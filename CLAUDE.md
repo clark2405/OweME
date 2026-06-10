@@ -50,6 +50,7 @@ oweme/
 - **State:** local state + hooks first. No Redux/Zustand unless complexity truly demands it (it shouldn't in v1).
 - **Styling:** mobile app uses React Native **StyleSheet** (decided at scaffold time — no NativeWind). Web app uses **Tailwind**. Stay consistent within each.
 - **Copy/microcopy matters.** OweMe's voice is playful and warm (see PROJECT.md §8). Use the established phrases: "You OweMe a drill 👀," "Out in the wild," "It found its way home 🎉". Don't write sterile corporate strings.
+- **Design language:** follow `.claude/skills/offbrand-design/SKILL.md` (OFF+BRAND-inspired: motion with meaning, first-seconds clarity, micro-interaction feedback, performance + reduced-motion discipline) for all UI/UX/animation work. §7 of that file maps it to OweMe's warm/playful brand.
 
 ## Workflow expectations
 

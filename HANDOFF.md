@@ -4,7 +4,8 @@
 > Windows to Mac). Read this, then `PROJECT.md` (product source of truth) and
 > `CLAUDE.md` (agent rules). Update this file at the end of each work session.
 
-_Last updated: 2026-06-10 (Windows). Branch: `scaffold/initial-apps`._
+_Last updated: 2026-06-10 evening (Windows, ending session). Next session likely
+on Mac — `git clone` fresh (see "How to resume" below)._
 
 ---
 
@@ -27,6 +28,24 @@ _Last updated: 2026-06-10 (Windows). Branch: `scaffold/initial-apps`._
 - Mobile app keeps Expo's modern **`src/` layout** (not top-level folders).
 - Mobile styling = **StyleSheet**. Web styling = **Tailwind**.
 - Web env vars are **server-only** (no `NEXT_PUBLIC_`) — service-role key.
+
+## Design language (IMPORTANT — read before any UI work)
+
+There is a project skill at **`.claude/skills/offbrand-design/SKILL.md`** —
+Claude Code auto-loads it; it distills the OFF+BRAND (itsoffbrand.com) design
+language Clark wants emulated: premium feel, motion-with-meaning, 100%
+interaction feedback, ambient idle motion ("never a dull page"), custom expo-out
+easing, depth/parallax, first-seconds clarity, performance + reduced-motion
+discipline. §7 maps it onto OweMe's warm/playful brand; §8 is a pre-ship
+checklist. **Apply it to every screen** — the current placeholder home screen is
+intentionally undesigned and does NOT reflect the target look yet.
+
+## Current screen state (don't be confused)
+
+The Expo web preview (`npm run web` → localhost:8081) shows only the static
+placeholder home (`src/app/index.tsx`): logo, tagline, empty-state line. That is
+expected — it's the only route, has no Supabase connection, and no design pass.
+Real screens start once the backend is wired.
 
 ## What's next (in order)
 

@@ -38,14 +38,17 @@ oweme/
 ## Code conventions
 
 - **Components:** function components, named exports. One component per file. PascalCase filenames (`LoanCard.tsx`).
-- **Folders (app/):**
-  - `app/` — Expo Router routes
-  - `components/` — shared UI
-  - `lib/` — Supabase client, helpers, types
-  - `hooks/` — custom hooks (`useLoans`, `useBorrowers`)
-- **Types:** define DB row types in `lib/types.ts`, mirroring the schema. A loan's `type` is `'item' | 'money'` — use discriminated unions so item/money fields are type-safe.
+- **Folders (app/):** the Expo app uses a `src/` layout (modern Expo default).
+  - `src/app/` — Expo Router routes
+  - `src/components/` — shared UI
+  - `src/lib/` — Supabase client, helpers, types
+  - `src/hooks/` — custom hooks (`useLoans`, `useBorrowers`)
+- **Folders (web/):** Next.js App Router, no `src/` dir.
+  - `app/` — routes, including `app/n/[token]/page.tsx` (the nudge page)
+  - `lib/` — server-side Supabase service-role client + helpers
+- **Types:** define DB row types in `app/src/lib/types.ts`, mirroring the schema. A loan's `type` is `'item' | 'money'` — use discriminated unions so item/money fields are type-safe.
 - **State:** local state + hooks first. No Redux/Zustand unless complexity truly demands it (it shouldn't in v1).
-- **Styling:** keep it consistent — pick one approach (StyleSheet or NativeWind) at project start and stick to it everywhere.
+- **Styling:** mobile app uses React Native **StyleSheet** (decided at scaffold time — no NativeWind). Web app uses **Tailwind**. Stay consistent within each.
 - **Copy/microcopy matters.** OweMe's voice is playful and warm (see PROJECT.md §8). Use the established phrases: "You OweMe a drill 👀," "Out in the wild," "It found its way home 🎉". Don't write sterile corporate strings.
 
 ## Workflow expectations
@@ -60,15 +63,18 @@ oweme/
 
 > Agents: update this section as work progresses so the next session has context.
 
-- [ ] Repo scaffolded (Expo app + Next.js web)
-- [ ] Supabase project created, schema migrated
+- [x] Repo scaffolded (Expo app in `app/` + Next.js web in `web/`, both TS strict, tsc clean)
+- [x] Initial schema migration written (`supabase/migrations/20260610000000_init_schema.sql`, tables + RLS)
+- [ ] Supabase project created, schema migrated (manual: create project, apply migration, fill `.env`)
+- [ ] Supabase client wiring (`app/src/lib`, `web/lib`) + `lib/types.ts`
 - [ ] Auth flow (email magic link)
 - [ ] Home screen (active loans list + stats)
 - [ ] Add loan flow (item + money, <15s target)
 - [ ] Loan detail + mark returned
 - [ ] Borrowers list + profile
 - [ ] Local notification scheduling
-- [ ] Nudge link generation + `/n/[token]` page
+- [ ] Nudge link generation + `/n/[token]` page (route placeholder exists)
 - [ ] History screen
 
-Nothing built yet — next step is scaffolding.
+Scaffolding done. Next: create the Supabase project, apply the migration, and
+wire up the Supabase clients + shared types. See `.env.example` in `app/` and `web/`.

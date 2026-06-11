@@ -35,6 +35,12 @@
             "imageWidth": 76
           }
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "OweMe uses your photos so you can attach a picture of the thing you lent."
+        }
       ]
     ],
     "experiments": {

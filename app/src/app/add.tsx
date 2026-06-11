@@ -1,5 +1,12 @@
+/**
+ * Add / edit a loan. The same form serves both: with no params it's the
+ * 15-second "Lend something" flow; with `?id=` it loads that loan, prefills,
+ * and saves in place. Covers item/money, an optional photo (items), inline
+ * "new person", an optional due date, and a reminder cadence.
+ */
+
 import { useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -10,6 +17,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { AmbientBackground } from '../components/AmbientBackground';
 import { Reveal } from '../components/Reveal';
 import { SegmentedToggle } from '../components/SegmentedToggle';
@@ -17,36 +26,114 @@ import { Button } from '../components/Button';
 import { PressableScale } from '../components/PressableScale';
 import { Icon } from '../components/Icon';
 import { Avatar } from '../components/Avatar';
-import { addLoan, allBorrowers } from '../lib/store';
+import {
+  addBorrower,
+  addLoan,
+  loanById,
+  updateLoan,
+  useBorrowers,
+  useLoans,
+  useSettings,
+} from '../lib/store';
+import { ReminderCadence } from '../lib/types';
+import { currencySymbol, shortDate } from '../lib/format';
 import { colors, radius, shadow, space, type as t } from '../lib/theme';
 
 type LoanType = 'item' | 'money';
 
+const DUE_PRESETS = [
+  { label: '1 week', days: 7 },
+  { label: '2 weeks', days: 14 },
+  { label: '1 month', days: 30 },
+];
+
+const CADENCES: { value: ReminderCadence; label: string }[] = [
+  { value: 'off', label: 'Off' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'biweekly', label: 'Every 2 wks' },
+  { value: 'monthly', label: 'Monthly' },
+];
+
+function isoInDays(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
 export default function AddLoanScreen() {
   const router = useRouter();
-  const [type, setType] = useState<LoanType>('item');
-  const [itemName, setItemName] = useState('');
-  const [amount, setAmount] = useState('');
-  const [borrowerId, setBorrowerId] = useState<string | null>(null);
-  const [notes, setNotes] = useState('');
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const loans = useLoans();
+  const editing = id ? loanById(loans, id) : undefined;
+  const borrowers = useBorrowers();
+  const { defaultCurrency } = useSettings();
 
-  const borrowers = allBorrowers();
+  // Editing keeps the loan's own currency; new money loans use the default.
+  const currency = editing?.type === 'money' ? editing.currency : defaultCurrency;
+
+  const [type, setType] = useState<LoanType>(editing?.type ?? 'item');
+  const [itemName, setItemName] = useState(editing?.type === 'item' ? editing.itemName : '');
+  const [amount, setAmount] = useState(editing?.type === 'money' ? String(editing.amount) : '');
+  const [photoUri, setPhotoUri] = useState<string | undefined>(
+    editing?.type === 'item' ? editing.photoUrl : undefined,
+  );
+  const [borrowerId, setBorrowerId] = useState<string | null>(editing?.borrowerId ?? null);
+  const [notes, setNotes] = useState(editing?.notes ?? '');
+  const [dueAt, setDueAt] = useState<string | undefined>(editing?.dueAt);
+  const [reminder, setReminder] = useState<ReminderCadence>(editing?.reminder ?? (id ? 'off' : 'weekly'));
+
+  const [addingPerson, setAddingPerson] = useState(false);
+  const [newName, setNewName] = useState('');
+
   const valid =
     borrowerId != null &&
     (type === 'item' ? itemName.trim().length > 0 : Number(amount) > 0);
 
+  const pickPhoto = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return;
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.7,
+    });
+    if (!res.canceled) setPhotoUri(res.assets[0].uri);
+  };
+
+  const confirmNewPerson = () => {
+    const name = newName.trim();
+    if (!name) return;
+    const newId = addBorrower(name);
+    setBorrowerId(newId);
+    setNewName('');
+    setAddingPerson(false);
+  };
+
   const submit = () => {
     if (!valid || !borrowerId) return;
-    const id = addLoan({
+    const input = {
       borrowerId,
       type,
-      itemName: itemName.trim() || undefined,
+      itemName: type === 'item' ? itemName.trim() || undefined : undefined,
+      photoUrl: type === 'item' ? photoUri : undefined,
       amount: type === 'money' ? Number(amount) : undefined,
+      currency: type === 'money' ? currency : undefined,
       notes: notes.trim() || undefined,
-    });
+      dueAt,
+      reminder,
+    };
+    if (editing) {
+      updateLoan(editing.id, input);
+      router.back();
+      return;
+    }
+    const newId = addLoan(input);
     router.dismiss();
-    router.push(`/loan/${id}`);
+    router.push(`/loan/${newId}`);
   };
+
+  const dueMatchesPreset = dueAt != null && DUE_PRESETS.some((p) => isoInDays(p.days) === dueAt);
 
   return (
     <View style={styles.root}>
@@ -57,7 +144,12 @@ export default function AddLoanScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <View style={styles.handleRow}>
-            <PressableScale onPress={() => router.dismiss()} scaleTo={0.9} style={styles.close}>
+            <PressableScale
+              onPress={() => router.dismiss()}
+              scaleTo={0.9}
+              style={styles.close}
+              accessibilityLabel="Close"
+            >
               <Icon name="close" size={18} color={colors.inkSoft} strokeWidth={2.2} />
             </PressableScale>
           </View>
@@ -68,10 +160,10 @@ export default function AddLoanScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <Reveal index={0} from={10}>
-              <Text style={t.overline}>The 15-second flow</Text>
+              <Text style={t.overline}>{editing ? 'Tweak the details' : 'The 15-second flow'}</Text>
             </Reveal>
             <Reveal index={1} clip from={40}>
-              <Text style={[t.title, styles.title]}>Lend something</Text>
+              <Text style={[t.title, styles.title]}>{editing ? 'Edit loan' : 'Lend something'}</Text>
             </Reveal>
 
             <Reveal index={2} from={20}>
@@ -94,12 +186,12 @@ export default function AddLoanScreen() {
                     placeholder="What did you lend? (e.g. cordless drill)"
                     placeholderTextColor={colors.inkFaint}
                     style={styles.input}
-                    autoFocus
+                    autoFocus={!editing}
                     returnKeyType="next"
                   />
                 ) : (
                   <View style={styles.amountRow}>
-                    <Text style={styles.peso}>₱</Text>
+                    <Text style={styles.peso}>{currencySymbol(currency)}</Text>
                     <TextInput
                       value={amount}
                       onChangeText={(v) => setAmount(v.replace(/[^0-9.]/g, ''))}
@@ -107,14 +199,39 @@ export default function AddLoanScreen() {
                       placeholderTextColor={colors.inkFaint}
                       keyboardType="decimal-pad"
                       style={[styles.input, styles.amountInput]}
-                      autoFocus
+                      autoFocus={!editing}
                     />
                   </View>
                 )}
               </View>
             </Reveal>
 
-            <Reveal index={4} from={20}>
+            {/* Photo — items only */}
+            {type === 'item' && (
+              <Reveal index={4} from={18}>
+                {photoUri ? (
+                  <View style={styles.photoWrap}>
+                    <Image source={{ uri: photoUri }} style={styles.photo} contentFit="cover" />
+                    <PressableScale
+                      onPress={() => setPhotoUri(undefined)}
+                      scaleTo={0.85}
+                      style={styles.photoRemove}
+                      accessibilityLabel="Remove photo"
+                    >
+                      <Icon name="close" size={15} color={colors.surface} strokeWidth={2.4} />
+                    </PressableScale>
+                  </View>
+                ) : (
+                  <PressableScale onPress={pickPhoto} scaleTo={0.98} style={styles.photoAdd}>
+                    <Icon name="camera" size={20} color={colors.inkSoft} />
+                    <Text style={styles.photoAddText}>Add a photo</Text>
+                  </PressableScale>
+                )}
+              </Reveal>
+            )}
+
+            {/* Borrower */}
+            <Reveal index={5} from={20}>
               <Text style={[t.overline, styles.label]}>Who has it?</Text>
               <View style={styles.borrowerWrap}>
                 {borrowers.map((b) => {
@@ -133,10 +250,87 @@ export default function AddLoanScreen() {
                     </PressableScale>
                   );
                 })}
+                <PressableScale
+                  onPress={() => setAddingPerson((v) => !v)}
+                  scaleTo={0.94}
+                  style={[styles.borrowerChip, styles.newPersonChip]}
+                >
+                  <Icon name="plus" size={16} color={colors.inkSoft} strokeWidth={2.2} />
+                  <Text style={styles.borrowerName}>New person</Text>
+                </PressableScale>
+              </View>
+
+              {addingPerson && (
+                <View style={styles.newPersonRow}>
+                  <TextInput
+                    value={newName}
+                    onChangeText={setNewName}
+                    placeholder="Their name"
+                    placeholderTextColor={colors.inkFaint}
+                    style={[styles.input, styles.newPersonInput]}
+                    autoFocus
+                    returnKeyType="done"
+                    onSubmitEditing={confirmNewPerson}
+                  />
+                  <Button label="Add" variant="pill" onPress={confirmNewPerson} />
+                </View>
+              )}
+            </Reveal>
+
+            {/* Due date */}
+            <Reveal index={6} from={18}>
+              <Text style={[t.overline, styles.label]}>Due date (optional)</Text>
+              <View style={styles.chipRow}>
+                <PressableScale
+                  onPress={() => setDueAt(undefined)}
+                  scaleTo={0.94}
+                  style={[styles.chip, dueAt == null && styles.chipOn]}
+                >
+                  <Text style={[styles.chipText, dueAt == null && styles.chipTextOn]}>Whenever</Text>
+                </PressableScale>
+                {DUE_PRESETS.map((p) => {
+                  const iso = isoInDays(p.days);
+                  const on = dueAt === iso;
+                  return (
+                    <PressableScale
+                      key={p.label}
+                      onPress={() => setDueAt(iso)}
+                      scaleTo={0.94}
+                      style={[styles.chip, on && styles.chipOn]}
+                    >
+                      <Text style={[styles.chipText, on && styles.chipTextOn]}>{p.label}</Text>
+                    </PressableScale>
+                  );
+                })}
+                {dueAt != null && !dueMatchesPreset && (
+                  <View style={[styles.chip, styles.chipOn]}>
+                    <Text style={[styles.chipText, styles.chipTextOn]}>Due {shortDate(dueAt)}</Text>
+                  </View>
+                )}
               </View>
             </Reveal>
 
-            <Reveal index={5} from={20}>
+            {/* Reminder cadence */}
+            <Reveal index={7} from={18}>
+              <Text style={[t.overline, styles.label]}>Nudge me</Text>
+              <View style={styles.chipRow}>
+                {CADENCES.map((c) => {
+                  const on = reminder === c.value;
+                  return (
+                    <PressableScale
+                      key={c.value}
+                      onPress={() => setReminder(c.value)}
+                      scaleTo={0.94}
+                      style={[styles.chip, on && styles.chipOn]}
+                    >
+                      <Text style={[styles.chipText, on && styles.chipTextOn]}>{c.label}</Text>
+                    </PressableScale>
+                  );
+                })}
+              </View>
+            </Reveal>
+
+            <Reveal index={8} from={20}>
               <Text style={[t.overline, styles.label]}>Notes (optional)</Text>
               <TextInput
                 value={notes}
@@ -150,7 +344,11 @@ export default function AddLoanScreen() {
           </ScrollView>
 
           <View style={styles.footer}>
-            <Button label="Lend it 🤝" onPress={submit} disabled={!valid} />
+            <Button
+              label={editing ? 'Save changes' : 'Lend it 🤝'}
+              onPress={submit}
+              disabled={!valid}
+            />
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -186,6 +384,38 @@ const styles = StyleSheet.create({
   amountRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   peso: { ...t.numeral, color: colors.inkSoft },
   amountInput: { flex: 1, fontSize: 34, lineHeight: 42, fontWeight: '800', letterSpacing: -1 },
+  photoWrap: { alignSelf: 'flex-start' },
+  photo: {
+    width: 132,
+    height: 99,
+    borderRadius: radius.md,
+    backgroundColor: colors.bgSunken,
+  },
+  photoRemove: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    width: 26,
+    height: 26,
+    borderRadius: radius.pill,
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoAdd: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    alignSelf: 'flex-start',
+    paddingVertical: space.md,
+    paddingHorizontal: space.lg,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.hairline,
+    backgroundColor: colors.surface,
+  },
+  photoAddText: { ...t.small, color: colors.inkSoft },
   label: { marginTop: space.md, marginBottom: space.md },
   borrowerWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   borrowerChip: {
@@ -200,8 +430,23 @@ const styles = StyleSheet.create({
     borderColor: colors.hairline,
   },
   borrowerChipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
+  newPersonChip: { borderStyle: 'dashed' },
   borrowerName: { ...t.h3, fontSize: 15, color: colors.ink },
   borrowerNameOn: { color: colors.surface },
+  newPersonRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.sm },
+  newPersonInput: { flex: 1, paddingVertical: space.md },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  chip: {
+    paddingVertical: space.sm,
+    paddingHorizontal: space.lg,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.hairline,
+  },
+  chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
+  chipText: { ...t.small, color: colors.inkSoft },
+  chipTextOn: { color: colors.surface },
   notes: { minHeight: 80, textAlignVertical: 'top' },
   footer: {
     paddingHorizontal: space.xl,

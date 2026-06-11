@@ -9,6 +9,9 @@
 export type LoanStatus = 'active' | 'returned' | 'written_off';
 export type NudgeTone = 'friendly' | 'casual' | 'pointed';
 
+/** How often OweMe reminds you about a still-active loan. `off` = no nudges. */
+export type ReminderCadence = 'off' | 'weekly' | 'biweekly' | 'monthly';
+
 export interface Borrower {
   id: string;
   name: string;
@@ -18,13 +21,15 @@ export interface Borrower {
   emoji: string;
 }
 
-interface LoanBase {
+export interface LoanBase {
   id: string;
   borrowerId: string;
   notes?: string;
   /** ISO date (YYYY-MM-DD). */
   lentAt: string;
   dueAt?: string;
+  /** Reminder cadence for this loan; defaults to `off` when unset. */
+  reminder?: ReminderCadence;
   status: LoanStatus;
   /** ISO timestamp, set when status leaves `active`. */
   returnedAt?: string;

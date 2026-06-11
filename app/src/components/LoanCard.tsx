@@ -23,7 +23,13 @@ interface Props {
 export function LoanCard({ data, onPress }: Props) {
   const { loan, borrower } = data;
   return (
-    <PressableScale onPress={onPress} scaleTo={0.975} style={styles.card}>
+    <PressableScale
+      onPress={onPress}
+      scaleTo={0.975}
+      style={styles.card}
+      accessibilityRole="button"
+      accessibilityLabel={`${loanLabel(loan)}, lent to ${borrower.name} ${relativeDays(loan.lentAt)}`}
+    >
       <Avatar name={borrower.name} emoji={borrower.emoji} size={40} />
 
       <View style={styles.body}>

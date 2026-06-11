@@ -11,6 +11,10 @@ const CURRENCY_SYMBOL: Record<string, string> = {
   EUR: '€',
 };
 
+export function currencySymbol(currency = 'PHP'): string {
+  return CURRENCY_SYMBOL[currency] ?? '';
+}
+
 export function money(amount: number, currency = 'PHP'): string {
   const symbol = CURRENCY_SYMBOL[currency] ?? '';
   const formatted = amount.toLocaleString(undefined, {
@@ -18,6 +22,18 @@ export function money(amount: number, currency = 'PHP'): string {
     maximumFractionDigits: 2,
   });
   return `${symbol}${formatted}`;
+}
+
+/**
+ * Glanceable money for the home stat tile: exact up to ₱999,999, then compact
+ * millions (₱1.25M) so a hero number never wraps or shrinks to nothing. The
+ * exact amount still shows on loan detail and the full list.
+ */
+export function compactMoney(amount: number, currency = 'PHP'): string {
+  if (amount < 1_000_000) return money(amount, currency);
+  const symbol = CURRENCY_SYMBOL[currency] ?? '';
+  const millions = Math.round((amount / 1_000_000) * 100) / 100;
+  return `${symbol}${millions}M`;
 }
 
 /** Whole days between an ISO date and today (today = 0). */

@@ -20,7 +20,10 @@ export type IconName =
   | 'chevronLeft'
   | 'close'
   | 'send'
-  | 'search';
+  | 'search'
+  | 'edit'
+  | 'trash'
+  | 'camera';
 
 interface Props {
   name: IconName;
@@ -124,6 +127,30 @@ export function Icon({ name, size = 24, color = colors.ink, strokeWidth = 2 }: P
         <>
           <Circle cx="11" cy="11" r="6.2" {...common} />
           <Line x1="16" y1="16" x2="20" y2="20" {...common} />
+        </>
+      )}
+
+      {name === 'edit' && (
+        <>
+          <Path d="M14.5 5.5 18.5 9.5 9 19l-4.5 1 1-4.5 9-10Z" {...common} />
+          <Line x1="13" y1="7" x2="17" y2="11" {...common} />
+        </>
+      )}
+
+      {name === 'trash' && (
+        <>
+          <Path d="M5.5 7.5h13" {...common} />
+          <Path d="M9 7.5V6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1.5" {...common} />
+          <Path d="M7 7.5 7.7 19a1 1 0 0 0 1 .9h6.6a1 1 0 0 0 1-.9L17 7.5" {...common} />
+          <Line x1="10.5" y1="10.5" x2="10.5" y2="16.5" {...common} />
+          <Line x1="13.5" y1="10.5" x2="13.5" y2="16.5" {...common} />
+        </>
+      )}
+
+      {name === 'camera' && (
+        <>
+          <Path d="M4.5 8.5a1 1 0 0 1 1-1h2l1.2-1.6a1 1 0 0 1 .8-.4h3a1 1 0 0 1 .8.4L14.5 7.5h2a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1Z" {...common} />
+          <Circle cx="11" cy="12.5" r="2.8" {...common} />
         </>
       )}
     </Svg>

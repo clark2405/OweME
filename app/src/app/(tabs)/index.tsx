@@ -11,7 +11,7 @@ import { Icon } from '../../components/Icon';
 import { Fab } from '../../components/Fab';
 import { TAB_BAR_HEIGHT, tabBarBottomInset } from '../../components/TabBar';
 import { activeLoans, activeLoansBy, LoanTypeFilter, useLoans } from '../../lib/store';
-import { money } from '../../lib/format';
+import { compactMoney } from '../../lib/format';
 import { reduceMotion } from '../../lib/motion';
 import { colors, radius, shadow, space, type as t } from '../../lib/theme';
 
@@ -19,6 +19,20 @@ const FAB_HEIGHT = 58;
 /** How many loans the home lineup shows before deferring to "See all". Home is
  *  a dashboard of what needs attention, not the full ledger. */
 const HOME_LIMIT = 4;
+
+/** Deterministic font size for a bento's hero number — keyed to length so it
+ *  steps down predictably and never truncates (replaces flaky
+ *  adjustsFontSizeToFit). Calibrated to the ~130px inner width of a half-width
+ *  tile at weight 800; the heavy numerals are wide, so steps are conservative. */
+function bentoFontSize(text: string): number {
+  const n = text.length;
+  if (n <= 4) return 40; // "3", "₱750"
+  if (n === 5) return 36; // "₱9,999"
+  if (n === 6) return 31; // "₱1,250", "₱1.25M"
+  if (n === 7) return 27; // "₱12,500"
+  if (n === 8) return 23; // "₱125,000"
+  return 20;
+}
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -40,6 +54,9 @@ export default function HomeScreen() {
   const moneyTotal = active
     .filter((a) => a.loan.type === 'money')
     .reduce((s, a) => s + (a.loan.type === 'money' ? a.loan.amount : 0), 0);
+
+  const itemText = String(itemCount);
+  const moneyText = compactMoney(moneyTotal);
 
   const filtered = activeLoansBy(loans, { type: filter });
   const shown = filtered.slice(0, HOME_LIMIT);
@@ -72,8 +89,11 @@ export default function HomeScreen() {
               dark={false}
               onPress={() => toggle('item')}
             >
-              <Text style={t.numeral} numberOfLines={1} adjustsFontSizeToFit>
-                {itemCount}
+              <Text
+                style={[t.numeral, { fontSize: bentoFontSize(itemText), lineHeight: bentoFontSize(itemText) + 2 }]}
+                numberOfLines={1}
+              >
+                {itemText}
               </Text>
               <Text style={styles.statLabel}>thing{itemCount === 1 ? '' : 's'} lent out</Text>
             </StatTile>
@@ -83,8 +103,11 @@ export default function HomeScreen() {
               dark
               onPress={() => toggle('money')}
             >
-              <Text style={[t.numeral, styles.statMoney]} numberOfLines={1} adjustsFontSizeToFit>
-                {money(moneyTotal)}
+              <Text
+                style={[t.numeral, styles.statMoney, { fontSize: bentoFontSize(moneyText), lineHeight: bentoFontSize(moneyText) + 2 }]}
+                numberOfLines={1}
+              >
+                {moneyText}
               </Text>
               <Text style={[styles.statLabel, styles.statLabelOnDark]}>still owed to you</Text>
             </StatTile>
@@ -161,6 +184,9 @@ function StatTile({
       <PressableScale
         onPress={onPress}
         scaleTo={0.97}
+        accessibilityRole="button"
+        accessibilityState={{ selected }}
+        accessibilityHint={`Filter the lineup to ${dark ? 'money' : 'items'}`}
         style={[
           styles.stat,
           dark ? styles.statRight : styles.statLeft,

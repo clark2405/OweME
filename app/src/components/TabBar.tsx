@@ -62,7 +62,14 @@ function TabItem({
   }));
 
   return (
-    <PressableScale onPress={onPress} scaleTo={0.9} style={styles.item}>
+    <PressableScale
+      onPress={onPress}
+      scaleTo={0.9}
+      style={styles.item}
+      accessibilityRole="tab"
+      accessibilityLabel={LABELS[routeName]}
+      accessibilityState={{ selected: focused }}
+    >
       <Animated.View style={iconStyle}>
         <Icon
           name={ICONS[routeName]}

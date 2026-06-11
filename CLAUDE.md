@@ -63,6 +63,7 @@ oweme/
 ## Current status / where to pick up
 
 > Agents: update this section as work progresses so the next session has context.
+> **Frontend gap list lives in `TASKS.md`** (prioritized P0/P1/P2 with build order) — check items off there as they land.
 
 - [x] Repo scaffolded (Expo app in `app/` + Next.js web in `web/`, both TS strict, tsc clean)
 - [x] Initial schema migration written (`supabase/migrations/20260610000000_init_schema.sql`, tables + RLS)

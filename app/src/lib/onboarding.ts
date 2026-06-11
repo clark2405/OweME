@@ -47,3 +47,9 @@ export function markOnboardingSeen(): void {
   // Fire-and-forget: worst case the welcome replays next launch.
   AsyncStorage.setItem(KEY, 'true').catch(() => {});
 }
+
+/** Clears the seen-flag so the welcome flow can be replayed (Settings). */
+export function resetOnboarding(): void {
+  cached = false;
+  AsyncStorage.removeItem(KEY).catch(() => {});
+}

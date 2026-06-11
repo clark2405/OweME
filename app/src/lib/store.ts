@@ -8,7 +8,8 @@
  */
 
 import { useSyncExternalStore } from 'react';
-import { Borrower, Loan, LoanWithBorrower } from './types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Borrower, Loan, LoanBase, LoanWithBorrower, ReminderCadence } from './types';
 import { daysSince } from './format';
 
 function isoDaysAgo(days: number): string {
@@ -17,7 +18,7 @@ function isoDaysAgo(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-const borrowers: Borrower[] = [
+let borrowers: Borrower[] = [
   { id: 'b1', name: 'Miguel', emoji: '🧑🏽‍🔧' },
   { id: 'b2', name: 'Anna', emoji: '📚' },
   { id: 'b3', name: 'Jollibee Squad', emoji: '🍗' },
@@ -124,6 +125,64 @@ function getSnapshot() {
 
 export function useLoans(): Loan[] {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+let borrowerSnapshot = borrowers;
+function getBorrowerSnapshot() {
+  return borrowerSnapshot;
+}
+
+/** Reactive borrower list — re-renders when a new person is added mid-flow. */
+export function useBorrowers(): Borrower[] {
+  return useSyncExternalStore(subscribe, getBorrowerSnapshot, getBorrowerSnapshot);
+}
+
+// --- app settings (in-memory; will move to Supabase user prefs) ------------
+
+export type CurrencyCode = 'PHP' | 'USD' | 'EUR';
+
+export interface Settings {
+  /** Currency new money loans default to. */
+  defaultCurrency: CurrencyCode;
+  /** Master switch for nudge reminders (consumed once notifications exist). */
+  nudgesEnabled: boolean;
+}
+
+const SETTINGS_KEY = 'oweme.settings.v1';
+
+let settings: Settings = { defaultCurrency: 'PHP', nudgesEnabled: true };
+let settingsSnapshot = settings;
+function getSettingsSnapshot() {
+  return settingsSnapshot;
+}
+
+export function useSettings(): Settings {
+  return useSyncExternalStore(subscribe, getSettingsSnapshot, getSettingsSnapshot);
+}
+
+function commitSettings(next: Settings, persist = true) {
+  settings = next;
+  settingsSnapshot = next;
+  emit();
+  if (persist) AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(next)).catch(() => {});
+}
+
+// Hydrate persisted settings once at startup; re-renders subscribers if they
+// differ from the defaults. Persisting back is skipped (it's what we just read).
+void AsyncStorage.getItem(SETTINGS_KEY)
+  .then((raw) => {
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as Partial<Settings>;
+    commitSettings({ ...settings, ...parsed }, false);
+  })
+  .catch(() => {});
+
+export function setDefaultCurrency(c: CurrencyCode) {
+  commitSettings({ ...settings, defaultCurrency: c });
+}
+
+export function setNudgesEnabled(v: boolean) {
+  commitSettings({ ...settings, nudgesEnabled: v });
 }
 
 export function getBorrower(id: string): Borrower | undefined {
@@ -249,36 +308,82 @@ export function writeOff(id: string) {
   );
 }
 
+/** Undo a return / write-off — sends the loan back out into the wild. */
+export function unreturn(id: string) {
+  commit(
+    loans.map((l) =>
+      l.id === id ? { ...l, status: 'active', returnedAt: undefined } : l,
+    ),
+  );
+}
+
 export interface NewLoanInput {
   borrowerId: string;
   notes?: string;
   dueAt?: string;
+  reminder?: ReminderCadence;
   type: 'item' | 'money';
   itemName?: string;
+  photoUrl?: string;
   amount?: number;
   currency?: string;
 }
 
+/** Build the type-specific Loan from input, given the shared base fields. */
+function loanFromInput(base: LoanBase, input: NewLoanInput): Loan {
+  return input.type === 'item'
+    ? { ...base, type: 'item', itemName: input.itemName ?? 'Something', photoUrl: input.photoUrl }
+    : { ...base, type: 'money', amount: input.amount ?? 0, currency: input.currency ?? 'PHP' };
+}
+
 export function addLoan(input: NewLoanInput): string {
   const id = `l${Date.now()}`;
-  const base = {
+  const base: LoanBase = {
     id,
     borrowerId: input.borrowerId,
     notes: input.notes,
     dueAt: input.dueAt,
+    reminder: input.reminder,
     lentAt: new Date().toISOString().slice(0, 10),
-    status: 'active' as const,
+    status: 'active',
   };
-  const loan: Loan =
-    input.type === 'item'
-      ? { ...base, type: 'item', itemName: input.itemName ?? 'Something' }
-      : { ...base, type: 'money', amount: input.amount ?? 0, currency: input.currency ?? 'PHP' };
-  commit([loan, ...loans]);
+  commit([loanFromInput(base, input), ...loans]);
   return id;
+}
+
+/** Edit an existing loan in place — preserves id, lentAt, and status; rebuilds
+ *  the type-specific shape so switching item↔money leaves no stale fields. */
+export function updateLoan(id: string, input: NewLoanInput) {
+  commit(
+    loans.map((l) => {
+      if (l.id !== id) return l;
+      const base: LoanBase = {
+        id: l.id,
+        borrowerId: input.borrowerId,
+        notes: input.notes,
+        dueAt: input.dueAt,
+        reminder: input.reminder,
+        lentAt: l.lentAt,
+        status: l.status,
+        returnedAt: l.returnedAt,
+      };
+      return loanFromInput(base, input);
+    }),
+  );
+}
+
+export function deleteLoan(id: string) {
+  commit(loans.filter((l) => l.id !== id));
+}
+
+function commitBorrowers(next: Borrower[]) {
+  borrowers = next;
+  borrowerSnapshot = next;
+  emit();
 }
 
 export function addBorrower(name: string, emoji = '🙂'): string {
   const id = `b${Date.now()}`;
-  borrowers.push({ id, name, emoji });
+  commitBorrowers([...borrowers, { id, name, emoji }]);
   return id;
 }

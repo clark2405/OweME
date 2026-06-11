@@ -66,7 +66,13 @@ export default function LoansScreen() {
             returnKeyType="search"
           />
           {query.length > 0 && (
-            <PressableScale onPress={() => setQuery('')} scaleTo={0.85} style={styles.clear}>
+            <PressableScale
+              onPress={() => setQuery('')}
+              scaleTo={0.85}
+              style={styles.clear}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+            >
               <Icon name="close" size={15} color={colors.inkSoft} strokeWidth={2.2} />
             </PressableScale>
           )}

@@ -16,6 +16,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { PressableScale } from './PressableScale';
 import { Icon } from './Icon';
+import { haptics } from '../lib/haptics';
 import { colors, radius, shadow, space, type as t } from '../lib/theme';
 
 export function Fab({ onPress }: { onPress?: () => void }) {
@@ -37,7 +38,17 @@ export function Fab({ onPress }: { onPress?: () => void }) {
 
   return (
     <Animated.View style={[styles.wrap, float]}>
-      <PressableScale onPress={onPress} scaleTo={0.94} liftOnPress style={styles.fab}>
+      <PressableScale
+        onPress={() => {
+          haptics.tap();
+          onPress?.();
+        }}
+        scaleTo={0.94}
+        liftOnPress
+        style={styles.fab}
+        accessibilityRole="button"
+        accessibilityLabel="Lend something"
+      >
         <View style={styles.plus}>
           <Icon name="plus" size={24} color={colors.onAccent} strokeWidth={2.4} />
         </View>

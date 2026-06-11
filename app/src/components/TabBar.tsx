@@ -1,0 +1,137 @@
+/**
+ * Custom floating tab bar — a glassy pill above the safe area. The active tab's
+ * custom line icon pops on focus and shifts from faint to ink; the label fades
+ * in. Icons are stripped-back line drawings (see Icon.tsx) to match the
+ * premium/warm aesthetic.
+ */
+
+import { StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import { PressableScale } from './PressableScale';
+import { Icon, IconName } from './Icon';
+import { colors, radius, shadow, space } from '../lib/theme';
+import { reduceMotion, spring } from '../lib/motion';
+
+/** Approx height of the floating pill (icon + label + padding), used by screens
+ *  to size their bottom clearance so content/FAB never collide with the bar. */
+export const TAB_BAR_HEIGHT = 68;
+
+const ICONS: Record<string, IconName> = {
+  index: 'home',
+  borrowers: 'people',
+  history: 'history',
+  settings: 'settings',
+};
+
+const LABELS: Record<string, string> = {
+  index: 'Home',
+  borrowers: 'People',
+  history: 'History',
+  settings: 'Settings',
+};
+
+function TabItem({
+  focused,
+  routeName,
+  onPress,
+}: {
+  focused: boolean;
+  routeName: string;
+  onPress: () => void;
+}) {
+  const iconStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: withSpring(focused ? 1.1 : 1, spring.pop) },
+      { translateY: withSpring(focused ? -1 : 0, spring.pop) },
+    ],
+  }));
+  const labelStyle = useAnimatedStyle(() => ({
+    opacity: withTiming(focused ? 1 : 0.55, { duration: 180, reduceMotion }),
+  }));
+
+  return (
+    <PressableScale onPress={onPress} scaleTo={0.9} style={styles.item}>
+      <Animated.View style={iconStyle}>
+        <Icon
+          name={ICONS[routeName]}
+          size={24}
+          color={focused ? colors.ink : colors.inkFaint}
+          strokeWidth={focused ? 2.2 : 1.9}
+        />
+      </Animated.View>
+      <Animated.Text style={[styles.label, labelStyle, focused && styles.labelActive]}>
+        {LABELS[routeName]}
+      </Animated.Text>
+    </PressableScale>
+  );
+}
+
+/**
+ * Minimal shape of the navigation tab-bar props we actually use. In SDK 56
+ * `@react-navigation/bottom-tabs` is vendored inside expo-router and not
+ * resolvable as a standalone module, so we type only what we touch.
+ */
+interface TabBarProps {
+  state: { index: number; routes: { key: string; name: string }[] };
+  navigation: {
+    emit: (e: { type: 'tabPress'; target?: string; canPreventDefault: true }) => {
+      defaultPrevented: boolean;
+    };
+    navigate: (name: string) => void;
+  };
+}
+
+export function TabBar({ state, navigation }: TabBarProps) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, space.md) }]} pointerEvents="box-none">
+      <View style={styles.bar}>
+        {state.routes.map((route, i) => {
+          const focused = state.index === i;
+          const onPress = () => {
+            const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+            if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
+          };
+          return <TabItem key={route.key} focused={focused} routeName={route.name} onPress={onPress} />;
+        })}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+  },
+  bar: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    borderRadius: radius.pill,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.sm,
+    gap: space.xs,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    ...shadow.lifted,
+  },
+  item: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    paddingHorizontal: space.lg,
+    paddingVertical: 6,
+    minWidth: 72,
+  },
+  label: { fontSize: 11, fontWeight: '700', color: colors.inkSoft, letterSpacing: -0.1 },
+  labelActive: { color: colors.ink },
+});

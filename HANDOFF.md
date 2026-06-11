@@ -85,3 +85,11 @@ the real Supabase keys before anything talks to the backend.
 - GitHub: `clark2405/OweME` (private). Default branch: `main`.
 - Active work branch: `scaffold/initial-apps`.
 - Node 24, npm 11 on the Windows machine.
+
+## Gotchas (Mac)
+
+- **`pod install` needs a UTF-8 locale.** CocoaPods 1.16.2 on Ruby 4.0 crashes with
+  `Unicode Normalization not appropriate for ASCII-8BIT` if the shell locale isn't
+  UTF-8. Run any native build / prebuild with `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8`
+  prefixed, e.g. `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 npx expo run:ios`. Bites
+  whenever a native dep is added (`react-native-svg` was the first to trip it).

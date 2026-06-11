@@ -66,16 +66,26 @@ oweme/
 
 - [x] Repo scaffolded (Expo app in `app/` + Next.js web in `web/`, both TS strict, tsc clean)
 - [x] Initial schema migration written (`supabase/migrations/20260610000000_init_schema.sql`, tables + RLS)
+- [x] iOS native build set up (prebuild + Pods, bundle id `com.clark24smoothoperator.oweme`, runs on simulator)
+- [x] **Mobile UI built on mock data** — full design system + all v1 screens, applying `offbrand-design`. Runs and verified on iOS sim. *Not wired to Supabase yet* (reads an in-memory store).
 - [ ] Supabase project created, schema migrated (manual: create project, apply migration, fill `.env`)
-- [ ] Supabase client wiring (`app/src/lib`, `web/lib`) + `lib/types.ts`
+- [ ] Supabase client wiring (`app/src/lib`, `web/lib`) + replace `src/lib/store.ts` reads/writes with real queries
 - [ ] Auth flow (email magic link)
-- [ ] Home screen (active loans list + stats)
-- [ ] Add loan flow (item + money, <15s target)
-- [ ] Loan detail + mark returned
-- [ ] Borrowers list + profile
+- [x] Home screen (active loans list + stats) — UI on mock data
+- [x] Add loan flow (item + money, <15s target) — UI on mock data
+- [x] Loan detail + mark returned (confetti) — UI on mock data
+- [x] Borrowers list + profile (reliability stats) — UI on mock data
 - [ ] Local notification scheduling
-- [ ] Nudge link generation + `/n/[token]` page (route placeholder exists)
-- [ ] History screen
+- [ ] Nudge link generation + `/n/[token]` page (mobile share-sheet nudge w/ tones exists; web page still a TODO)
+- [x] History screen — UI on mock data
 
-Scaffolding done. Next: create the Supabase project, apply the migration, and
-wire up the Supabase clients + shared types. See `.env.example` in `app/` and `web/`.
+**UI layer (this session):** `src/lib/{theme,motion,types,format,store}.ts` are the
+design tokens + mock data layer; `src/components/*` are the animated primitives
+(PressableScale, Button, Reveal, AmbientBackground, LoanCard, Fab, Confetti,
+SegmentedToggle, TabBar, …); routes live under `src/app/(tabs)/`, `src/app/add.tsx`,
+`src/app/loan/[id].tsx`, `src/app/borrower/[id].tsx`.
+
+Next: create the Supabase project, apply the migration, then swap `src/lib/store.ts`
+(currently an in-memory mock with the same shapes as `types.ts`) for real Supabase
+queries — the UI already consumes it through `useLoans()` and the read/write helpers,
+so wiring is localized to that file + a new `supabase.ts` client.

@@ -15,11 +15,14 @@ export default function RootLayout() {
             contentStyle: { backgroundColor: colors.bg },
           }}
         >
+          {/* First launch detours here via the guard in (tabs)/_layout. */}
+          <Stack.Screen name="onboarding" options={{ animation: 'fade', gestureEnabled: false }} />
           <Stack.Screen name="(tabs)" />
           <Stack.Screen
             name="add"
             options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
           />
+          <Stack.Screen name="loans" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="loan/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="borrower/[id]" options={{ animation: 'slide_from_right' }} />
         </Stack>

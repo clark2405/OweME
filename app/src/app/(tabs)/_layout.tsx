@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import { TabBar } from '../../components/TabBar';
 import { TabAmbient } from '../../components/TabAmbient';
 import { AmbientVariant } from '../../components/AmbientBackground';
+import { useHasSeenOnboarding } from '../../lib/onboarding';
 import { colors } from '../../lib/theme';
 
 const ROUTE_VARIANT: Record<string, AmbientVariant> = {
@@ -15,6 +16,12 @@ const ROUTE_VARIANT: Record<string, AmbientVariant> = {
 
 export default function TabsLayout() {
   const [variant, setVariant] = useState<AmbientVariant>('home');
+  const seenOnboarding = useHasSeenOnboarding();
+
+  // Guard at the destination: however the app lands on the tabs (cold start,
+  // deep link, dev-client URL), first launch detours through the welcome.
+  if (seenOnboarding === null) return <View style={styles.root} />;
+  if (!seenOnboarding) return <Redirect href="/onboarding" />;
 
   return (
     <View style={styles.root}>

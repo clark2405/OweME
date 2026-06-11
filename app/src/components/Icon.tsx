@@ -19,7 +19,8 @@ export type IconName =
   | 'chevronRight'
   | 'chevronLeft'
   | 'close'
-  | 'send';
+  | 'send'
+  | 'search';
 
 interface Props {
   name: IconName;
@@ -116,6 +117,13 @@ export function Icon({ name, size = 24, color = colors.ink, strokeWidth = 2 }: P
         <>
           <Path d="M20 4 3.5 11.5l6.2 2.3L20 4Z" {...common} />
           <Path d="M20 4l-5.6 16-3-7.2" {...common} />
+        </>
+      )}
+
+      {name === 'search' && (
+        <>
+          <Circle cx="11" cy="11" r="6.2" {...common} />
+          <Line x1="16" y1="16" x2="20" y2="20" {...common} />
         </>
       )}
     </Svg>

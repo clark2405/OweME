@@ -19,7 +19,14 @@ import { reduceMotion, spring } from '../lib/motion';
 
 /** Approx height of the floating pill (icon + label + padding), used by screens
  *  to size their bottom clearance so content/FAB never collide with the bar. */
-export const TAB_BAR_HEIGHT = 68;
+export const TAB_BAR_HEIGHT = 74;
+
+/** Gap between the floating bar and the screen's bottom edge. Sits just above
+ *  the home indicator without floating high. Screens reuse this to anchor the
+ *  FAB so it tracks the bar. */
+export function tabBarBottomInset(safeBottom: number): number {
+  return Math.max(safeBottom - space.lg, space.sm);
+}
 
 const ICONS: Record<string, IconName> = {
   index: 'home',
@@ -59,7 +66,7 @@ function TabItem({
       <Animated.View style={iconStyle}>
         <Icon
           name={ICONS[routeName]}
-          size={24}
+          size={26}
           color={focused ? colors.ink : colors.inkFaint}
           strokeWidth={focused ? 2.2 : 1.9}
         />
@@ -90,7 +97,10 @@ export function TabBar({ state, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, space.md) }]} pointerEvents="box-none">
+    <View
+      style={[styles.wrap, { paddingBottom: tabBarBottomInset(insets.bottom) }]}
+      pointerEvents="box-none"
+    >
       <View style={styles.bar}>
         {state.routes.map((route, i) => {
           const focused = state.index === i;
@@ -111,27 +121,34 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    alignItems: 'center',
+    // Side margins + stretch so the bar uses the screen width responsively
+    // instead of being a small fixed-width pill on large devices.
+    paddingHorizontal: space.lg,
+    alignItems: 'stretch',
   },
   bar: {
     flexDirection: 'row',
+    // Fill the available width, capped so it stays a pill (not a slab) on
+    // tablets / very wide screens; centered when capped.
+    width: '100%',
+    maxWidth: 460,
+    alignSelf: 'center',
     backgroundColor: colors.surface,
     borderRadius: radius.pill,
-    paddingHorizontal: space.sm,
+    paddingHorizontal: space.xs,
     paddingVertical: space.sm,
-    gap: space.xs,
     borderWidth: 1,
     borderColor: colors.hairline,
     ...shadow.lifted,
   },
   item: {
+    // Evenly distribute across whatever width the bar takes.
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
-    paddingHorizontal: space.lg,
-    paddingVertical: 6,
-    minWidth: 72,
+    gap: 3,
+    paddingVertical: 8,
   },
-  label: { fontSize: 11, fontWeight: '700', color: colors.inkSoft, letterSpacing: -0.1 },
+  label: { fontSize: 12, fontWeight: '700', color: colors.inkSoft, letterSpacing: -0.1 },
   labelActive: { color: colors.ink },
 });

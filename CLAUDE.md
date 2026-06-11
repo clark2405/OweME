@@ -78,6 +78,8 @@ oweme/
 - [ ] Local notification scheduling
 - [ ] Nudge link generation + `/n/[token]` page (mobile share-sheet nudge w/ tones exists; web page still a TODO)
 - [x] History screen — UI on mock data
+- [x] First-launch onboarding (`src/app/onboarding.tsx`, 3-page welcome + tab tour; seen-flag in AsyncStorage via `src/lib/onboarding.ts`, gated in `(tabs)/_layout.tsx`).
+- [x] Home reworked into a dashboard: the two stat bentos are tappable type filters (item/money), the lineup is capped at `HOME_LIMIT` with a "See all N →" overflow row, and a new full active-loans screen (`src/app/loans.tsx`, route registered in root `_layout.tsx`) has search + type chips + oldest/newest sort. Store helper `activeLoansBy(list, {type,sort,query})` backs both.
 
 **UI layer (this session):** `src/lib/{theme,motion,types,format,store}.ts` are the
 design tokens + mock data layer; `src/components/*` are the animated primitives

@@ -146,6 +146,36 @@ export function activeLoans(list: Loan[]): LoanWithBorrower[] {
     .map(withBorrower);
 }
 
+export type LoanTypeFilter = 'all' | 'item' | 'money';
+export type LoanSort = 'oldest' | 'newest';
+
+/**
+ * Active loans, filtered by type and sorted — backs both the home lineup
+ * (filtered via the stat tiles) and the full "see all" screen (search/sort).
+ * `query` matches item name or borrower name, case-insensitive.
+ */
+export function activeLoansBy(
+  list: Loan[],
+  opts: { type?: LoanTypeFilter; sort?: LoanSort; query?: string } = {},
+): LoanWithBorrower[] {
+  const { type = 'all', sort = 'oldest', query = '' } = opts;
+  const q = query.trim().toLowerCase();
+  return list
+    .filter((l) => l.status === 'active')
+    .filter((l) => type === 'all' || l.type === type)
+    .map(withBorrower)
+    .filter(({ loan, borrower }) => {
+      if (!q) return true;
+      const name = loan.type === 'item' ? loan.itemName : '';
+      return name.toLowerCase().includes(q) || borrower.name.toLowerCase().includes(q);
+    })
+    .sort((a, b) =>
+      sort === 'oldest'
+        ? a.loan.lentAt.localeCompare(b.loan.lentAt)
+        : b.loan.lentAt.localeCompare(a.loan.lentAt),
+    );
+}
+
 export function archivedLoans(list: Loan[]): LoanWithBorrower[] {
   return list
     .filter((l) => l.status !== 'active')

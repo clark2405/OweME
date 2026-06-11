@@ -1,7 +1,9 @@
 /**
- * The active-loan list row. Material surface with soft shadow + generous
- * padding (cramped = cheap). Tapping it presses inward and routes to detail.
- * Entrance staggering is owned by the parent (wrap in <Reveal index>).
+ * The active-loan list row. Slim by design: the borrower avatar is the only
+ * leading visual (no icon tile — one glyph per row, quiet surface), so a
+ * stack of these reads as a list, not a wall of cards. Tapping it presses
+ * inward and routes to detail. Entrance staggering is owned by the parent
+ * (wrap in <Reveal index>).
  */
 
 import { StyleSheet, Text, View } from 'react-native';
@@ -22,26 +24,19 @@ export function LoanCard({ data, onPress }: Props) {
   const { loan, borrower } = data;
   return (
     <PressableScale onPress={onPress} scaleTo={0.975} style={styles.card}>
-      <View style={styles.emojiBadge}>
-        <Icon name={loan.type === 'item' ? 'box' : 'money'} size={24} color={colors.ink} />
-      </View>
+      <Avatar name={borrower.name} emoji={borrower.emoji} size={40} />
 
       <View style={styles.body}>
         <Text style={styles.label} numberOfLines={1}>
           {loanLabel(loan)}
         </Text>
-        <View style={styles.metaRow}>
-          <Avatar name={borrower.name} emoji={borrower.emoji} size={20} />
-          <Text style={styles.meta} numberOfLines={1}>
-            {borrower.name} · {relativeDays(loan.lentAt)}
-          </Text>
-        </View>
+        <Text style={styles.meta} numberOfLines={1}>
+          {borrower.name} · {relativeDays(loan.lentAt)}
+        </Text>
       </View>
 
-      <View style={styles.right}>
-        <AgeChip loan={loan} />
-        <Icon name="chevronRight" size={20} color={colors.inkFaint} strokeWidth={2.2} />
-      </View>
+      <AgeChip loan={loan} />
+      <Icon name="chevronRight" size={18} color={colors.inkFaint} strokeWidth={2.2} />
     </PressableScale>
   );
 }
@@ -50,23 +45,14 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.lg,
+    gap: space.md,
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    padding: space.lg,
+    paddingVertical: space.md + 2,
+    paddingHorizontal: space.lg,
     ...shadow.card,
   },
-  emojiBadge: {
-    width: 52,
-    height: 52,
-    borderRadius: radius.md,
-    backgroundColor: colors.bgSunken,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  body: { flex: 1, gap: 6 },
-  label: { ...t.h3, fontSize: 18 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  meta: { ...t.small, color: colors.inkSoft, flexShrink: 1 },
-  right: { alignItems: 'flex-end', gap: 6 },
+  body: { flex: 1, gap: 3 },
+  label: { ...t.h3, fontSize: 17 },
+  meta: { ...t.small, color: colors.inkSoft },
 });

@@ -1,8 +1,9 @@
 /**
- * Bottom sheet for editing a borrower: rename, pick an emoji avatar, set an
- * optional phone (which pre-addresses WhatsApp/SMS nudges), and delete — but
- * only when they have no loans on record, since deleting otherwise would
- * orphan those rows. Reused from the borrower profile and People list.
+ * Bottom sheet for adding or editing a borrower: name, an emoji avatar, an
+ * optional phone (which pre-addresses WhatsApp/SMS nudges). In edit mode it
+ * also deletes — but only when they have no loans on record, since deleting
+ * otherwise would orphan those rows. Pass no `borrower` to create one fresh.
+ * Reused from the borrower profile and the People list.
  */
 
 import { useState } from 'react';
@@ -10,7 +11,7 @@ import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, Tex
 import { PressableScale } from './PressableScale';
 import { Avatar } from './Avatar';
 import { Button } from './Button';
-import { deleteBorrower, loanCountFor, updateBorrower } from '../lib/store';
+import { addBorrower, deleteBorrower, loanCountFor, updateBorrower } from '../lib/store';
 import { haptics } from '../lib/haptics';
 import { Borrower } from '../lib/types';
 import { colors, radius, shadow, space, type as t } from '../lib/theme';
@@ -22,28 +23,53 @@ const EMOJI_CHOICES = [
 
 interface Props {
   visible: boolean;
-  borrower: Borrower;
+  /** Omit to create a new person; pass one to edit it. */
+  borrower?: Borrower;
   onClose: () => void;
   onDeleted?: () => void;
+  /** Called with the new borrower's id after a create. */
+  onCreated?: (id: string) => void;
 }
 
-export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted }: Props) {
-  const [name, setName] = useState(borrower.name);
-  const [emoji, setEmoji] = useState(borrower.emoji);
-  const [phone, setPhone] = useState(borrower.phone ?? '');
+const DEFAULT_EMOJI = '🙂';
 
-  const loanCount = loanCountFor(borrower.id);
-  const canDelete = loanCount === 0;
+export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCreated }: Props) {
+  const creating = borrower == null;
+  const [name, setName] = useState(borrower?.name ?? '');
+  const [emoji, setEmoji] = useState(borrower?.emoji ?? DEFAULT_EMOJI);
+  const [phone, setPhone] = useState(borrower?.phone ?? '');
+
+  // Re-seed the fields each time the sheet opens (a create sheet starts blank,
+  // an edit sheet reflects the current borrower). Adjusting state during render
+  // on a prop change is React's recommended alternative to a reset effect.
+  const [wasOpen, setWasOpen] = useState(visible);
+  if (visible !== wasOpen) {
+    setWasOpen(visible);
+    if (visible) {
+      setName(borrower?.name ?? '');
+      setEmoji(borrower?.emoji ?? DEFAULT_EMOJI);
+      setPhone(borrower?.phone ?? '');
+    }
+  }
+
+  const loanCount = borrower ? loanCountFor(borrower.id) : 0;
+  const canDelete = !creating && loanCount === 0;
 
   const save = () => {
     if (!name.trim()) return;
-    updateBorrower(borrower.id, { name, emoji, phone });
     haptics.tap();
-    onClose();
+    if (creating) {
+      const id = addBorrower(name.trim(), emoji, phone);
+      onClose();
+      onCreated?.(id);
+    } else {
+      updateBorrower(borrower.id, { name, emoji, phone });
+      onClose();
+    }
   };
 
   const remove = () => {
-    if (deleteBorrower(borrower.id)) {
+    if (borrower && deleteBorrower(borrower.id)) {
       haptics.tap();
       onClose();
       onDeleted?.();
@@ -52,14 +78,15 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted }: Pro
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close" />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={styles.sheet}>
+      <View style={styles.root}>
+        <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close" />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={styles.sheet}>
           <View style={styles.grabber} />
 
           <View style={styles.head}>
-            <Avatar name={name || borrower.name} emoji={emoji} size={56} />
-            <Text style={[t.overline, styles.headLabel]}>Edit person</Text>
+            <Avatar name={name || '?'} emoji={emoji} size={56} />
+            <Text style={[t.overline, styles.headLabel]}>{creating ? 'Add person' : 'Edit person'}</Text>
           </View>
 
           <TextInput
@@ -99,29 +126,33 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted }: Pro
           />
 
           <View style={styles.actions}>
-            <Button label="Save" onPress={save} disabled={!name.trim()} />
-            <PressableScale
-              onPress={canDelete ? remove : undefined}
-              disabled={!canDelete}
-              style={styles.delete}
-              accessibilityRole="button"
-              accessibilityLabel="Delete person"
-            >
-              <Text style={[styles.deleteText, !canDelete && styles.deleteOff]}>
-                {canDelete
-                  ? 'Delete person'
-                  : `Can’t delete — ${loanCount} loan${loanCount === 1 ? '' : 's'} on record`}
-              </Text>
-            </PressableScale>
+            <Button label={creating ? 'Add 🤝' : 'Save'} onPress={save} disabled={!name.trim()} />
+            {!creating && (
+              <PressableScale
+                onPress={canDelete ? remove : undefined}
+                disabled={!canDelete}
+                style={styles.delete}
+                accessibilityRole="button"
+                accessibilityLabel="Delete person"
+              >
+                <Text style={[styles.deleteText, !canDelete && styles.deleteOff]}>
+                  {canDelete
+                    ? 'Delete person'
+                    : `Can’t delete — ${loanCount} loan${loanCount === 1 ? '' : 's'} on record`}
+                </Text>
+              </PressableScale>
+            )}
+            </View>
           </View>
-        </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(26,21,16,0.4)' },
+  root: { flex: 1, justifyContent: 'flex-end' },
+  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(26,21,16,0.4)' },
   sheet: {
     backgroundColor: colors.bg,
     borderTopLeftRadius: radius.xl,

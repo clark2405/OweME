@@ -99,6 +99,14 @@ export function shortDate(isoDate: string): string {
   });
 }
 
+/** "June 2026" — section header for grouping the archive by month. */
+export function monthLabel(isoDate: string): string {
+  return new Date(isoDate + 'T00:00:00').toLocaleDateString(undefined, {
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
 /** One-line label for what a loan is. */
 export function loanLabel(loan: Loan): string {
   return loan.type === 'item' ? loan.itemName : money(loan.amount, loan.currency);

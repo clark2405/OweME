@@ -150,11 +150,18 @@ export interface Settings {
   nudgesEnabled: boolean;
   /** Where nudge messages go: a platform's prefilled composer, or the share sheet. */
   channel: NudgeChannel;
+  /** Opt-in: surface the (lender-private) Hall of Shame leaderboard. */
+  shameMode: boolean;
 }
 
 const SETTINGS_KEY = 'oweme.settings.v1';
 
-let settings: Settings = { defaultCurrency: 'PHP', nudgesEnabled: true, channel: 'share' };
+let settings: Settings = {
+  defaultCurrency: 'PHP',
+  nudgesEnabled: true,
+  channel: 'share',
+  shameMode: false,
+};
 let settingsSnapshot = settings;
 function getSettingsSnapshot() {
   return settingsSnapshot;
@@ -196,6 +203,10 @@ export function setNudgesEnabled(v: boolean) {
 
 export function setNudgeChannel(c: NudgeChannel) {
   commitSettings({ ...settings, channel: c });
+}
+
+export function setShameMode(v: boolean) {
+  commitSettings({ ...settings, shameMode: v });
 }
 
 /** Re-mirror every active loan's cadence into pending notifications. */
@@ -264,6 +275,56 @@ export function archivedLoans(list: Loan[]): LoanWithBorrower[] {
     .map(withBorrower);
 }
 
+export type ArchiveFilter = 'all' | 'returned' | 'written_off';
+
+/** Archived loans (newest-resolved first), filtered by status and a name/item
+ *  search — backs the History list's filter chips + search box. */
+export function archivedLoansBy(
+  list: Loan[],
+  opts: { status?: ArchiveFilter; query?: string } = {},
+): LoanWithBorrower[] {
+  const { status = 'all', query = '' } = opts;
+  const q = query.trim().toLowerCase();
+  return archivedLoans(list)
+    .filter(({ loan }) => status === 'all' || loan.status === status)
+    .filter(({ loan, borrower }) => {
+      if (!q) return true;
+      const name = loan.type === 'item' ? loan.itemName : '';
+      return name.toLowerCase().includes(q) || borrower.name.toLowerCase().includes(q);
+    });
+}
+
+export interface ArchiveStats {
+  /** Items marked returned (came home). */
+  itemsReturned: number;
+  /** Money marked returned, grouped by currency (never summed across them). */
+  moneyRecovered: { currency: string; total: number }[];
+  /** Loans given up on. */
+  writtenOff: number;
+}
+
+/** The "payoff" tally for the History hero: what actually came back. */
+export function archivedStats(list: Loan[]): ArchiveStats {
+  let itemsReturned = 0;
+  let writtenOff = 0;
+  const recovered = new Map<string, number>();
+  for (const l of list) {
+    if (l.status === 'returned') {
+      if (l.type === 'item') itemsReturned += 1;
+      else recovered.set(l.currency, (recovered.get(l.currency) ?? 0) + l.amount);
+    } else if (l.status === 'written_off') {
+      writtenOff += 1;
+    }
+  }
+  return {
+    itemsReturned,
+    moneyRecovered: [...recovered.entries()]
+      .map(([currency, total]) => ({ currency, total }))
+      .sort((a, b) => b.total - a.total),
+    writtenOff,
+  };
+}
+
 export function loanById(list: Loan[], id: string): Loan | undefined {
   return list.find((l) => l.id === id);
 }
@@ -324,6 +385,65 @@ export function slowestReturner(
     }
   }
   return worst;
+}
+
+export interface ShameEntry {
+  borrower: Borrower;
+  /** Active loans this person is holding (items + money). */
+  activeCount: number;
+  /** Of those, how many are items. */
+  itemCount: number;
+  /** Days the oldest active loan has been out — the headline number. */
+  oldestActiveDays: number;
+  /** Active money still owed, per currency (never summed across currencies). */
+  moneyOut: { currency: string; total: number }[];
+  /** Composite ranking heat: age dominates, count nudges it up. */
+  score: number;
+  /** Playful rank title keyed off how long the oldest thing's been out. */
+  title: string;
+}
+
+function shameTitle(oldestDays: number): string {
+  if (oldestDays >= 60) return 'Serial Borrower';
+  if (oldestDays >= 30) return 'Repeat Offender';
+  if (oldestDays >= 14) return 'On Thin Ice';
+  return 'Just Forgetful';
+}
+
+/**
+ * The Hall of Shame leaderboard (opt-in, lender-private): everyone currently
+ * holding something, ranked worst-first. "Worst" = a heat score where the age
+ * of the oldest outstanding loan dominates and each extra thing nudges it up.
+ * People who owe nothing are left off entirely.
+ */
+export function shameBoard(list: Loan[], people: Borrower[]): ShameEntry[] {
+  const entries: ShameEntry[] = [];
+  for (const b of people) {
+    const active = list.filter((l) => l.borrowerId === b.id && l.status === 'active');
+    if (active.length === 0) continue;
+
+    const money = new Map<string, number>();
+    let itemCount = 0;
+    let oldest = 0;
+    for (const l of active) {
+      oldest = Math.max(oldest, daysSince(l.lentAt));
+      if (l.type === 'money') money.set(l.currency, (money.get(l.currency) ?? 0) + l.amount);
+      else itemCount += 1;
+    }
+
+    entries.push({
+      borrower: b,
+      activeCount: active.length,
+      itemCount,
+      oldestActiveDays: oldest,
+      moneyOut: [...money.entries()]
+        .map(([currency, total]) => ({ currency, total }))
+        .sort((a, b) => b.total - a.total),
+      score: oldest + active.length * 3,
+      title: shameTitle(oldest),
+    });
+  }
+  return entries.sort((a, b) => b.score - a.score);
 }
 
 /** Distinct item names ever lent, most-recently-used first — for autocomplete. */

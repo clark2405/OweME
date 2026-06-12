@@ -204,6 +204,57 @@ on the mock store, today.
 
 ---
 
+## P4 — Public shame mode 😈 (next session, 2026-06-14)
+
+> Spec-sanctioned: `PROJECT.md` §9 lists it under *Someday / maybe — "Group
+> visibility (public shame mode, opt-in)."* **Guardrails:** it must stay
+> **opt-in** and **lender-private** in v1 — "public" means the lender *chooses
+> to share* a board, NOT that borrowers get an account or see anything
+> automatically. No borrower-facing surface, no group balances (that's the
+> Splitwise line we don't cross, §2). All buildable on the mock store — no
+> backend. The Settings toggle already renders (`shameMode` useState in
+> `settings.tsx`); right now it controls nothing — that's task A.
+>
+> Most of the data already exists in `store.ts`: `reliabilityFor`,
+> `mostWanted`, `slowestReturner`, `archivedStats`. Build order A → B → C.
+
+- [x] **A. Persist the toggle (wire `shameMode` into Settings)** — added
+  `shameMode: boolean` (default `false`) to the persisted `Settings` in
+  `store.ts` (in the `oweme.settings.v1` blob + hydration) with a
+  `setShameMode()` setter; `settings.tsx` now reads `useSettings().shameMode`
+  and the toggle copy describes what it does. Everything below gates on it.
+
+- [x] **B. The Hall of Shame board (new screen + data)** — `store.ts` gained
+  `shameBoard(loans, borrowers)` → `ShameEntry[]`, ranking holders worst-first
+  by a heat score (`oldestActiveDays + activeCount * 3`; age dominates),
+  with per-currency `moneyOut` (never cross-summed), `itemCount`, and a
+  playful `title` (`shameTitle()`: Just Forgetful < On Thin Ice < Repeat
+  Offender < Serial Borrower). New route `src/app/shame.tsx` (registered in
+  root `_layout.tsx`): a dark 👑 podium for #1 (🥇 Most Wanted + title), a
+  🥈/🥉/#n ranked list below, "only you can see this" footnote, and a
+  "Spotless… suspiciously reliable 😌" empty state. Reached from a gated
+  `accentSoft` "😈 Open the Hall of Shame" card on the People tab.
+
+- [ ] **C. Shareable shame card (the "social" payoff)**
+  A "Post the board 📢" button on the shame screen → builds a text summary
+  ("🏆 OweMe Hall of Shame: 1. Miguel — 2 things, 34d 🐌 …") and opens the
+  share sheet (reuse the `Share`/`deliverNudge` pattern in `lib/nudge.ts`).
+  v1 = **text only**; a rendered image card (react-native-view-shot) is a
+  nice-to-have, park it if it balloons. This is the lender choosing to share —
+  keep it one deliberate tap, no auto-posting.
+
+- [ ] **D. (stretch) Per-borrower "exempt from shame" flag**
+  Some people you don't want on the board (your tita, your boss). Optional
+  `exempt?: boolean` on `Borrower`, a toggle in `BorrowerEditSheet`, filtered
+  out of `shameBoard`. Only if A–C land with time to spare.
+
+> **Decisions to confirm with Clark before building:** (1) does "public"
+> ever mean a real shared/Supabase link, or is share-sheet-only fine for v1?
+> (2) rank score weighting — money-weighted, count-weighted, or oldest-first?
+> (3) is the playful-but-mean tone OK, or keep it gentle?
+
+---
+
 *Done so far (for context): onboarding flow, home dashboard (tappable bento
 filters + pinned overdue group + capped lineup + "See all"), full
 active-loans screen with search/sort, swipe-to-return / swipe-to-nudge on
@@ -212,6 +263,8 @@ presets, cadence, inline new borrower, contacts import, item-name
 autocomplete), loan detail with nudge tones + channels + nudge history +
 photo lightbox + confetti + undo-delete + lend-it-again, global undo toasts,
 scheduled nudge notifications + long-press actions, People tab with
-most-wanted board + borrower editing (emoji/phone/delete) + reliability
-stats, phone-addressed nudges, history, settings (persisted), responsive
-floating tab bar.*
+most-wanted board + borrower editing (emoji/phone/delete) + add-a-person
+from the People tab + reliability stats, phone-addressed nudges, per-loan
+currency picker in the add flow, history (payoff-stats hero + search +
+status filter + month grouping), settings (persisted), responsive floating
+tab bar.*

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { StyleSheet, Switch, Text, View } from 'react-native';
 import Animated, {
@@ -7,7 +6,6 @@ import Animated, {
   withTiming,
   withSequence,
   withDelay,
-  runOnJS,
   Easing,
   cancelAnimation,
 } from 'react-native-reanimated';
@@ -21,6 +19,7 @@ import {
   setDefaultCurrency,
   setNudgeChannel,
   setNudgesEnabled,
+  setShameMode,
   useSettings,
 } from '../../lib/store';
 import { NUDGE_CHANNELS } from '../../lib/nudge';
@@ -121,8 +120,7 @@ function Card({ children, index }: { children: React.ReactNode; index: number })
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { defaultCurrency, nudgesEnabled, channel } = useSettings();
-  const [shameMode, setShameMode] = useState(false);
+  const { defaultCurrency, nudgesEnabled, channel, shameMode } = useSettings();
 
   const replayTour = () => {
     resetOnboarding();
@@ -193,7 +191,10 @@ export default function SettingsScreen() {
           <View style={styles.toggleRow}>
             <View style={styles.toggleText}>
               <Text style={t.h3}>Public shame mode 😈</Text>
-              <Text style={styles.sub}>Opt-in leaderboard. Parked for later, obviously.</Text>
+              <Text style={styles.sub}>
+                Rank who&apos;s holding your stuff longest. Just for you — adds a Hall of
+                Shame to the People tab.
+              </Text>
             </View>
             <Switch
               value={shameMode}

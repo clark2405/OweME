@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { Screen } from '../../components/Screen';
@@ -6,12 +7,14 @@ import { Reveal } from '../../components/Reveal';
 import { PressableScale } from '../../components/PressableScale';
 import { Avatar } from '../../components/Avatar';
 import { Icon } from '../../components/Icon';
+import { BorrowerEditSheet } from '../../components/BorrowerEditSheet';
 import {
   mostWanted,
   reliabilityFor,
   slowestReturner,
   useBorrowers,
   useLoans,
+  useSettings,
 } from '../../lib/store';
 import { loanLabel, relativeDays } from '../../lib/format';
 import { colors, radius, shadow, space, type as t } from '../../lib/theme';
@@ -20,13 +23,29 @@ export default function BorrowersScreen() {
   const router = useRouter();
   const loans = useLoans();
   const borrowers = useBorrowers();
+  const [addOpen, setAddOpen] = useState(false);
+  const { shameMode } = useSettings();
 
   const wanted = mostWanted(loans);
   const slowest = slowestReturner(loans, borrowers);
 
   return (
     <Screen scroll tabBarInset bare>
-      <Header overline="The usual suspects" title="People" />
+      <Header
+        overline="The usual suspects"
+        title="People"
+        trailing={
+          <PressableScale
+            onPress={() => setAddOpen(true)}
+            scaleTo={0.9}
+            style={styles.addBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Add a person"
+          >
+            <Icon name="plus" size={20} color={colors.surface} strokeWidth={2.4} />
+          </PressableScale>
+        }
+      />
 
       {/* Most wanted — the playful leaderboard (spec §3.4). */}
       {wanted && (
@@ -49,6 +68,26 @@ export default function BorrowersScreen() {
                 🐌 Slowest to return: {slowest.borrower.name} · ~{slowest.avgDays}d avg
               </Text>
             )}
+          </PressableScale>
+        </Reveal>
+      )}
+
+      {/* Opt-in Hall of Shame entry — only when the setting is on. */}
+      {shameMode && (
+        <Reveal from={20}>
+          <PressableScale
+            onPress={() => router.push('/shame')}
+            scaleTo={0.98}
+            style={styles.shameCard}
+            accessibilityRole="button"
+            accessibilityLabel="Open the Hall of Shame"
+          >
+            <Text style={styles.shameEmoji}>😈</Text>
+            <View style={styles.shameBody}>
+              <Text style={styles.shameTitle}>Open the Hall of Shame</Text>
+              <Text style={styles.shameSub}>Who&apos;s holding your stuff longest — just for you</Text>
+            </View>
+            <Icon name="chevronRight" size={20} color={colors.accentPress} strokeWidth={2.2} />
           </PressableScale>
         </Reveal>
       )}
@@ -83,11 +122,26 @@ export default function BorrowersScreen() {
           );
         })}
       </View>
+
+      <BorrowerEditSheet
+        visible={addOpen}
+        onClose={() => setAddOpen(false)}
+        onCreated={(newId) => router.push(`/borrower/${newId}`)}
+      />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  addBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadow.card,
+  },
   wantedCard: {
     backgroundColor: colors.ink,
     borderRadius: radius.lg,
@@ -109,6 +163,19 @@ const styles = StyleSheet.create({
     marginVertical: space.md,
   },
   wantedSlow: { ...t.small, color: colors.surfaceWarm },
+  shameCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    backgroundColor: colors.accentSoft,
+    borderRadius: radius.lg,
+    padding: space.lg,
+    marginBottom: space.lg,
+  },
+  shameEmoji: { fontSize: 26 },
+  shameBody: { flex: 1, gap: 2 },
+  shameTitle: { ...t.h3, color: colors.accentPress },
+  shameSub: { ...t.small, color: colors.accentPress, opacity: 0.8 },
   list: { gap: space.md },
   row: {
     flexDirection: 'row',

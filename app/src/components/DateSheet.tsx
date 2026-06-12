@@ -57,9 +57,10 @@ export function DateSheet({ visible, value, title = 'Pick a date', minDate, maxD
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close date picker" />
-      <View style={styles.sheet}>
-        <View style={styles.grabber} />
+      <View style={styles.root}>
+        <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close date picker" />
+        <View style={styles.sheet}>
+          <View style={styles.grabber} />
         <Text style={[t.overline, styles.title]}>{title}</Text>
 
         <View style={styles.navRow}>
@@ -105,13 +106,15 @@ export function DateSheet({ visible, value, title = 'Pick a date', minDate, maxD
             );
           })}
         </View>
+        </View>
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: 'rgba(26,21,16,0.4)' },
+  root: { flex: 1, justifyContent: 'flex-end' },
+  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(26,21,16,0.4)' },
   sheet: {
     backgroundColor: colors.bg,
     borderTopLeftRadius: radius.xl,

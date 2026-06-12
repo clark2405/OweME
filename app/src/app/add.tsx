@@ -23,6 +23,7 @@ import { DateSheet } from '../components/DateSheet';
 import {
   addBorrower,
   addLoan,
+  CurrencyCode,
   loanById,
   pastItemNames,
   updateLoan,
@@ -49,6 +50,8 @@ const LENT_PRESETS = [
   { label: '1 week ago', days: -7 },
 ];
 
+const CURRENCIES: CurrencyCode[] = ['PHP', 'USD', 'EUR'];
+
 const CADENCES: { value: ReminderCadence; label: string }[] = [
   { value: 'off', label: 'Off' },
   { value: 'weekly', label: 'Weekly' },
@@ -74,10 +77,12 @@ export default function AddLoanScreen() {
   const borrowers = useBorrowers();
   const { defaultCurrency } = useSettings();
 
-  // Edit/clone keep the loan's own currency; otherwise new money loans use the default.
-  const currency = source?.type === 'money' ? source.currency : defaultCurrency;
-
   const [type, setType] = useState<LoanType>(source?.type ?? 'item');
+  // Edit/clone keep the loan's own currency; otherwise a new money loan starts
+  // on the default but can be switched per-loan without changing the setting.
+  const [currency, setCurrency] = useState<CurrencyCode>(
+    source?.type === 'money' ? (source.currency as CurrencyCode) : defaultCurrency,
+  );
   const [itemName, setItemName] = useState(source?.type === 'item' ? source.itemName : '');
   const [amount, setAmount] = useState(source?.type === 'money' ? String(source.amount) : '');
   const [photoUri, setPhotoUri] = useState<string | undefined>(
@@ -242,17 +247,39 @@ export default function AddLoanScreen() {
                     returnKeyType="next"
                   />
                 ) : (
-                  <View style={styles.amountRow}>
-                    <Text style={styles.peso}>{currencySymbol(currency)}</Text>
-                    <TextInput
-                      value={amount}
-                      onChangeText={(v) => setAmount(v.replace(/[^0-9.]/g, ''))}
-                      placeholder="0"
-                      placeholderTextColor={colors.inkFaint}
-                      keyboardType="decimal-pad"
-                      style={[styles.input, styles.amountInput]}
-                      autoFocus={!editing}
-                    />
+                  <View style={styles.moneyField}>
+                    <View style={styles.amountRow}>
+                      <Text style={styles.peso}>{currencySymbol(currency)}</Text>
+                      <TextInput
+                        value={amount}
+                        onChangeText={(v) => setAmount(v.replace(/[^0-9.]/g, ''))}
+                        placeholder="0"
+                        placeholderTextColor={colors.inkFaint}
+                        keyboardType="decimal-pad"
+                        style={[styles.input, styles.amountInput]}
+                        autoFocus={!editing}
+                      />
+                    </View>
+                    <View style={styles.chipRow}>
+                      {CURRENCIES.map((c) => {
+                        const on = c === currency;
+                        return (
+                          <PressableScale
+                            key={c}
+                            onPress={() => setCurrency(c)}
+                            scaleTo={0.94}
+                            style={[styles.curChip, on && styles.chipOn]}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Currency ${c}`}
+                            accessibilityState={{ selected: on }}
+                          >
+                            <Text style={[styles.curChipText, on && styles.chipTextOn]}>
+                              {currencySymbol(c)} {c}
+                            </Text>
+                          </PressableScale>
+                        );
+                      })}
+                    </View>
                   </View>
                 )}
               </View>
@@ -544,7 +571,17 @@ const styles = StyleSheet.create({
     borderColor: colors.hairline,
   },
   suggestText: { ...t.small, color: colors.inkSoft, maxWidth: 160 },
+  moneyField: { gap: space.md },
   amountRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  curChip: {
+    paddingVertical: space.sm,
+    paddingHorizontal: space.lg,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.hairline,
+  },
+  curChipText: { ...t.small, color: colors.inkSoft },
   peso: { ...t.numeral, color: colors.inkSoft },
   amountInput: { flex: 1, fontSize: 34, lineHeight: 42, fontWeight: '800', letterSpacing: -1 },
   photoWrap: { alignSelf: 'flex-start' },

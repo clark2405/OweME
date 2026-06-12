@@ -6,9 +6,9 @@
  */
 
 import Svg, { Circle, Line, Path } from 'react-native-svg';
-import Animated, { SharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import Animated, { SharedValue, useAnimatedStyle, withSpring, useSharedValue, useAnimatedReaction, withTiming } from 'react-native-reanimated';
 import { colors } from '../lib/theme';
-import { spring } from '../lib/motion';
+import { spring, expoOut } from '../lib/motion';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path) as any;
 const AnimatedCircle = Animated.createAnimatedComponent(Circle) as any;
@@ -51,7 +51,19 @@ export function Icon({ name, size = 24, color = colors.ink, strokeWidth = 2, foc
     fill: 'none',
   };
 
-  const progress = clickProgress || { value: 0 };
+  const fallbackProgress = useSharedValue(0);
+  const progress = clickProgress || fallbackProgress;
+
+  const rotation = useSharedValue(0);
+
+  useAnimatedReaction(
+    () => progress.value,
+    (curr, prev) => {
+      if (prev !== null && curr > prev && prev === 0) {
+        rotation.value = withTiming(rotation.value + 360, { duration: 600, easing: expoOut });
+      }
+    }
+  );
 
   // Home
   const homeRoofStyle = useAnimatedStyle(() => ({
@@ -88,7 +100,15 @@ export function Icon({ name, size = 24, color = colors.ink, strokeWidth = 2, foc
     transform: [{ translateX: progress.value * -4 }],
   }));
 
-  return (
+  // Plus
+  const plusStyle = useAnimatedStyle(() => ({
+    transform: [
+      { rotate: `${rotation.value}deg` },
+      { scale: 1 + progress.value * 0.2 },
+    ],
+  }));
+
+  const svg = (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       {name === 'home' && (
         <>
@@ -213,4 +233,14 @@ export function Icon({ name, size = 24, color = colors.ink, strokeWidth = 2, foc
       {name === 'check' && <Path d="M5 12.5 10 17.5 19.5 7" {...common} />}
     </Svg>
   );
+
+  if (name === 'plus') {
+    return (
+      <Animated.View style={[plusStyle, { width: size, height: size, alignItems: 'center', justifyContent: 'center' }]}>
+        {svg}
+      </Animated.View>
+    );
+  }
+
+  return svg;
 }

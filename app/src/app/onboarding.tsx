@@ -27,8 +27,14 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   useAnimatedStyle,
+  useSharedValue,
   withSpring,
   withTiming,
+  LinearTransition,
+  FadeIn,
+  FadeInUp,
+  FadeOut,
+  FadeOutUp,
 } from 'react-native-reanimated';
 import { AmbientBackground } from '../components/AmbientBackground';
 import { Reveal } from '../components/Reveal';
@@ -39,7 +45,7 @@ import { AppPreview } from '../components/onboarding/AppPreview';
 import { FloatingChips } from '../components/onboarding/FloatingChips';
 import { NudgePreview } from '../components/onboarding/NudgePreview';
 import { markOnboardingSeen } from '../lib/onboarding';
-import { spring } from '../lib/motion';
+import { spring, expoOut } from '../lib/motion';
 import { colors, radius, shadow, space, type as t } from '../lib/theme';
 
 type Visual = 'chips' | 'preview' | 'nudge' | 'tour';
@@ -89,11 +95,31 @@ const LEGEND: { blurb: string }[] = [
 ];
 
 /** Tab tour on the last page — where everything else lives. */
-const TOUR: { icon: IconName; label: string; blurb: string }[] = [
-  { icon: 'home', label: 'Home', blurb: 'What’s still out in the wild' },
-  { icon: 'people', label: 'People', blurb: 'Who has your stuff + their track record' },
-  { icon: 'history', label: 'History', blurb: 'Everything that found its way home' },
-  { icon: 'plus', label: 'Lend something', blurb: 'The coral button — start here' },
+const TOUR: { icon: IconName; label: string; blurb: string; details: string }[] = [
+  {
+    icon: 'home',
+    label: 'Home',
+    blurb: 'What’s still out in the wild',
+    details: 'Track your active loans, total money out in the wild (split by currency), and overdue items. Swipe cards left to nudge, or right to mark returned.',
+  },
+  {
+    icon: 'people',
+    label: 'People',
+    blurb: 'Who has your stuff + their track record',
+    details: 'Keep a contacts directory. Displays a "Most Wanted" board, debtor reliability stats, and profiles. Import contacts directly from your iOS address book.',
+  },
+  {
+    icon: 'history',
+    label: 'History',
+    blurb: 'Everything that found its way home',
+    details: 'A clean archive of returned or written-off loans. Tap any completed loan to copy details and lend it again, or easily undo accidental returns.',
+  },
+  {
+    icon: 'plus',
+    label: 'Lend something',
+    blurb: 'The coral button — start here',
+    details: 'Log a new loan in 15 seconds. Capture item photos, backdate when it was lent, choose recurring nudge presets, and autocomplete item names.',
+  },
 ];
 
 export default function OnboardingScreen() {
@@ -101,6 +127,7 @@ export default function OnboardingScreen() {
   const { width } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
   const [page, setPage] = useState(0);
+  const [expanded, setExpanded] = useState<number | null>(null);
   const last = page === PAGES.length - 1;
 
   const finish = () => {
@@ -175,7 +202,7 @@ export default function OnboardingScreen() {
                     header (so it clears the text and fills the bottom on tall
                     screens), but collapse to 0 and let the page scroll on short
                     ones. */}
-                <View style={styles.flexSpacerTop} />
+                <View style={p.visual === 'tour' ? styles.staticSpacerTop : styles.flexSpacerTop} />
                 <View style={styles.visualArea}>
                   {p.visual === 'chips' && (
                     <Reveal active={active} index={3} from={20}>
@@ -212,21 +239,16 @@ export default function OnboardingScreen() {
                   {p.visual === 'tour' && (
                     <View style={styles.tour}>
                       {TOUR.map((stop, j) => (
-                        <Reveal key={stop.label} active={active} index={3 + j} from={16}>
-                          <View style={styles.tourRow}>
-                            <View style={[styles.tourIcon, stop.icon === 'plus' && styles.tourIconAccent]}>
-                              <Icon
-                                name={stop.icon}
-                                size={18}
-                                color={stop.icon === 'plus' ? colors.onAccent : colors.inkSoft}
-                              />
-                            </View>
-                            <View style={styles.tourText}>
-                              <Text style={t.h3}>{stop.label}</Text>
-                              <Text style={t.small}>{stop.blurb}</Text>
-                            </View>
-                          </View>
-                        </Reveal>
+                        <TourRow
+                          key={stop.label}
+                          stop={stop}
+                          isExpanded={expanded === j}
+                          onPress={() => {
+                            setExpanded(expanded === j ? null : j);
+                          }}
+                          active={active}
+                          index={3 + j}
+                        />
                       ))}
                     </View>
                   )}
@@ -257,6 +279,69 @@ function Dot({ active }: { active: boolean }) {
     backgroundColor: withTiming(active ? colors.accent : colors.hairline, { duration: 200 }),
   }));
   return <Animated.View style={[styles.dot, style]} />;
+}
+
+interface TourRowProps {
+  stop: typeof TOUR[number];
+  isExpanded: boolean;
+  onPress: () => void;
+  active: boolean;
+  index: number;
+}
+
+function TourRow({ stop, isExpanded, onPress, active, index }: TourRowProps) {
+  const clickProgress = useSharedValue(0);
+
+  const handlePress = () => {
+    clickProgress.value = 0;
+    clickProgress.value = withTiming(1, { duration: 200, easing: expoOut }, (finished) => {
+      if (finished) {
+        clickProgress.value = withTiming(0, { duration: 400, easing: expoOut });
+      }
+    });
+    onPress();
+  };
+
+  const chevronStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: withSpring(isExpanded ? '90deg' : '0deg', spring.press) }],
+  }));
+
+  return (
+    <Reveal active={active} index={index} from={16}>
+      <Animated.View layout={LinearTransition.springify().damping(22).stiffness(160)}>
+        <PressableScale onPress={handlePress} style={styles.tourRow} scaleTo={0.98}>
+          <View style={styles.tourRowMain}>
+            <View style={[styles.tourIcon, stop.icon === 'plus' && styles.tourIconAccent]}>
+              <Icon
+                name={stop.icon}
+                size={18}
+                color={stop.icon === 'plus' ? colors.onAccent : colors.inkSoft}
+                clickProgress={clickProgress}
+              />
+            </View>
+            <View style={styles.tourText}>
+              <Text style={t.h3}>{stop.label}</Text>
+              <Text style={t.small}>{stop.blurb}</Text>
+            </View>
+            <Animated.View style={chevronStyle}>
+              <Icon name="chevronRight" size={16} color={colors.inkFaint} />
+            </Animated.View>
+          </View>
+
+          {isExpanded && (
+            <Animated.View
+              entering={FadeIn.duration(150)}
+              exiting={FadeOut.duration(120)}
+              style={styles.tourDetails}
+            >
+              <View style={styles.divider} />
+              <Text style={styles.detailsText}>{stop.details}</Text>
+            </Animated.View>
+          )}
+        </PressableScale>
+      </Animated.View>
+    </Reveal>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -293,14 +378,15 @@ const styles = StyleSheet.create({
   // on tall screens and collapse (page scrolls) on short ones.
   visualArea: { paddingVertical: space.sm },
   flexSpacerTop: { flex: 2, minHeight: space.lg },
+  staticSpacerTop: { height: space.xl },
   flexSpacerBottom: { flex: 3, minHeight: space.lg },
   kicker: { color: colors.accent },
   headline: { marginTop: space.xs, fontSize: 38, lineHeight: 42 },
   accent: { color: colors.accent },
   body: { fontSize: 15.5, lineHeight: 23, maxWidth: 340 },
 
-  previewBlock: { gap: space.lg },
-  legend: { gap: space.md },
+  previewBlock: { gap: space.xl },
+  legend: { gap: space.md, marginTop: space.sm },
   // Fixed row height so the three badges are evenly spaced regardless of copy.
   legendRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 26 },
   legendBadge: {
@@ -316,13 +402,29 @@ const styles = StyleSheet.create({
 
   tour: { gap: space.md },
   tourRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
+    flexDirection: 'column',
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     padding: space.md,
     ...shadow.card,
+  },
+  tourRowMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+  },
+  tourDetails: {
+    marginTop: space.md,
+    gap: space.sm,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.hairline,
+  },
+  detailsText: {
+    ...t.small,
+    color: colors.inkSoft,
+    lineHeight: 18,
   },
   tourIcon: {
     width: 38,

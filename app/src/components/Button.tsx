@@ -20,9 +20,6 @@ import { spring } from '../lib/motion';
 
 type Variant = 'primary' | 'ghost' | 'pill';
 
-/** Width of the diagonal sheen that sweeps the primary button on press. */
-const SWEEP_BAND = 110;
-
 interface Props {
   label: string;
   onPress?: () => void;
@@ -34,20 +31,12 @@ interface Props {
 
 export function Button({ label, onPress, variant = 'primary', icon, disabled, style }: Props) {
   const press = useSharedValue(0);
-  const width = useSharedValue(0);
   const reduce = useReducedMotion();
 
-  // A diagonal sheen that travels the FULL width of the button on press (left
-  // edge → right edge), not a band stuck in the middle. Opacity is a bell so it
-  // fades in as it crosses and out as it leaves.
-  const sweep = useAnimatedStyle(() => {
-    const p = press.value;
+  // A subtle white overlay that fades in on press for a premium, clean glow/highlight.
+  const highlight = useAnimatedStyle(() => {
     return {
-      opacity: reduce ? 0 : p * (1 - p) * 4 * 0.22,
-      transform: [
-        { translateX: -SWEEP_BAND + p * (width.value + SWEEP_BAND) },
-        { skewX: '-14deg' },
-      ],
+      opacity: reduce ? 0 : press.value * 0.12,
     };
   });
 
@@ -56,7 +45,6 @@ export function Button({ label, onPress, variant = 'primary', icon, disabled, st
   return (
     <PressableScale
       onPress={disabled ? undefined : onPress}
-      onLayout={(e) => (width.value = e.nativeEvent.layout.width)}
       onPressIn={() => (press.value = withTiming(1, { duration: 320 }))}
       onPressOut={() => (press.value = withSpring(0, spring.press))}
       scaleTo={0.97}
@@ -71,7 +59,7 @@ export function Button({ label, onPress, variant = 'primary', icon, disabled, st
       ]}
     >
       {isPrimary && (
-        <Animated.View pointerEvents="none" style={[styles.sweep, sweep]} />
+        <Animated.View pointerEvents="none" style={[styles.highlight, highlight]} />
       )}
       <View style={styles.row}>
         {icon}
@@ -106,12 +94,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceWarm,
   },
   disabled: { opacity: 0.45 },
-  sweep: {
+  highlight: {
     position: 'absolute',
     top: 0,
     bottom: 0,
     left: 0,
-    width: SWEEP_BAND,
+    right: 0,
     backgroundColor: '#FFFFFF',
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.sm },

@@ -11,6 +11,8 @@ import { useSyncExternalStore } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Borrower, Loan, LoanBase, LoanWithBorrower, ReminderCadence } from './types';
 import { daysSince } from './format';
+import { NudgeChannel } from './nudge';
+import { cancelAllReminders, cancelLoanReminder, syncLoanReminder } from './notifications';
 
 function isoDaysAgo(days: number): string {
   const d = new Date();
@@ -144,13 +146,15 @@ export type CurrencyCode = 'PHP' | 'USD' | 'EUR';
 export interface Settings {
   /** Currency new money loans default to. */
   defaultCurrency: CurrencyCode;
-  /** Master switch for nudge reminders (consumed once notifications exist). */
+  /** Master switch for nudge reminders. */
   nudgesEnabled: boolean;
+  /** Where nudge messages go: a platform's prefilled composer, or the share sheet. */
+  channel: NudgeChannel;
 }
 
 const SETTINGS_KEY = 'oweme.settings.v1';
 
-let settings: Settings = { defaultCurrency: 'PHP', nudgesEnabled: true };
+let settings: Settings = { defaultCurrency: 'PHP', nudgesEnabled: true, channel: 'share' };
 let settingsSnapshot = settings;
 function getSettingsSnapshot() {
   return settingsSnapshot;
@@ -183,6 +187,24 @@ export function setDefaultCurrency(c: CurrencyCode) {
 
 export function setNudgesEnabled(v: boolean) {
   commitSettings({ ...settings, nudgesEnabled: v });
+  if (v) {
+    resyncAllReminders();
+  } else {
+    cancelAllReminders();
+  }
+}
+
+export function setNudgeChannel(c: NudgeChannel) {
+  commitSettings({ ...settings, channel: c });
+}
+
+/** Re-mirror every active loan's cadence into pending notifications. */
+function resyncAllReminders() {
+  for (const l of loans) {
+    if (l.status === 'active' && l.reminder && l.reminder !== 'off') {
+      void syncLoanReminder(l, getBorrower(l.borrowerId)?.name ?? 'Someone', settings.nudgesEnabled);
+    }
+  }
 }
 
 export function getBorrower(id: string): Borrower | undefined {
@@ -280,12 +302,60 @@ export function reliabilityFor(list: Loan[], borrowerId: string): ReliabilitySta
   };
 }
 
+/** The single longest-outstanding active loan — the "🏆 most wanted". */
+export function mostWanted(list: Loan[]): LoanWithBorrower | null {
+  const active = list.filter((l) => l.status === 'active');
+  if (active.length === 0) return null;
+  const oldest = active.reduce((a, b) => (a.lentAt <= b.lentAt ? a : b));
+  return withBorrower(oldest);
+}
+
+/** Slowest returner — borrower with the worst average days-to-return, needs at
+ *  least one resolved loan to qualify. Null if nobody has returned anything. */
+export function slowestReturner(
+  list: Loan[],
+  people: Borrower[],
+): { borrower: Borrower; avgDays: number } | null {
+  let worst: { borrower: Borrower; avgDays: number } | null = null;
+  for (const b of people) {
+    const stat = reliabilityFor(list, b.id);
+    if (stat.avgDaysToReturn != null && (worst == null || stat.avgDaysToReturn > worst.avgDays)) {
+      worst = { borrower: b, avgDays: stat.avgDaysToReturn };
+    }
+  }
+  return worst;
+}
+
+/** Distinct item names ever lent, most-recently-used first — for autocomplete. */
+export function pastItemNames(list: Loan[]): string[] {
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const l of [...list].sort((a, b) => b.lentAt.localeCompare(a.lentAt))) {
+    if (l.type !== 'item') continue;
+    const key = l.itemName.trim();
+    const lower = key.toLowerCase();
+    if (!key || seen.has(lower)) continue;
+    seen.add(lower);
+    names.push(key);
+  }
+  return names;
+}
+
 // --- writes ----------------------------------------------------------------
 
 function commit(next: Loan[]) {
   loans = next;
   snapshot = next;
   emit();
+}
+
+/** Mirror one loan's reminder schedule after a write. */
+function syncReminderFor(loan: Loan) {
+  void syncLoanReminder(
+    loan,
+    getBorrower(loan.borrowerId)?.name ?? 'Someone',
+    settings.nudgesEnabled,
+  );
 }
 
 export function markReturned(id: string) {
@@ -296,6 +366,7 @@ export function markReturned(id: string) {
         : l,
     ),
   );
+  cancelLoanReminder(id);
 }
 
 export function writeOff(id: string) {
@@ -306,6 +377,7 @@ export function writeOff(id: string) {
         : l,
     ),
   );
+  cancelLoanReminder(id);
 }
 
 /** Undo a return / write-off — sends the loan back out into the wild. */
@@ -315,11 +387,15 @@ export function unreturn(id: string) {
       l.id === id ? { ...l, status: 'active', returnedAt: undefined } : l,
     ),
   );
+  const loan = loans.find((l) => l.id === id);
+  if (loan) syncReminderFor(loan);
 }
 
 export interface NewLoanInput {
   borrowerId: string;
   notes?: string;
+  /** ISO date the loan started; defaults to today on create, preserved on edit. */
+  lentAt?: string;
   dueAt?: string;
   reminder?: ReminderCadence;
   type: 'item' | 'money';
@@ -344,10 +420,12 @@ export function addLoan(input: NewLoanInput): string {
     notes: input.notes,
     dueAt: input.dueAt,
     reminder: input.reminder,
-    lentAt: new Date().toISOString().slice(0, 10),
+    lentAt: input.lentAt ?? new Date().toISOString().slice(0, 10),
     status: 'active',
   };
-  commit([loanFromInput(base, input), ...loans]);
+  const loan = loanFromInput(base, input);
+  commit([loan, ...loans]);
+  syncReminderFor(loan);
   return id;
 }
 
@@ -363,17 +441,35 @@ export function updateLoan(id: string, input: NewLoanInput) {
         notes: input.notes,
         dueAt: input.dueAt,
         reminder: input.reminder,
-        lentAt: l.lentAt,
+        lentAt: input.lentAt ?? l.lentAt,
         status: l.status,
         returnedAt: l.returnedAt,
       };
       return loanFromInput(base, input);
     }),
   );
+  const loan = loans.find((l) => l.id === id);
+  if (loan) syncReminderFor(loan);
 }
 
 export function deleteLoan(id: string) {
   commit(loans.filter((l) => l.id !== id));
+  cancelLoanReminder(id);
+}
+
+/** Re-insert a just-deleted loan (undo). Reminders re-sync from its state. */
+export function restoreLoan(loan: Loan) {
+  if (loans.some((l) => l.id === loan.id)) return;
+  commit([loan, ...loans]);
+  syncReminderFor(loan);
+}
+
+/** Append a nudge timestamp to a loan — powers "Nudged 3× · last week". */
+export function recordNudge(id: string) {
+  const now = new Date().toISOString();
+  commit(
+    loans.map((l) => (l.id === id ? { ...l, nudges: [...(l.nudges ?? []), now] } : l)),
+  );
 }
 
 function commitBorrowers(next: Borrower[]) {
@@ -382,8 +478,31 @@ function commitBorrowers(next: Borrower[]) {
   emit();
 }
 
-export function addBorrower(name: string, emoji = '🙂'): string {
+export function addBorrower(name: string, emoji = '🙂', phone?: string): string {
   const id = `b${Date.now()}`;
-  commitBorrowers([...borrowers, { id, name, emoji }]);
+  commitBorrowers([...borrowers, { id, name, emoji, phone }]);
   return id;
+}
+
+export function updateBorrower(
+  id: string,
+  patch: Partial<Pick<Borrower, 'name' | 'emoji' | 'phone'>>,
+) {
+  const clean: typeof patch = { ...patch };
+  if ('phone' in clean) clean.phone = clean.phone?.trim() || undefined;
+  if ('name' in clean && clean.name != null) clean.name = clean.name.trim();
+  commitBorrowers(borrowers.map((b) => (b.id === id ? { ...b, ...clean } : b)));
+}
+
+/** How many loans (any status) reference a borrower — gates delete. */
+export function loanCountFor(id: string): number {
+  return loans.filter((l) => l.borrowerId === id).length;
+}
+
+/** Remove a borrower. Refuses if they still have any loans on record (which
+ *  would orphan those rows); returns false so the UI can explain why. */
+export function deleteBorrower(id: string): boolean {
+  if (loanCountFor(id) > 0) return false;
+  commitBorrowers(borrowers.filter((b) => b.id !== id));
+  return true;
 }

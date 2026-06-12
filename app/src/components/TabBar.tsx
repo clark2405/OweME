@@ -5,17 +5,18 @@
  * premium/warm aesthetic.
  */
 
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   useAnimatedStyle,
+  useSharedValue,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { PressableScale } from './PressableScale';
 import { Icon, IconName } from './Icon';
 import { colors, radius, shadow, space } from '../lib/theme';
-import { reduceMotion, spring } from '../lib/motion';
+import { reduceMotion, spring, expoOut } from '../lib/motion';
 
 /** Approx height of the floating pill (icon + label + padding), used by screens
  *  to size their bottom clearance so content/FAB never collide with the bar. */
@@ -51,6 +52,18 @@ function TabItem({
   routeName: string;
   onPress: () => void;
 }) {
+  const clickProgress = useSharedValue(0);
+
+  const handlePress = () => {
+    clickProgress.value = 0;
+    clickProgress.value = withTiming(1, { duration: 120, easing: expoOut }, (finished) => {
+      if (finished) {
+        clickProgress.value = withTiming(0, { duration: 180, easing: expoOut });
+      }
+    });
+    onPress();
+  };
+
   const iconStyle = useAnimatedStyle(() => ({
     transform: [
       { scale: withSpring(focused ? 1.1 : 1, spring.pop) },
@@ -63,7 +76,7 @@ function TabItem({
 
   return (
     <PressableScale
-      onPress={onPress}
+      onPress={handlePress}
       scaleTo={0.9}
       style={styles.item}
       accessibilityRole="tab"
@@ -76,9 +89,15 @@ function TabItem({
           size={26}
           color={focused ? colors.ink : colors.inkFaint}
           strokeWidth={focused ? 2.2 : 1.9}
+          focused={focused}
+          clickProgress={clickProgress}
         />
       </Animated.View>
-      <Animated.Text style={[styles.label, labelStyle, focused && styles.labelActive]}>
+      <Animated.Text
+        style={[styles.label, labelStyle, focused && styles.labelActive]}
+        numberOfLines={1}
+        maxFontSizeMultiplier={1.3}
+      >
         {LABELS[routeName]}
       </Animated.Text>
     </PressableScale>

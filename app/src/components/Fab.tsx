@@ -52,7 +52,9 @@ export function Fab({ onPress }: { onPress?: () => void }) {
         <View style={styles.plus}>
           <Icon name="plus" size={24} color={colors.onAccent} strokeWidth={2.4} />
         </View>
-        <Text style={styles.label}>Lend something</Text>
+        <Text style={styles.label} numberOfLines={1} maxFontSizeMultiplier={1.3}>
+          Lend something
+        </Text>
       </PressableScale>
     </Animated.View>
   );

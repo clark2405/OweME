@@ -20,6 +20,9 @@ import { spring } from '../lib/motion';
 
 type Variant = 'primary' | 'ghost' | 'pill';
 
+/** Width of the diagonal sheen that sweeps the primary button on press. */
+const SWEEP_BAND = 110;
+
 interface Props {
   label: string;
   onPress?: () => void;
@@ -31,20 +34,30 @@ interface Props {
 
 export function Button({ label, onPress, variant = 'primary', icon, disabled, style }: Props) {
   const press = useSharedValue(0);
+  const width = useSharedValue(0);
   const reduce = useReducedMotion();
 
-  // Sweep highlight that slides across the primary button on press.
-  const sweep = useAnimatedStyle(() => ({
-    opacity: reduce ? 0 : press.value * 0.18,
-    transform: [{ translateX: (press.value - 1) * 60 }],
-  }));
+  // A diagonal sheen that travels the FULL width of the button on press (left
+  // edge → right edge), not a band stuck in the middle. Opacity is a bell so it
+  // fades in as it crosses and out as it leaves.
+  const sweep = useAnimatedStyle(() => {
+    const p = press.value;
+    return {
+      opacity: reduce ? 0 : p * (1 - p) * 4 * 0.22,
+      transform: [
+        { translateX: -SWEEP_BAND + p * (width.value + SWEEP_BAND) },
+        { skewX: '-14deg' },
+      ],
+    };
+  });
 
   const isPrimary = variant === 'primary';
 
   return (
     <PressableScale
       onPress={disabled ? undefined : onPress}
-      onPressIn={() => (press.value = withTiming(1, { duration: 90 }))}
+      onLayout={(e) => (width.value = e.nativeEvent.layout.width)}
+      onPressIn={() => (press.value = withTiming(1, { duration: 320 }))}
       onPressOut={() => (press.value = withSpring(0, spring.press))}
       scaleTo={0.97}
       disabled={disabled}
@@ -97,7 +110,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     bottom: 0,
-    width: '60%',
+    left: 0,
+    width: SWEEP_BAND,
     backgroundColor: '#FFFFFF',
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.sm },

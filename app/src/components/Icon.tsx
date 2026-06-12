@@ -6,7 +6,13 @@
  */
 
 import Svg, { Circle, Line, Path } from 'react-native-svg';
+import Animated, { SharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { colors } from '../lib/theme';
+import { spring } from '../lib/motion';
+
+const AnimatedPath = Animated.createAnimatedComponent(Path) as any;
+const AnimatedCircle = Animated.createAnimatedComponent(Circle) as any;
+const AnimatedLine = Animated.createAnimatedComponent(Line) as any;
 
 export type IconName =
   | 'home'
@@ -23,16 +29,20 @@ export type IconName =
   | 'search'
   | 'edit'
   | 'trash'
-  | 'camera';
+  | 'camera'
+  | 'image'
+  | 'check';
 
 interface Props {
   name: IconName;
   size?: number;
   color?: string;
   strokeWidth?: number;
+  focused?: boolean;
+  clickProgress?: SharedValue<number>;
 }
 
-export function Icon({ name, size = 24, color = colors.ink, strokeWidth = 2 }: Props) {
+export function Icon({ name, size = 24, color = colors.ink, strokeWidth = 2, focused = false, clickProgress }: Props) {
   const common = {
     stroke: color,
     strokeWidth,
@@ -41,31 +51,68 @@ export function Icon({ name, size = 24, color = colors.ink, strokeWidth = 2 }: P
     fill: 'none',
   };
 
+  const progress = clickProgress || { value: 0 };
+
+  // Home
+  const homeRoofStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: progress.value * -2 }],
+  }));
+  const homeDoorStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: progress.value * -1.5 }],
+  }));
+
+  // People
+  const peopleHeadStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: progress.value * -2 }],
+  }));
+  const peopleSecondStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: progress.value * -1.2 },
+      { translateX: progress.value * 1.2 },
+    ],
+  }));
+
+  // History
+  const historyLidStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: progress.value * -2.5 }],
+  }));
+  const historyDrawerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: progress.value * 1.2 }],
+  }));
+
+  // Settings
+  const settingsTopKnobStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: progress.value * 4 }],
+  }));
+  const settingsBottomKnobStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: progress.value * -4 }],
+  }));
+
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       {name === 'home' && (
         <>
-          <Path d="M3.5 10.8 12 4l8.5 6.8" {...common} />
+          <AnimatedPath d="M3.5 10.8 12 4l8.5 6.8" style={homeRoofStyle} {...common} />
           <Path d="M5.5 9.6V19a1 1 0 0 0 1 1H17.5a1 1 0 0 0 1-1V9.6" {...common} />
-          <Path d="M9.7 20v-5.2a1 1 0 0 1 1-1h2.6a1 1 0 0 1 1 1V20" {...common} />
+          <AnimatedPath d="M9.7 20v-5.2a1 1 0 0 1 1-1h2.6a1 1 0 0 1 1 1V20" style={homeDoorStyle} {...common} />
         </>
       )}
 
       {name === 'people' && (
         <>
-          <Circle cx="9" cy="8" r="3.2" {...common} />
+          <AnimatedCircle cx="9" cy="8" r="3.2" style={peopleHeadStyle} {...common} />
           <Path d="M3.5 19.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5" {...common} />
-          <Path d="M15.5 5.4a3.2 3.2 0 0 1 0 5.6" {...common} />
-          <Path d="M16.5 14.8c2.3.5 4 2.3 4 4.7" {...common} />
+          <AnimatedPath d="M15.5 5.4a3.2 3.2 0 0 1 0 5.6" style={peopleSecondStyle} {...common} />
+          <AnimatedPath d="M16.5 14.8c2.3.5 4 2.3 4 4.7" style={peopleSecondStyle} {...common} />
         </>
       )}
 
       {name === 'history' && (
         <>
           {/* archive tray — matches the "the archive" copy */}
-          <Path d="M3.5 6.5a1 1 0 0 1 1-1h15a1 1 0 0 1 1 1v2.4a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1Z" {...common} />
-          <Path d="M5 9.9V18.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.9" {...common} />
-          <Line x1="9.6" y1="13.4" x2="14.4" y2="13.4" {...common} />
+          <AnimatedPath d="M3.5 6.5a1 1 0 0 1 1-1h15a1 1 0 0 1 1 1v2.4a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1Z" style={historyLidStyle} {...common} />
+          <AnimatedPath d="M5 9.9V18.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.9" style={historyDrawerStyle} {...common} />
+          <AnimatedLine x1="9.6" y1="13.4" x2="14.4" y2="13.4" style={historyDrawerStyle} {...common} />
         </>
       )}
 
@@ -74,8 +121,8 @@ export function Icon({ name, size = 24, color = colors.ink, strokeWidth = 2 }: P
           {/* sliders — modern, less busy than a gear */}
           <Line x1="4" y1="8" x2="20" y2="8" {...common} />
           <Line x1="4" y1="16" x2="20" y2="16" {...common} />
-          <Circle cx="9" cy="8" r="2.5" {...common} fill={colors.surface} />
-          <Circle cx="15" cy="16" r="2.5" {...common} fill={colors.surface} />
+          <AnimatedCircle cx="9" cy="8" r="2.5" style={settingsTopKnobStyle} {...common} fill={colors.surface} />
+          <AnimatedCircle cx="15" cy="16" r="2.5" style={settingsBottomKnobStyle} {...common} fill={colors.surface} />
         </>
       )}
 
@@ -153,6 +200,17 @@ export function Icon({ name, size = 24, color = colors.ink, strokeWidth = 2 }: P
           <Circle cx="11" cy="12.5" r="2.8" {...common} />
         </>
       )}
+
+      {name === 'image' && (
+        <>
+          {/* framed photo — mountain + sun, the universal gallery glyph */}
+          <Path d="M4.5 6.5a1 1 0 0 1 1-1h13a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1Z" {...common} />
+          <Circle cx="9" cy="10" r="1.5" {...common} />
+          <Path d="M5 16.5 9.5 12l2.5 2.4L15 11l4 4.2" {...common} />
+        </>
+      )}
+
+      {name === 'check' && <Path d="M5 12.5 10 17.5 19.5 7" {...common} />}
     </Svg>
   );
 }

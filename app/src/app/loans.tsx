@@ -10,11 +10,13 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { Screen } from '../components/Screen';
 import { Reveal } from '../components/Reveal';
-import { LoanCard } from '../components/LoanCard';
+import { SwipeableLoanCard } from '../components/SwipeableLoanCard';
 import { SegmentedToggle } from '../components/SegmentedToggle';
 import { PressableScale } from '../components/PressableScale';
 import { Icon } from '../components/Icon';
 import { activeLoansBy, LoanSort, LoanTypeFilter, useLoans } from '../lib/store';
+import { useLoanQuickActions } from '../lib/quickActions';
+import { isOverdue } from '../lib/format';
 import { colors, radius, shadow, space, type as t } from '../lib/theme';
 
 const TYPES: { value: LoanTypeFilter; label: string }[] = [
@@ -36,7 +38,12 @@ export default function LoansScreen() {
   const [sort, setSort] = useState<LoanSort>('oldest');
   const [query, setQuery] = useState('');
 
+  const { onReturn, onNudge } = useLoanQuickActions();
   const results = activeLoansBy(loans, { type, sort, query });
+  // Overdue pins to the top of any view — the urgent stuff shouldn't hide
+  // behind the sort order.
+  const overdue = results.filter((d) => isOverdue(d.loan));
+  const rest = results.filter((d) => !isOverdue(d.loan));
 
   return (
     <Screen scroll contentStyle={styles.content}>
@@ -122,13 +129,44 @@ export default function LoansScreen() {
           </View>
         </Reveal>
       ) : (
-        <View style={styles.list}>
-          {results.map((data, i) => (
-            <Reveal key={data.loan.id} index={5 + Math.min(i, 6)} from={20}>
-              <LoanCard data={data} onPress={() => router.push(`/loan/${data.loan.id}`)} />
-            </Reveal>
-          ))}
-        </View>
+        <>
+          {overdue.length > 0 && (
+            <>
+              <Reveal index={5} from={16}>
+                <Text style={[t.overline, styles.overdueLabel]}>👀 {overdue.length} overdue</Text>
+              </Reveal>
+              <View style={styles.list}>
+                {overdue.map((data, i) => (
+                  <Reveal key={data.loan.id} index={6 + Math.min(i, 4)} from={20}>
+                    <SwipeableLoanCard
+                      data={data}
+                      onPress={() => router.push(`/loan/${data.loan.id}`)}
+                      onReturn={() => onReturn(data)}
+                      onNudge={() => onNudge(data)}
+                    />
+                  </Reveal>
+                ))}
+              </View>
+              {rest.length > 0 && (
+                <Reveal index={7} from={16}>
+                  <Text style={[t.overline, styles.restLabel]}>The rest</Text>
+                </Reveal>
+              )}
+            </>
+          )}
+          <View style={styles.list}>
+            {rest.map((data, i) => (
+              <Reveal key={data.loan.id} index={7 + Math.min(i, 6)} from={20}>
+                <SwipeableLoanCard
+                  data={data}
+                  onPress={() => router.push(`/loan/${data.loan.id}`)}
+                  onReturn={() => onReturn(data)}
+                  onNudge={() => onNudge(data)}
+                />
+              </Reveal>
+            ))}
+          </View>
+        </>
       )}
     </Screen>
   );
@@ -172,6 +210,8 @@ const styles = StyleSheet.create({
   chipText: { ...t.small, color: colors.inkSoft },
   chipTextActive: { color: colors.surface },
   sort: { marginBottom: space.xl },
+  overdueLabel: { color: colors.accentPress, marginBottom: space.md },
+  restLabel: { marginTop: space.xl, marginBottom: space.md },
   list: { gap: space.md },
   empty: {
     backgroundColor: colors.surface,

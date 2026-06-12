@@ -1,11 +1,4 @@
-/**
- * Add / edit a loan. The same form serves both: with no params it's the
- * 15-second "Lend something" flow; with `?id=` it loads that loan, prefills,
- * and saves in place. Covers item/money, an optional photo (items), inline
- * "new person", an optional due date, and a reminder cadence.
- */
-
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   KeyboardAvoidingView,
@@ -26,18 +19,21 @@ import { Button } from '../components/Button';
 import { PressableScale } from '../components/PressableScale';
 import { Icon } from '../components/Icon';
 import { Avatar } from '../components/Avatar';
+import { DateSheet } from '../components/DateSheet';
 import {
   addBorrower,
   addLoan,
   loanById,
+  pastItemNames,
   updateLoan,
   useBorrowers,
   useLoans,
   useSettings,
 } from '../lib/store';
+import { pickContact } from '../lib/contacts';
 import { ReminderCadence } from '../lib/types';
 import { currencySymbol, shortDate } from '../lib/format';
-import { colors, radius, shadow, space, type as t } from '../lib/theme';
+import { colors, radius, space, type as t } from '../lib/theme';
 
 type LoanType = 'item' | 'money';
 
@@ -45,6 +41,12 @@ const DUE_PRESETS = [
   { label: '1 week', days: 7 },
   { label: '2 weeks', days: 14 },
   { label: '1 month', days: 30 },
+];
+
+const LENT_PRESETS = [
+  { label: 'Today', days: 0 },
+  { label: 'Yesterday', days: -1 },
+  { label: '1 week ago', days: -7 },
 ];
 
 const CADENCES: { value: ReminderCadence; label: string }[] = [
@@ -62,42 +64,73 @@ function isoInDays(n: number): string {
 
 export default function AddLoanScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, clone } = useLocalSearchParams<{ id?: string; clone?: string }>();
   const loans = useLoans();
   const editing = id ? loanById(loans, id) : undefined;
+  // "Lend it again": prefill the item's identity from a past loan, but start
+  // the borrower/dates fresh (it's a brand-new loan, not an edit).
+  const template = clone ? loanById(loans, clone) : undefined;
+  const source = editing ?? template;
   const borrowers = useBorrowers();
   const { defaultCurrency } = useSettings();
 
-  // Editing keeps the loan's own currency; new money loans use the default.
-  const currency = editing?.type === 'money' ? editing.currency : defaultCurrency;
+  // Edit/clone keep the loan's own currency; otherwise new money loans use the default.
+  const currency = source?.type === 'money' ? source.currency : defaultCurrency;
 
-  const [type, setType] = useState<LoanType>(editing?.type ?? 'item');
-  const [itemName, setItemName] = useState(editing?.type === 'item' ? editing.itemName : '');
-  const [amount, setAmount] = useState(editing?.type === 'money' ? String(editing.amount) : '');
+  const [type, setType] = useState<LoanType>(source?.type ?? 'item');
+  const [itemName, setItemName] = useState(source?.type === 'item' ? source.itemName : '');
+  const [amount, setAmount] = useState(source?.type === 'money' ? String(source.amount) : '');
   const [photoUri, setPhotoUri] = useState<string | undefined>(
-    editing?.type === 'item' ? editing.photoUrl : undefined,
+    source?.type === 'item' ? source.photoUrl : undefined,
   );
   const [borrowerId, setBorrowerId] = useState<string | null>(editing?.borrowerId ?? null);
-  const [notes, setNotes] = useState(editing?.notes ?? '');
+  const [notes, setNotes] = useState(source?.notes ?? '');
+  const [lentAt, setLentAt] = useState<string>(editing?.lentAt ?? isoInDays(0));
   const [dueAt, setDueAt] = useState<string | undefined>(editing?.dueAt);
   const [reminder, setReminder] = useState<ReminderCadence>(editing?.reminder ?? (id ? 'off' : 'weekly'));
 
   const [addingPerson, setAddingPerson] = useState(false);
   const [newName, setNewName] = useState('');
+  // Which date the calendar sheet is editing, if open.
+  const [dateSheet, setDateSheet] = useState<'lent' | 'due' | null>(null);
+
+  const today = isoInDays(0);
+  const lentMatchesPreset = LENT_PRESETS.some((p) => isoInDays(p.days) === lentAt);
 
   const valid =
     borrowerId != null &&
     (type === 'item' ? itemName.trim().length > 0 : Number(amount) > 0);
 
+  // Suggest item names from past loans — people lend the same handful of things
+  // over and over. Empty field shows recents; typing filters by substring.
+  const suggestions = useMemo(() => {
+    if (type !== 'item') return [];
+    const q = itemName.trim().toLowerCase();
+    return pastItemNames(loans)
+      .filter((n) => n.toLowerCase() !== q && (q === '' || n.toLowerCase().includes(q)))
+      .slice(0, 4);
+  }, [type, itemName, loans]);
+
+  const editOpts: ImagePicker.ImagePickerOptions = {
+    mediaTypes: ['images'],
+    allowsEditing: true,
+    aspect: [4, 3],
+    quality: 0.7,
+  };
+
+  // Snap a fresh photo of the thing being lent — the fastest path for the
+  // 15-second flow (no digging through the gallery).
+  const takePhoto = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) return;
+    const res = await ImagePicker.launchCameraAsync(editOpts);
+    if (!res.canceled) setPhotoUri(res.assets[0].uri);
+  };
+
   const pickPhoto = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) return;
-    const res = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.7,
-    });
+    const res = await ImagePicker.launchImageLibraryAsync(editOpts);
     if (!res.canceled) setPhotoUri(res.assets[0].uri);
   };
 
@@ -110,6 +143,20 @@ export default function AddLoanScreen() {
     setAddingPerson(false);
   };
 
+  // Pull a name (+ phone, which pre-addresses nudges) from the OS contact
+  // picker. Falls back to the inline form if the contact has no name.
+  const addFromContacts = async () => {
+    const contact = await pickContact();
+    if (!contact) return;
+    if (contact.name) {
+      const newId = addBorrower(contact.name, undefined, contact.phone);
+      setBorrowerId(newId);
+      setAddingPerson(false);
+    } else {
+      setAddingPerson(true);
+    }
+  };
+
   const submit = () => {
     if (!valid || !borrowerId) return;
     const input = {
@@ -120,6 +167,7 @@ export default function AddLoanScreen() {
       amount: type === 'money' ? Number(amount) : undefined,
       currency: type === 'money' ? currency : undefined,
       notes: notes.trim() || undefined,
+      lentAt,
       dueAt,
       reminder,
     };
@@ -160,10 +208,14 @@ export default function AddLoanScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <Reveal index={0} from={10}>
-              <Text style={t.overline}>{editing ? 'Tweak the details' : 'The 15-second flow'}</Text>
+              <Text style={t.overline}>
+                {editing ? 'Tweak the details' : template ? 'Round two 🔁' : 'The 15-second flow'}
+              </Text>
             </Reveal>
             <Reveal index={1} clip from={40}>
-              <Text style={[t.title, styles.title]}>{editing ? 'Edit loan' : 'Lend something'}</Text>
+              <Text style={[t.title, styles.title]}>
+                {editing ? 'Edit loan' : template ? 'Lend it again' : 'Lend something'}
+              </Text>
             </Reveal>
 
             <Reveal index={2} from={20}>
@@ -204,6 +256,23 @@ export default function AddLoanScreen() {
                   </View>
                 )}
               </View>
+
+              {type === 'item' && suggestions.length > 0 && (
+                <View style={styles.suggestRow}>
+                  {suggestions.map((name) => (
+                    <PressableScale
+                      key={name}
+                      onPress={() => setItemName(name)}
+                      scaleTo={0.94}
+                      style={styles.suggestChip}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Use ${name}`}
+                    >
+                      <Text style={styles.suggestText} numberOfLines={1}>{name}</Text>
+                    </PressableScale>
+                  ))}
+                </View>
+              )}
             </Reveal>
 
             {/* Photo — items only */}
@@ -222,10 +291,28 @@ export default function AddLoanScreen() {
                     </PressableScale>
                   </View>
                 ) : (
-                  <PressableScale onPress={pickPhoto} scaleTo={0.98} style={styles.photoAdd}>
-                    <Icon name="camera" size={20} color={colors.inkSoft} />
-                    <Text style={styles.photoAddText}>Add a photo</Text>
-                  </PressableScale>
+                  <View style={styles.photoChoices}>
+                    <PressableScale
+                      onPress={takePhoto}
+                      scaleTo={0.97}
+                      style={styles.photoAdd}
+                      accessibilityRole="button"
+                      accessibilityLabel="Take a photo with the camera"
+                    >
+                      <Icon name="camera" size={20} color={colors.inkSoft} />
+                      <Text style={styles.photoAddText}>Take photo</Text>
+                    </PressableScale>
+                    <PressableScale
+                      onPress={pickPhoto}
+                      scaleTo={0.97}
+                      style={styles.photoAdd}
+                      accessibilityRole="button"
+                      accessibilityLabel="Choose a photo from your gallery"
+                    >
+                      <Icon name="image" size={20} color={colors.inkSoft} />
+                      <Text style={styles.photoAddText}>Gallery</Text>
+                    </PressableScale>
+                  </View>
                 )}
               </Reveal>
             )}
@@ -258,6 +345,15 @@ export default function AddLoanScreen() {
                   <Icon name="plus" size={16} color={colors.inkSoft} strokeWidth={2.2} />
                   <Text style={styles.borrowerName}>New person</Text>
                 </PressableScale>
+                <PressableScale
+                  onPress={addFromContacts}
+                  scaleTo={0.94}
+                  style={[styles.borrowerChip, styles.newPersonChip]}
+                  accessibilityLabel="Add a borrower from your contacts"
+                >
+                  <Icon name="people" size={16} color={colors.inkSoft} strokeWidth={2} />
+                  <Text style={styles.borrowerName}>From contacts</Text>
+                </PressableScale>
               </View>
 
               {addingPerson && (
@@ -277,8 +373,38 @@ export default function AddLoanScreen() {
               )}
             </Reveal>
 
-            {/* Due date */}
+            {/* When it was lent — backdate stuff that's already been out a while */}
             <Reveal index={6} from={18}>
+              <Text style={[t.overline, styles.label]}>When did you lend it?</Text>
+              <View style={styles.chipRow}>
+                {LENT_PRESETS.map((p) => {
+                  const iso = isoInDays(p.days);
+                  const on = lentAt === iso;
+                  return (
+                    <PressableScale
+                      key={p.label}
+                      onPress={() => setLentAt(iso)}
+                      scaleTo={0.94}
+                      style={[styles.chip, on && styles.chipOn]}
+                    >
+                      <Text style={[styles.chipText, on && styles.chipTextOn]}>{p.label}</Text>
+                    </PressableScale>
+                  );
+                })}
+                <PressableScale
+                  onPress={() => setDateSheet('lent')}
+                  scaleTo={0.94}
+                  style={[styles.chip, !lentMatchesPreset && styles.chipOn]}
+                >
+                  <Text style={[styles.chipText, !lentMatchesPreset && styles.chipTextOn]}>
+                    {lentMatchesPreset ? 'Pick a date' : shortDate(lentAt)}
+                  </Text>
+                </PressableScale>
+              </View>
+            </Reveal>
+
+            {/* Due date */}
+            <Reveal index={7} from={18}>
               <Text style={[t.overline, styles.label]}>Due date (optional)</Text>
               <View style={styles.chipRow}>
                 <PressableScale
@@ -302,16 +428,22 @@ export default function AddLoanScreen() {
                     </PressableScale>
                   );
                 })}
-                {dueAt != null && !dueMatchesPreset && (
-                  <View style={[styles.chip, styles.chipOn]}>
-                    <Text style={[styles.chipText, styles.chipTextOn]}>Due {shortDate(dueAt)}</Text>
-                  </View>
-                )}
+                <PressableScale
+                  onPress={() => setDateSheet('due')}
+                  scaleTo={0.94}
+                  style={[styles.chip, dueAt != null && !dueMatchesPreset && styles.chipOn]}
+                >
+                  <Text
+                    style={[styles.chipText, dueAt != null && !dueMatchesPreset && styles.chipTextOn]}
+                  >
+                    {dueAt != null && !dueMatchesPreset ? `Due ${shortDate(dueAt)}` : 'Pick a date'}
+                  </Text>
+                </PressableScale>
               </View>
             </Reveal>
 
             {/* Reminder cadence */}
-            <Reveal index={7} from={18}>
+            <Reveal index={8} from={18}>
               <Text style={[t.overline, styles.label]}>Nudge me</Text>
               <View style={styles.chipRow}>
                 {CADENCES.map((c) => {
@@ -330,7 +462,7 @@ export default function AddLoanScreen() {
               </View>
             </Reveal>
 
-            <Reveal index={8} from={20}>
+            <Reveal index={9} from={20}>
               <Text style={[t.overline, styles.label]}>Notes (optional)</Text>
               <TextInput
                 value={notes}
@@ -352,6 +484,23 @@ export default function AddLoanScreen() {
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      <DateSheet
+        visible={dateSheet === 'lent'}
+        value={lentAt}
+        title="When did you lend it?"
+        maxDate={today}
+        onSelect={setLentAt}
+        onClose={() => setDateSheet(null)}
+      />
+      <DateSheet
+        visible={dateSheet === 'due'}
+        value={dueAt}
+        title="Due date"
+        minDate={lentAt}
+        onSelect={setDueAt}
+        onClose={() => setDateSheet(null)}
+      />
     </View>
   );
 }
@@ -381,6 +530,18 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.hairline,
   },
+  suggestRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.sm },
+  suggestChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: space.xs + 2,
+    paddingHorizontal: space.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceWarm,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+  },
+  suggestText: { ...t.small, color: colors.inkSoft, maxWidth: 160 },
   amountRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   peso: { ...t.numeral, color: colors.inkSoft },
   amountInput: { flex: 1, fontSize: 34, lineHeight: 42, fontWeight: '800', letterSpacing: -1 },
@@ -402,11 +563,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  photoChoices: { flexDirection: 'row', gap: space.sm },
   photoAdd: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: space.sm,
-    alignSelf: 'flex-start',
     paddingVertical: space.md,
     paddingHorizontal: space.lg,
     borderRadius: radius.md,

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Alert, Share, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Screen } from '../../components/Screen';
 import { Reveal } from '../../components/Reveal';
@@ -15,45 +15,35 @@ import {
   getBorrower,
   loanById,
   markReturned,
+  recordNudge,
+  restoreLoan,
   unreturn,
   useLoans,
+  useSettings,
   writeOff,
 } from '../../lib/store';
-import { loanLabel, money, relativeDays, shortDate } from '../../lib/format';
+import { deliverNudge, NUDGE_TONES } from '../../lib/nudge';
+import { showToast } from '../../lib/toast';
+import { loanLabel, relativeDays, relativeSince, shortDate } from '../../lib/format';
 import { haptics } from '../../lib/haptics';
 import { NudgeTone, ReminderCadence } from '../../lib/types';
+import { colors, radius, shadow, space, type as t } from '../../lib/theme';
 
 const REMINDER_LABEL: Record<Exclude<ReminderCadence, 'off'>, string> = {
   weekly: 'Nudges weekly',
   biweekly: 'Nudges every 2 wks',
   monthly: 'Nudges monthly',
 };
-import { colors, radius, shadow, space, type as t } from '../../lib/theme';
-
-const TONES: { value: NudgeTone; emoji: string; label: string }[] = [
-  { value: 'friendly', emoji: '😊', label: 'Friendly' },
-  { value: 'casual', emoji: '🙂', label: 'Casual' },
-  { value: 'pointed', emoji: '👀', label: 'Pointed' },
-];
-
-function nudgeMessage(tone: NudgeTone, what: string, who: string, when: string): string {
-  switch (tone) {
-    case 'friendly':
-      return `Hey ${who}! 😊 No rush at all — just a gentle nudge from OweMe that you've still got my ${what} (since ${when}). Whenever's good! 🙏`;
-    case 'casual':
-      return `Hey ${who} 🙂 OweMe here — reminder that my ${what} is still with you from ${when}. Mind sending it back when you get a sec?`;
-    case 'pointed':
-      return `${who}… 👀 OweMe says my ${what} has been out in the wild since ${when}. It misses home. Time to bring it back? 📦`;
-  }
-}
 
 export default function LoanDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const loans = useLoans();
+  const { channel } = useSettings();
   const loan = loanById(loans, id);
   const [nudgeOpen, setNudgeOpen] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
+  const [photoOpen, setPhotoOpen] = useState(false);
 
   if (!loan) {
     return (
@@ -64,14 +54,18 @@ export default function LoanDetailScreen() {
   }
 
   const borrower = getBorrower(loan.borrowerId)!;
-  const what = loan.type === 'item' ? loan.itemName : `${money(loan.amount, loan.currency)}`;
+  const what = loanLabel(loan);
+  const nudges = loan.nudges ?? [];
+  const lastNudge = nudges[nudges.length - 1];
+  // Soften the CTA if we nudged in the last day — the app shouldn't make the
+  // user the annoying one by encouraging double-nudges.
+  const nudgedRecently = lastNudge != null && Date.now() - new Date(lastNudge).getTime() < 86_400_000;
 
   const sendNudge = async (tone: NudgeTone) => {
     setNudgeOpen(false);
     haptics.tap();
-    await Share.share({
-      message: nudgeMessage(tone, what, borrower.name, shortDate(loan.lentAt)),
-    });
+    const sent = await deliverNudge(loan, borrower, tone, channel);
+    if (sent) recordNudge(loan.id);
   };
 
   const onReturned = () => {
@@ -81,21 +75,23 @@ export default function LoanDetailScreen() {
   };
 
   const onDelete = () => {
-    Alert.alert(
-      'Delete this loan?',
-      `Remove your ${what} from OweMe entirely? This can't be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            deleteLoan(loan.id);
-            router.back();
-          },
+    Alert.alert('Delete this loan?', `Remove your ${what} from OweMe? You can undo for a few seconds.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          const snapshot = loan;
+          deleteLoan(loan.id);
+          router.back();
+          showToast({
+            message: 'Loan deleted',
+            actionLabel: 'Undo',
+            onAction: () => restoreLoan(snapshot),
+          });
         },
-      ],
-    );
+      },
+    ]);
   };
 
   const onWriteOff = () => {
@@ -148,7 +144,14 @@ export default function LoanDetailScreen() {
         <Reveal index={1} from={26}>
           <View style={styles.hero}>
             {loan.type === 'item' && loan.photoUrl ? (
-              <Image source={{ uri: loan.photoUrl }} style={styles.heroPhoto} contentFit="cover" />
+              <PressableScale
+                onPress={() => setPhotoOpen(true)}
+                scaleTo={0.98}
+                accessibilityRole="imagebutton"
+                accessibilityLabel="View photo full screen"
+              >
+                <Image source={{ uri: loan.photoUrl }} style={styles.heroPhoto} contentFit="cover" />
+              </PressableScale>
             ) : (
               <View style={styles.heroBadge}>
                 <Icon name={loan.type === 'item' ? 'box' : 'money'} size={30} color={colors.ink} strokeWidth={1.9} />
@@ -169,6 +172,12 @@ export default function LoanDetailScreen() {
               {loan.status === 'active' && loan.reminder && loan.reminder !== 'off' && (
                 <Chip label={REMINDER_LABEL[loan.reminder]} tone="mint" />
               )}
+              {lastNudge && (
+                <Chip
+                  label={`Nudged ${nudges.length}× · ${relativeSince(lastNudge)}`}
+                  tone="sand"
+                />
+              )}
             </View>
           </View>
         </Reveal>
@@ -188,7 +197,7 @@ export default function LoanDetailScreen() {
             <View style={styles.toneCard}>
               <Text style={[t.overline, styles.toneLabel]}>Pick a tone · escalate as needed</Text>
               <View style={styles.toneRow}>
-                {TONES.map((tone) => (
+                {NUDGE_TONES.map((tone) => (
                   <PressableScale
                     key={tone.value}
                     onPress={() => sendNudge(tone.value)}
@@ -210,7 +219,7 @@ export default function LoanDetailScreen() {
         {loan.status === 'active' ? (
           <>
             <Button
-              label={nudgeOpen ? 'Maybe later' : 'Send a nudge 📨'}
+              label={nudgeOpen ? 'Maybe later' : nudgedRecently ? 'Nudge again?' : 'Send a nudge 📨'}
               variant="ghost"
               onPress={() => setNudgeOpen((v) => !v)}
             />
@@ -226,6 +235,10 @@ export default function LoanDetailScreen() {
                 {loan.status === 'returned' ? 'It found its way home 🎉' : 'Written off 🪦'}
               </Text>
             </View>
+            <Button
+              label="Lend it again 🔁"
+              onPress={() => router.push(`/add?clone=${loan.id}`)}
+            />
             <PressableScale
               onPress={() => unreturn(loan.id)}
               scaleTo={0.97}
@@ -240,6 +253,26 @@ export default function LoanDetailScreen() {
           </>
         )}
       </View>
+
+      {/* Full-screen photo viewer — tap anywhere to dismiss. */}
+      {loan.type === 'item' && loan.photoUrl && (
+        <Modal
+          visible={photoOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setPhotoOpen(false)}
+        >
+          <Pressable
+            style={styles.lightbox}
+            onPress={() => setPhotoOpen(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Close photo"
+          >
+            <Image source={{ uri: loan.photoUrl }} style={styles.lightboxPhoto} contentFit="contain" />
+            <Text style={styles.lightboxHint}>Tap anywhere to close</Text>
+          </Pressable>
+        </Modal>
+      )}
 
       {celebrating && (
         <Confetti
@@ -362,4 +395,18 @@ const styles = StyleSheet.create({
     marginTop: space.sm,
   },
   undoText: { ...t.small, color: colors.inkSoft },
+  lightbox: {
+    flex: 1,
+    backgroundColor: 'rgba(26,21,16,0.96)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: space.lg,
+  },
+  lightboxPhoto: { width: '100%', height: '75%' },
+  lightboxHint: {
+    ...t.small,
+    color: 'rgba(255,255,255,0.55)',
+    position: 'absolute',
+    bottom: space.xxl * 2,
+  },
 });

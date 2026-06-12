@@ -9,9 +9,11 @@ import { Icon } from '../../components/Icon';
 import {
   CurrencyCode,
   setDefaultCurrency,
+  setNudgeChannel,
   setNudgesEnabled,
   useSettings,
 } from '../../lib/store';
+import { NUDGE_CHANNELS } from '../../lib/nudge';
 import { resetOnboarding } from '../../lib/onboarding';
 import { colors, radius, shadow, space, type as t } from '../../lib/theme';
 
@@ -27,7 +29,7 @@ function Card({ children, index }: { children: React.ReactNode; index: number })
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { defaultCurrency, nudgesEnabled } = useSettings();
+  const { defaultCurrency, nudgesEnabled, channel } = useSettings();
   const [shameMode, setShameMode] = useState(false);
 
   const replayTour = () => {
@@ -74,6 +76,33 @@ export default function SettingsScreen() {
         </Card>
 
         <Card index={2}>
+          <Text style={[t.overline, styles.cardLabel]}>Nudges go through</Text>
+          <View style={styles.segmentRow}>
+            {NUDGE_CHANNELS.map((c) => {
+              const on = c.value === channel;
+              return (
+                <PressableScale
+                  key={c.value}
+                  onPress={() => setNudgeChannel(c.value)}
+                  scaleTo={0.94}
+                  style={[styles.curChip, on && styles.curChipOn]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                >
+                  <Text style={[styles.curText, styles.channelText, on && styles.curTextOn]}>
+                    {c.label}
+                  </Text>
+                </PressableScale>
+              );
+            })}
+          </View>
+          <Text style={styles.sub}>
+            Sends open with the message already written — one tap and it&apos;s gone.
+            &ldquo;Ask me&rdquo; uses the share sheet.
+          </Text>
+        </Card>
+
+        <Card index={3}>
           <View style={styles.toggleRow}>
             <View style={styles.toggleText}>
               <Text style={t.h3}>Public shame mode 😈</Text>
@@ -87,7 +116,7 @@ export default function SettingsScreen() {
           </View>
         </Card>
 
-        <Reveal index={3} from={20}>
+        <Reveal index={4} from={20}>
           <PressableScale onPress={replayTour} scaleTo={0.98} style={styles.row}>
             <View style={styles.toggleText}>
               <Text style={t.h3}>Replay the tour</Text>
@@ -97,7 +126,7 @@ export default function SettingsScreen() {
           </PressableScale>
         </Reveal>
 
-        <Reveal index={4} from={18}>
+        <Reveal index={5} from={18}>
           <Text style={styles.footer}>OweMe 📦 · v1.0 · made to get your stuff back</Text>
         </Reveal>
       </View>
@@ -125,6 +154,7 @@ const styles = StyleSheet.create({
   },
   curChipOn: { backgroundColor: colors.ink },
   curText: { ...t.h3, fontSize: 15, color: colors.inkSoft },
+  channelText: { fontSize: 12 },
   curTextOn: { color: colors.surface },
   row: {
     flexDirection: 'row',

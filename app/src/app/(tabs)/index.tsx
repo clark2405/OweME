@@ -5,13 +5,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { Screen } from '../../components/Screen';
 import { Reveal } from '../../components/Reveal';
-import { LoanCard } from '../../components/LoanCard';
+import { SwipeableLoanCard } from '../../components/SwipeableLoanCard';
 import { PressableScale } from '../../components/PressableScale';
 import { Icon } from '../../components/Icon';
 import { Fab } from '../../components/Fab';
 import { TAB_BAR_HEIGHT, tabBarBottomInset } from '../../components/TabBar';
-import { activeLoans, activeLoansBy, LoanTypeFilter, useLoans } from '../../lib/store';
-import { compactMoney } from '../../lib/format';
+import { activeLoans, activeLoansBy, LoanTypeFilter, useLoans, useSettings } from '../../lib/store';
+import { useLoanQuickActions } from '../../lib/quickActions';
+import { compactMoney, currencySymbol, isOverdue, moneyByCurrency } from '../../lib/format';
 import { reduceMotion } from '../../lib/motion';
 import { colors, radius, shadow, space, type as t } from '../../lib/theme';
 
@@ -50,17 +51,31 @@ export default function HomeScreen() {
   const fabBottom = tabBarTop + space.md;
   const listClearance = fabBottom + FAB_HEIGHT + space.xl;
 
-  const itemCount = active.filter((a) => a.loan.type === 'item').length;
-  const moneyTotal = active
-    .filter((a) => a.loan.type === 'money')
-    .reduce((s, a) => s + (a.loan.type === 'money' ? a.loan.amount : 0), 0);
+  const { defaultCurrency } = useSettings();
 
+  const itemCount = active.filter((a) => a.loan.type === 'item').length;
   const itemText = String(itemCount);
-  const moneyText = compactMoney(moneyTotal);
+
+  // Currencies can't be summed together. Show one primary currency big (the
+  // user's default if they have money in it, else the largest), and footnote
+  // any others as "+$20 €5".
+  const byCurrency = moneyByCurrency(loans);
+  const primary =
+    byCurrency.find((c) => c.currency === defaultCurrency) ?? byCurrency[0];
+  const others = byCurrency.filter((c) => c !== primary);
+  const moneyText = primary
+    ? compactMoney(primary.total, primary.currency)
+    : `${currencySymbol(defaultCurrency)}0`;
+  const othersText = others.map((c) => `+${compactMoney(c.total, c.currency)}`).join(' ');
+
+  const { onReturn, onNudge } = useLoanQuickActions();
 
   const filtered = activeLoansBy(loans, { type: filter });
-  const shown = filtered.slice(0, HOME_LIMIT);
-  const overflow = filtered.length - shown.length;
+  // Overdue jumps the queue into its own pinned group; the rest form the lineup.
+  const overdue = filtered.filter((d) => isOverdue(d.loan));
+  const rest = filtered.filter((d) => !isOverdue(d.loan));
+  const shown = rest.slice(0, HOME_LIMIT);
+  const overflow = filtered.length - overdue.length - shown.length;
 
   const seeAll = () =>
     router.push(filter === 'all' ? '/loans' : `/loans?type=${filter}`);
@@ -92,6 +107,8 @@ export default function HomeScreen() {
               <Text
                 style={[t.numeral, { fontSize: bentoFontSize(itemText), lineHeight: bentoFontSize(itemText) + 2 }]}
                 numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.6}
               >
                 {itemText}
               </Text>
@@ -106,49 +123,96 @@ export default function HomeScreen() {
               <Text
                 style={[t.numeral, styles.statMoney, { fontSize: bentoFontSize(moneyText), lineHeight: bentoFontSize(moneyText) + 2 }]}
                 numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.6}
               >
                 {moneyText}
               </Text>
+              {othersText !== '' && (
+                <Text style={styles.statOthers} numberOfLines={1}>{othersText}</Text>
+              )}
               <Text style={[styles.statLabel, styles.statLabelOnDark]}>still owed to you</Text>
             </StatTile>
           </View>
         </Reveal>
 
-        <Reveal index={3} from={18}>
-          <Text style={[t.overline, styles.sectionLabel]}>{lineupLabel}</Text>
-        </Reveal>
-
         {filtered.length === 0 ? (
-          <Reveal index={4}>
-            <View style={styles.empty}>
-              <Text style={styles.emptyEmoji}>{filter === 'all' ? '🌵' : '🔍'}</Text>
-              <Text style={styles.emptyText}>
-                {filter === 'all'
-                  ? 'Nobody owes you anything. Either you’re very organized or very stingy 😌'
-                  : `No ${filter === 'item' ? 'things' : 'money'} out right now.`}
-              </Text>
-            </View>
-          </Reveal>
+          <>
+            <Reveal index={3} from={18}>
+              <Text style={[t.overline, styles.sectionLabel]}>{lineupLabel}</Text>
+            </Reveal>
+            <Reveal index={4}>
+              <View style={styles.empty}>
+                <Text style={styles.emptyEmoji}>{filter === 'all' ? '🌵' : '🔍'}</Text>
+                <Text style={styles.emptyText}>
+                  {filter === 'all'
+                    ? 'Nobody owes you anything. Either you’re very organized or very stingy 😌'
+                    : `No ${filter === 'item' ? 'things' : 'money'} out right now.`}
+                </Text>
+              </View>
+            </Reveal>
+          </>
         ) : (
-          <View style={styles.list}>
-            {shown.map((data, i) => (
-              <Reveal key={data.loan.id} index={4 + i} from={22}>
-                <LoanCard data={data} onPress={() => router.push(`/loan/${data.loan.id}`)} />
-              </Reveal>
-            ))}
-
-            {overflow > 0 && (
-              <Reveal index={4 + shown.length} from={18}>
-                <PressableScale onPress={seeAll} scaleTo={0.98} style={styles.seeAll}>
-                  <Text style={styles.seeAllText}>
-                    See all {filtered.length}
-                    {filter === 'item' ? ' things' : filter === 'money' ? ' loans' : ' out'}
+          <>
+            {/* Overdue — pinned above the lineup, the one thing to yell about. */}
+            {overdue.length > 0 && (
+              <>
+                <Reveal index={3} from={18}>
+                  <Text style={[t.overline, styles.overdueLabel]}>
+                    👀 {overdue.length} overdue
                   </Text>
-                  <Icon name="chevronRight" size={18} color={colors.accent} strokeWidth={2.2} />
-                </PressableScale>
-              </Reveal>
+                </Reveal>
+                <View style={styles.list}>
+                  {overdue.map((data, i) => (
+                    <Reveal key={data.loan.id} index={4 + i} from={22}>
+                      <SwipeableLoanCard
+                        data={data}
+                        onPress={() => router.push(`/loan/${data.loan.id}`)}
+                        onReturn={() => onReturn(data)}
+                        onNudge={() => onNudge(data)}
+                      />
+                    </Reveal>
+                  ))}
+                </View>
+              </>
             )}
-          </View>
+
+            {rest.length > 0 && (
+              <>
+                <Reveal index={4 + overdue.length} from={18}>
+                  <Text
+                    style={[t.overline, styles.sectionLabel, overdue.length > 0 && styles.sectionLabelTop]}
+                  >
+                    {lineupLabel}
+                  </Text>
+                </Reveal>
+                <View style={styles.list}>
+                  {shown.map((data, i) => (
+                    <Reveal key={data.loan.id} index={5 + overdue.length + i} from={22}>
+                      <SwipeableLoanCard
+                        data={data}
+                        onPress={() => router.push(`/loan/${data.loan.id}`)}
+                        onReturn={() => onReturn(data)}
+                        onNudge={() => onNudge(data)}
+                      />
+                    </Reveal>
+                  ))}
+
+                  {overflow > 0 && (
+                    <Reveal index={5 + overdue.length + shown.length} from={18}>
+                      <PressableScale onPress={seeAll} scaleTo={0.98} style={styles.seeAll}>
+                        <Text style={styles.seeAllText}>
+                          See all {filtered.length}
+                          {filter === 'item' ? ' things' : filter === 'money' ? ' loans' : ' out'}
+                        </Text>
+                        <Icon name="chevronRight" size={18} color={colors.accent} strokeWidth={2.2} />
+                      </PressableScale>
+                    </Reveal>
+                  )}
+                </View>
+              </>
+            )}
+          </>
         )}
       </Screen>
 
@@ -218,9 +282,12 @@ const styles = StyleSheet.create({
   statRing: { borderColor: colors.ink },
   statRingDark: { borderColor: colors.surfaceWarm },
   statMoney: { color: colors.surface },
+  statOthers: { ...t.small, color: colors.inkFaint, fontWeight: '700', marginTop: 2 },
   statLabel: { ...t.small, color: colors.inkSoft },
   statLabelOnDark: { color: colors.inkFaint },
   sectionLabel: { marginBottom: space.lg },
+  sectionLabelTop: { marginTop: space.xl },
+  overdueLabel: { color: colors.accentPress, marginBottom: space.lg },
   list: { gap: space.md },
   seeAll: {
     flexDirection: 'row',

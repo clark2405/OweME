@@ -26,19 +26,34 @@ interface Props {
   from?: number;
   clip?: boolean;
   style?: StyleProp<ViewStyle>;
+  /**
+   * When set, the entrance is driven by this flag instead of playing once on
+   * mount: it animates in when `active` becomes true and snaps back to hidden
+   * when false. For pagers — each page reveals on arrival, and stays hidden
+   * (no pre-show) while it's off-screen, so there's no flash. Omit for the
+   * normal play-once-on-mount behavior.
+   */
+  active?: boolean;
 }
 
-export function Reveal({ children, index = 0, delay = 0, from = 18, clip = false, style }: Props) {
+export function Reveal({ children, index = 0, delay = 0, from = 18, clip = false, style, active }: Props) {
   const p = useSharedValue(0);
   const reduce = useReducedMotion();
 
   useEffect(() => {
-    const total = delay + index * stagger;
-    p.value = withDelay(
-      reduce ? 0 : total,
-      withTiming(1, { duration: reduce ? 0 : duration.base, easing: expoOut, reduceMotion }),
-    );
-  }, [delay, index, p, reduce]);
+    // active === undefined → play once on mount. Otherwise reveal when the page
+    // becomes active and snap hidden (off-screen) when it isn't, so each page
+    // reveals on arrival with no pre-show flash.
+    if (active === undefined || active) {
+      const total = delay + index * stagger;
+      p.value = withDelay(
+        reduce ? 0 : total,
+        withTiming(1, { duration: reduce ? 0 : duration.base, easing: expoOut, reduceMotion }),
+      );
+    } else {
+      p.value = 0;
+    }
+  }, [active, delay, index, p, reduce]);
 
   const inner = useAnimatedStyle(() => ({
     opacity: p.value,

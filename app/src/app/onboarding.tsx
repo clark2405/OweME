@@ -1,11 +1,16 @@
 /**
- * First-launch welcome. Three chapters, one idea each (first-seconds clarity):
- * 1. what OweMe is, 2. the core loop in motion, 3. where everything lives —
- * so the home screen can stay quiet and still leave nobody lost.
+ * First-launch welcome — four chapters, one idea each (offbrand §4
+ * first-seconds clarity), built to *show* the app, not just describe it:
+ *   01 Hook        — what OweMe is, your stuff drifting "out in the wild"
+ *   02 Home base   — a live mini-render of the home screen with numbered
+ *                    hotspots explaining the bentos / swipe / FAB
+ *   03 The magic   — the nudge that comes from OweMe, not you (in motion)
+ *   04 The map     — where everything lives, then the one accent CTA
  *
- * Horizontal pager with progress counter ("1 / 3"), staggered reveals per
- * page, ONE accent CTA. Skip is always available (agency). Reduced motion
- * collapses entrances via Reveal.
+ * Horizontal pager with a numbered counter, an ambient idle layer behind
+ * everything (nothing fully static), staggered reveals re-keyed per page so
+ * each chapter *arrives*, and a morphing progress pill. Skip is always there.
+ * All motion collapses under OS reduced-motion (Reveal + each visual).
  */
 
 import { useRef, useState } from 'react';
@@ -19,54 +24,76 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import { Screen } from '../components/Screen';
+import { AmbientBackground } from '../components/AmbientBackground';
 import { Reveal } from '../components/Reveal';
 import { Button } from '../components/Button';
 import { PressableScale } from '../components/PressableScale';
 import { Icon, IconName } from '../components/Icon';
+import { AppPreview } from '../components/onboarding/AppPreview';
+import { FloatingChips } from '../components/onboarding/FloatingChips';
+import { NudgePreview } from '../components/onboarding/NudgePreview';
 import { markOnboardingSeen } from '../lib/onboarding';
 import { spring } from '../lib/motion';
 import { colors, radius, shadow, space, type as t } from '../lib/theme';
 
+type Visual = 'chips' | 'preview' | 'nudge' | 'tour';
+
 interface Page {
-  overline: string;
+  kicker: string;
   headline: string;
   accentWord: string;
-  body: string;
+  body?: string;
+  visual: Visual;
 }
 
 const PAGES: Page[] = [
   {
-    overline: 'OweMe',
-    headline: 'Your stuff has a way of\n',
+    kicker: 'Welcome',
+    headline: 'Your stuff has a way of ',
     accentWord: 'wandering off.',
     body: 'The drill. The book. That ₱500 from lunch. OweMe remembers what you lent and who has it — so you don’t have to.',
+    visual: 'chips',
   },
   {
-    overline: 'The loop',
-    headline: 'Lend it.\nLog it.\n',
-    accentWord: 'Get it back.',
-    body: 'Logging a loan takes 15 seconds. It waits on your home screen, you nudge when it’s been a while, and it comes home with confetti.',
+    kicker: 'Your home base',
+    headline: 'Everything you’re owed, ',
+    accentWord: 'at a glance.',
+    visual: 'preview',
   },
   {
-    overline: 'The lay of the land',
-    headline: 'Everything has\n',
-    accentWord: 'a place.',
-    body: 'A quick tour before you go:',
+    kicker: 'The magic',
+    headline: 'We do the ',
+    accentWord: 'awkward part.',
+    body: 'Set a loan and forget it. OweMe pokes you when it’s been a while, then sends a friendly, pre-written nudge — so the reminder comes from the app, not from you.',
+    visual: 'nudge',
+  },
+  {
+    kicker: 'The lay of the land',
+    headline: 'Find your way ',
+    accentWord: 'around.',
+    visual: 'tour',
   },
 ];
 
-/** Tab tour shown on the last page — the "where everything else is" guide. */
+/** The numbered legend that decodes the hotspots in the home-screen preview. */
+const LEGEND: { blurb: string }[] = [
+  { blurb: 'What you’re owed — tap to filter.' },
+  { blurb: 'Swipe → returned 🎉 or nudge 📨.' },
+  { blurb: 'Lend an item or money in 15s.' },
+];
+
+/** Tab tour on the last page — where everything else lives. */
 const TOUR: { icon: IconName; label: string; blurb: string }[] = [
   { icon: 'home', label: 'Home', blurb: 'What’s still out in the wild' },
-  { icon: 'people', label: 'People', blurb: 'Who has your stuff (and their track record)' },
+  { icon: 'people', label: 'People', blurb: 'Who has your stuff + their track record' },
   { icon: 'history', label: 'History', blurb: 'Everything that found its way home' },
-  { icon: 'plus', label: 'Lend something', blurb: 'The big coral button — start here' },
+  { icon: 'plus', label: 'Lend something', blurb: 'The coral button — start here' },
 ];
 
 export default function OnboardingScreen() {
@@ -92,76 +119,134 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <Screen edges={['top', 'bottom']} contentStyle={styles.content}>
-      <View style={styles.topBar}>
-        <Text style={t.overline}>{page + 1} / {PAGES.length}</Text>
-        {!last && (
-          <PressableScale onPress={finish} scaleTo={0.94} style={styles.skip}>
-            <Text style={styles.skipLabel}>Skip</Text>
-          </PressableScale>
-        )}
-      </View>
+    <View style={styles.root}>
+      <AmbientBackground variant="home" />
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+        <View style={styles.topBar}>
+          <Text style={t.overline}>
+            {String(page + 1).padStart(2, '0')} <Text style={styles.counterDim}>/ {String(PAGES.length).padStart(2, '0')}</Text>
+          </Text>
+          {!last && (
+            <PressableScale onPress={finish} scaleTo={0.94} style={styles.skip} accessibilityLabel="Skip onboarding">
+              <Text style={styles.skipLabel}>Skip</Text>
+            </PressableScale>
+          )}
+        </View>
 
-      <ScrollView
-        ref={scrollRef}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={onScroll}
-        style={styles.pager}
-        contentContainerStyle={{ width: width * PAGES.length }}
-      >
-        {PAGES.map((p, i) => (
-          // Pages span the full window; re-key reveals to the active page so
-          // each chapter arrives, not just the first.
-          <View key={p.overline} style={[styles.page, { width }]}>
-            <Reveal key={`o${i}-${page === i}`} index={1} from={12}>
-              <Text style={t.overline}>{p.overline}</Text>
-            </Reveal>
-            <Reveal key={`h${i}-${page === i}`} index={2} clip from={48}>
-              <Text style={[t.hero, styles.headline]}>
-                {p.headline}
-                <Text style={styles.accent}>{p.accentWord}</Text>
-              </Text>
-            </Reveal>
-            <Reveal key={`b${i}-${page === i}`} index={3} from={18}>
-              <Text style={[t.bodySoft, styles.body]}>{p.body}</Text>
-            </Reveal>
+        <ScrollView
+          ref={scrollRef}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={onScroll}
+          style={styles.pager}
+          contentContainerStyle={{ width: width * PAGES.length }}
+        >
+          {PAGES.map((p, i) => {
+            // Each page's content is hidden until the page is the active one,
+            // then reveals on arrival — driven by `active` (no remount, so no
+            // flash, and no pre-show while it's scrolling in).
+            const active = page === i;
+            return (
+              <ScrollView
+                key={p.kicker}
+                style={[styles.page, { width }]}
+                contentContainerStyle={styles.pageContent}
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.header}>
+                  <Reveal active={active} index={1} from={12}>
+                    <Text style={[t.overline, styles.kicker]}>{p.kicker}</Text>
+                  </Reveal>
+                  <Reveal active={active} index={2} clip from={44}>
+                    <Text style={[t.title, styles.headline]}>
+                      {p.headline}
+                      <Text style={styles.accent}>{p.accentWord}</Text>
+                    </Text>
+                  </Reveal>
+                  {p.body && (
+                    <Reveal active={active} index={3} from={18}>
+                      <Text style={[t.bodySoft, styles.body]}>{p.body}</Text>
+                    </Reveal>
+                  )}
+                </View>
 
-            {i === PAGES.length - 1 && (
-              <View style={styles.tour}>
-                {TOUR.map((stop, j) => (
-                  <Reveal key={`${stop.label}-${page === i}`} index={4 + j} from={16}>
-                    <View style={styles.tourRow}>
-                      <View style={[styles.tourIcon, stop.icon === 'plus' && styles.tourIconAccent]}>
-                        <Icon
-                          name={stop.icon}
-                          size={18}
-                          color={stop.icon === 'plus' ? colors.onAccent : colors.inkSoft}
-                        />
-                      </View>
-                      <View style={styles.tourText}>
-                        <Text style={t.h3}>{stop.label}</Text>
-                        <Text style={t.small}>{stop.blurb}</Text>
+                {/* Flex spacers centre the visual in the space left below the
+                    header (so it clears the text and fills the bottom on tall
+                    screens), but collapse to 0 and let the page scroll on short
+                    ones. */}
+                <View style={styles.flexSpacerTop} />
+                <View style={styles.visualArea}>
+                  {p.visual === 'chips' && (
+                    <Reveal active={active} index={3} from={20}>
+                      <FloatingChips />
+                    </Reveal>
+                  )}
+
+                  {p.visual === 'preview' && (
+                    <View style={styles.previewBlock}>
+                      <Reveal active={active} index={3} from={26}>
+                        <AppPreview />
+                      </Reveal>
+                      <View style={styles.legend}>
+                        {LEGEND.map((row, j) => (
+                          <Reveal key={j} active={active} index={4 + j} from={16}>
+                            <View style={styles.legendRow}>
+                              <View style={styles.legendBadge}>
+                                <Text style={styles.legendNum}>{j + 1}</Text>
+                              </View>
+                              <Text style={styles.legendText}>{row.blurb}</Text>
+                            </View>
+                          </Reveal>
+                        ))}
                       </View>
                     </View>
-                  </Reveal>
-                ))}
-              </View>
-            )}
-          </View>
-        ))}
-      </ScrollView>
+                  )}
 
-      <View style={styles.bottom}>
-        <View style={styles.dots}>
-          {PAGES.map((_, i) => (
-            <Dot key={i} active={i === page} />
-          ))}
+                  {p.visual === 'nudge' && (
+                    <Reveal active={active} index={4} from={22}>
+                      <NudgePreview />
+                    </Reveal>
+                  )}
+
+                  {p.visual === 'tour' && (
+                    <View style={styles.tour}>
+                      {TOUR.map((stop, j) => (
+                        <Reveal key={stop.label} active={active} index={3 + j} from={16}>
+                          <View style={styles.tourRow}>
+                            <View style={[styles.tourIcon, stop.icon === 'plus' && styles.tourIconAccent]}>
+                              <Icon
+                                name={stop.icon}
+                                size={18}
+                                color={stop.icon === 'plus' ? colors.onAccent : colors.inkSoft}
+                              />
+                            </View>
+                            <View style={styles.tourText}>
+                              <Text style={t.h3}>{stop.label}</Text>
+                              <Text style={t.small}>{stop.blurb}</Text>
+                            </View>
+                          </View>
+                        </Reveal>
+                      ))}
+                    </View>
+                  )}
+                </View>
+                <View style={styles.flexSpacerBottom} />
+              </ScrollView>
+            );
+          })}
+        </ScrollView>
+
+        <View style={styles.bottom}>
+          <View style={styles.dots}>
+            {PAGES.map((_, i) => (
+              <Dot key={i} active={i === page} />
+            ))}
+          </View>
+          <Button label={last ? 'Start lending smarter 🤝' : 'Next'} onPress={next} />
         </View>
-        <Button label={last ? 'Start lending smarter' : 'Next'} onPress={next} />
-      </View>
-    </Screen>
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -175,7 +260,8 @@ function Dot({ active }: { active: boolean }) {
 }
 
 const styles = StyleSheet.create({
-  content: { paddingHorizontal: 0, paddingBottom: 0 },
+  root: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1 },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -184,6 +270,7 @@ const styles = StyleSheet.create({
     paddingTop: space.md,
     minHeight: 44,
   },
+  counterDim: { color: colors.inkFaint },
   skip: {
     paddingHorizontal: space.lg,
     paddingVertical: space.sm,
@@ -192,15 +279,42 @@ const styles = StyleSheet.create({
   },
   skipLabel: { ...t.small, color: colors.inkSoft },
   pager: { flex: 1 },
-  page: {
+  page: { flex: 1 },
+  pageContent: {
     paddingHorizontal: space.xl,
-    paddingTop: space.xxxl,
-    gap: space.md,
+    paddingTop: space.lg,
+    paddingBottom: space.md,
+    flexGrow: 1,
   },
-  headline: { marginTop: space.xs },
+  header: { gap: space.md },
+  // The visual takes its natural height; the spacers above/below position it
+  // in the space under the header — biased slightly upward (top lighter than
+  // bottom) so it sits near the headline, not marooned dead-centre. They grow
+  // on tall screens and collapse (page scrolls) on short ones.
+  visualArea: { paddingVertical: space.sm },
+  flexSpacerTop: { flex: 2, minHeight: space.lg },
+  flexSpacerBottom: { flex: 3, minHeight: space.lg },
+  kicker: { color: colors.accent },
+  headline: { marginTop: space.xs, fontSize: 38, lineHeight: 42 },
   accent: { color: colors.accent },
-  body: { fontSize: 16, lineHeight: 24, maxWidth: 320 },
-  tour: { marginTop: space.lg, gap: space.md },
+  body: { fontSize: 15.5, lineHeight: 23, maxWidth: 340 },
+
+  previewBlock: { gap: space.lg },
+  legend: { gap: space.md },
+  // Fixed row height so the three badges are evenly spaced regardless of copy.
+  legendRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 26 },
+  legendBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  legendNum: { fontSize: 11, fontWeight: '900', color: colors.onAccent },
+  legendText: { ...t.small, flex: 1, color: colors.inkSoft, lineHeight: 17 },
+
+  tour: { gap: space.md },
   tourRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -222,14 +336,10 @@ const styles = StyleSheet.create({
   tourText: { flex: 1, gap: 2 },
   bottom: {
     paddingHorizontal: space.xl,
-    paddingBottom: space.lg,
+    paddingTop: space.md,
+    paddingBottom: space.xs,
     gap: space.lg,
   },
-  dots: {
-    flexDirection: 'row',
-    gap: space.sm,
-    alignSelf: 'center',
-    alignItems: 'center',
-  },
+  dots: { flexDirection: 'row', gap: space.sm, alignSelf: 'center', alignItems: 'center' },
   dot: { height: 8, borderRadius: radius.pill },
 });

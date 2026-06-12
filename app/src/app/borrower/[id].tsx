@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { Screen } from '../../components/Screen';
@@ -7,6 +8,7 @@ import { Avatar } from '../../components/Avatar';
 import { LoanCard } from '../../components/LoanCard';
 import { StatusChip } from '../../components/Chip';
 import { Icon } from '../../components/Icon';
+import { BorrowerEditSheet } from '../../components/BorrowerEditSheet';
 import { getBorrower, reliabilityFor, useLoans, withBorrower } from '../../lib/store';
 import { loanLabel } from '../../lib/format';
 import { colors, radius, shadow, space, type as t } from '../../lib/theme';
@@ -16,6 +18,7 @@ export default function BorrowerProfileScreen() {
   const router = useRouter();
   const loans = useLoans();
   const borrower = getBorrower(id);
+  const [editOpen, setEditOpen] = useState(false);
 
   if (!borrower) {
     return (
@@ -40,10 +43,20 @@ export default function BorrowerProfileScreen() {
   return (
     <Screen scroll>
       <Reveal index={0} from={8}>
-        <PressableScale onPress={() => router.back()} scaleTo={0.9} style={styles.back}>
-          <Icon name="chevronLeft" size={20} color={colors.inkSoft} strokeWidth={2.2} />
-          <Text style={styles.backText}>People</Text>
-        </PressableScale>
+        <View style={styles.topRow}>
+          <PressableScale onPress={() => router.back()} scaleTo={0.9} style={styles.back}>
+            <Icon name="chevronLeft" size={20} color={colors.inkSoft} strokeWidth={2.2} />
+            <Text style={styles.backText}>People</Text>
+          </PressableScale>
+          <PressableScale
+            onPress={() => setEditOpen(true)}
+            scaleTo={0.9}
+            style={styles.editBtn}
+            accessibilityLabel="Edit person"
+          >
+            <Icon name="edit" size={18} color={colors.inkSoft} strokeWidth={2} />
+          </PressableScale>
+        </View>
       </Reveal>
 
       <Reveal index={1} from={26}>
@@ -110,21 +123,42 @@ export default function BorrowerProfileScreen() {
           </View>
         </>
       )}
+
+      <BorrowerEditSheet
+        visible={editOpen}
+        borrower={borrower}
+        onClose={() => setEditOpen(false)}
+        onDeleted={() => router.back()}
+      />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: space.sm,
+  },
   back: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    alignSelf: 'flex-start',
     paddingVertical: space.sm,
     paddingRight: space.md,
-    marginBottom: space.sm,
   },
   backText: { ...t.h3, color: colors.inkSoft },
+  editBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   hero: {
     backgroundColor: colors.surface,
     borderRadius: radius.xl,

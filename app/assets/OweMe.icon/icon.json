@@ -1,0 +1,131 @@
+{
+  "fill" : "automatic",
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "glass" : false,
+          "image-name" : "Gemini_Generated_Image_7nm2687nm2687nm2 4-2 2.jpeg",
+          "name" : "Gemini_Generated_Image_7nm2687nm2687nm2 4-2 2",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              294.9765625,
+              305.640625
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    },
+    {
+      "layers" : [
+
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    },
+    {
+      "layers" : [
+        {
+          "blend-mode" : "normal",
+          "fill" : "none",
+          "glass" : true,
+          "image-name" : "Gemini_Generated_Image_7nm2687nm2687nm2 3-2.jpeg",
+          "name" : "Gemini_Generated_Image_7nm2687nm2687nm2 3-2",
+          "position" : {
+            "scale" : 0.6,
+            "translation-in-points" : [
+              56.232607406490956,
+              350.67635443426605
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    },
+    {
+      "layers" : [
+        {
+          "blend-mode-specializations" : [
+            {
+              "value" : "normal"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "normal"
+            }
+          ],
+          "glass" : false,
+          "image-name" : "Gemini_Generated_Image_7nm2687nm2687nm2-2.jpeg",
+          "name" : "Gemini_Generated_Image_7nm2687nm2687nm2-2",
+          "position" : {
+            "scale" : 1.7,
+            "translation-in-points" : [
+              -11.049999999999955,
+              5.684341886080802e-14
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    },
+    {
+      "layers" : [
+        {
+          "glass" : false,
+          "image-name" : "Gemini_Generated_Image_7nm2687nm2687nm2 2-2.jpeg",
+          "name" : "Gemini_Generated_Image_7nm2687nm2687nm2 2-2",
+          "position" : {
+            "scale" : 0.8,
+            "translation-in-points" : [
+              -16.799999999999955,
+              3.6000000000000227
+            ]
+          }
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}

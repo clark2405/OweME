@@ -54,6 +54,43 @@ export function relativeDays(isoDate: string): string {
   return `${Math.round(d / 30)} months ago`;
 }
 
+/** Active loan that's past its due date — the thing the app should yell about. */
+export function isOverdue(loan: Loan): boolean {
+  return loan.status === 'active' && loan.dueAt != null && daysSince(loan.dueAt) > 0;
+}
+
+/** "due today", "due in 3 days", "5 days overdue" — for the overdue surface. */
+export function dueRelative(isoDue: string): string {
+  const overdueDays = daysSince(isoDue);
+  if (overdueDays > 0) return `${overdueDays} day${overdueDays === 1 ? '' : 's'} overdue`;
+  const until = daysUntil(isoDue);
+  if (until === 0) return 'due today';
+  if (until === 1) return 'due tomorrow';
+  return `due in ${until} days`;
+}
+
+/** Whole days from today until an ISO date (today = 0, past = 0). */
+export function daysUntil(isoDate: string): number {
+  const then = new Date(isoDate + 'T00:00:00');
+  const now = new Date();
+  const ms = then.getTime() - now.getTime();
+  return Math.max(0, Math.floor(ms / 86_400_000));
+}
+
+/** Compact relative timestamp for a nudge: "just now", "2h ago", "3d ago". */
+export function relativeSince(isoTimestamp: string): string {
+  const ms = Date.now() - new Date(isoTimestamp).getTime();
+  const mins = Math.floor(ms / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  const weeks = Math.floor(days / 7);
+  return weeks < 5 ? `${weeks}w ago` : `${Math.floor(days / 30)}mo ago`;
+}
+
 /** "May 12" style short date. */
 export function shortDate(isoDate: string): string {
   return new Date(isoDate + 'T00:00:00').toLocaleDateString(undefined, {
@@ -71,16 +108,17 @@ export function loanEmoji(loan: Loan): string {
   return loan.type === 'item' ? '🧰' : '💸';
 }
 
-/** Aggregate active loans into the home headline: "3 items + ₱1,250". */
-export function outInTheWild(loans: Loan[]): string {
-  const active = loans.filter((l) => l.status === 'active');
-  const items = active.filter((l) => l.type === 'item').length;
-  const total = active
-    .filter((l): l is Extract<Loan, { type: 'money' }> => l.type === 'money')
-    .reduce((sum, l) => sum + l.amount, 0);
-
-  const parts: string[] = [];
-  if (items > 0) parts.push(`${items} item${items === 1 ? '' : 's'}`);
-  if (total > 0) parts.push(money(total));
-  return parts.join(' + ') || 'nothing';
+/** Sum active money loans grouped by currency, largest total first. Currencies
+ *  must never be added together (₱ + $ is meaningless), so the home total shows
+ *  one primary currency and footnotes the rest. */
+export function moneyByCurrency(loans: Loan[]): { currency: string; total: number }[] {
+  const totals = new Map<string, number>();
+  for (const l of loans) {
+    if (l.status === 'active' && l.type === 'money') {
+      totals.set(l.currency, (totals.get(l.currency) ?? 0) + l.amount);
+    }
+  }
+  return [...totals.entries()]
+    .map(([currency, total]) => ({ currency, total }))
+    .sort((a, b) => b.total - a.total);
 }

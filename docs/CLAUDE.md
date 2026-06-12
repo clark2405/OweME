@@ -64,6 +64,7 @@ oweme/
 
 > Agents: update this section as work progresses so the next session has context.
 > **Frontend gap list lives in `TASKS.md`** (prioritized P0/P1/P2 with build order) — check items off there as they land.
+> **iOS build gotchas live in `BUILD_NOTES.md`** — read it first if a device build fails. Key constraint: Clark is on a **free** Apple account, so NO push/`aps-environment` entitlement (local notifications only).
 
 - [x] Repo scaffolded (Expo app in `app/` + Next.js web in `web/`, both TS strict, tsc clean)
 - [x] Initial schema migration written (`supabase/migrations/20260610000000_init_schema.sql`, tables + RLS)
@@ -76,7 +77,7 @@ oweme/
 - [x] Add loan flow (item + money, <15s target) — UI on mock data
 - [x] Loan detail + mark returned (confetti) — UI on mock data
 - [x] Borrowers list + profile (reliability stats) — UI on mock data
-- [ ] Local notification scheduling
+- [x] Local notification scheduling (expo-notifications; per-loan cadence synced by the store, tap deep-links to the loan; channel picker in Settings)
 - [ ] Nudge link generation + `/n/[token]` page (mobile share-sheet nudge w/ tones exists; web page still a TODO)
 - [x] History screen — UI on mock data
 - [x] First-launch onboarding (`src/app/onboarding.tsx`, 3-page welcome + tab tour; seen-flag in AsyncStorage via `src/lib/onboarding.ts`, gated in `(tabs)/_layout.tsx`).

@@ -30,6 +30,8 @@ export interface LoanBase {
   dueAt?: string;
   /** Reminder cadence for this loan; defaults to `off` when unset. */
   reminder?: ReminderCadence;
+  /** ISO timestamps of nudges sent for this loan, oldest first. */
+  nudges?: string[];
   status: LoanStatus;
   /** ISO timestamp, set when status leaves `active`. */
   returnedAt?: string;

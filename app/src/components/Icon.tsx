@@ -6,9 +6,9 @@
  */
 
 import Svg, { Circle, Line, Path } from 'react-native-svg';
-import Animated, { SharedValue, useAnimatedStyle, withSpring, useSharedValue, useAnimatedReaction, withTiming } from 'react-native-reanimated';
+import Animated, { SharedValue, useAnimatedStyle, useSharedValue, useAnimatedReaction, withTiming } from 'react-native-reanimated';
 import { colors } from '../lib/theme';
-import { spring, expoOut } from '../lib/motion';
+import { expoOut } from '../lib/motion';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path) as any;
 const AnimatedCircle = Animated.createAnimatedComponent(Circle) as any;
@@ -100,7 +100,7 @@ export function Icon({ name, size = 24, color = colors.ink, strokeWidth = 2, foc
     transform: [{ translateX: progress.value * -4 }],
   }));
 
-  // Plus
+  // Plus — 360° twirl + scale pop on tap.
   const plusStyle = useAnimatedStyle(() => ({
     transform: [
       { rotate: `${rotation.value}deg` },

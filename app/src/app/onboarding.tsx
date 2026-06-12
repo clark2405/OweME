@@ -24,7 +24,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -32,15 +32,14 @@ import Animated, {
   withTiming,
   LinearTransition,
   FadeIn,
-  FadeInUp,
   FadeOut,
-  FadeOutUp,
 } from 'react-native-reanimated';
 import { AmbientBackground } from '../components/AmbientBackground';
 import { Reveal } from '../components/Reveal';
 import { Button } from '../components/Button';
 import { PressableScale } from '../components/PressableScale';
 import { Icon, IconName } from '../components/Icon';
+import { tabBarBottomInset } from '../components/TabBar';
 import { AppPreview } from '../components/onboarding/AppPreview';
 import { FloatingChips } from '../components/onboarding/FloatingChips';
 import { NudgePreview } from '../components/onboarding/NudgePreview';
@@ -125,6 +124,7 @@ const TOUR: { icon: IconName; label: string; blurb: string; details: string }[] 
 export default function OnboardingScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   const [page, setPage] = useState(0);
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -148,7 +148,7 @@ export default function OnboardingScreen() {
   return (
     <View style={styles.root}>
       <AmbientBackground variant="home" />
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.topBar}>
           <Text style={t.overline}>
             {String(page + 1).padStart(2, '0')} <Text style={styles.counterDim}>/ {String(PAGES.length).padStart(2, '0')}</Text>
@@ -232,7 +232,7 @@ export default function OnboardingScreen() {
 
                   {p.visual === 'nudge' && (
                     <Reveal active={active} index={4} from={22}>
-                      <NudgePreview />
+                      <NudgePreview active={active} />
                     </Reveal>
                   )}
 
@@ -259,7 +259,9 @@ export default function OnboardingScreen() {
           })}
         </ScrollView>
 
-        <View style={styles.bottom}>
+        {/* Anchored at the same height as the app's floating tab bar — just
+            above the home indicator — so the CTA lives where the navbar will. */}
+        <View style={[styles.bottom, { paddingBottom: tabBarBottomInset(insets.bottom) }]}>
           <View style={styles.dots}>
             {PAGES.map((_, i) => (
               <Dot key={i} active={i === page} />
@@ -439,7 +441,6 @@ const styles = StyleSheet.create({
   bottom: {
     paddingHorizontal: space.xl,
     paddingTop: space.md,
-    paddingBottom: space.xs,
     gap: space.lg,
   },
   dots: { flexDirection: 'row', gap: space.sm, alignSelf: 'center', alignItems: 'center' },

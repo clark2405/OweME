@@ -1,6 +1,16 @@
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { StyleSheet, Switch, Text, View } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSequence,
+  withDelay,
+  runOnJS,
+  Easing,
+  cancelAnimation,
+} from 'react-native-reanimated';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
 import { Reveal } from '../../components/Reveal';
@@ -18,6 +28,88 @@ import { resetOnboarding } from '../../lib/onboarding';
 import { colors, radius, shadow, space, type as t } from '../../lib/theme';
 
 const CURRENCIES: CurrencyCode[] = ['PHP', 'USD', 'EUR'];
+const CURRENCY_SYMBOLS: Record<CurrencyCode, string> = { PHP: '₱', USD: '$', EUR: '€' };
+
+function CurrencyButton({ c, isSelected, onPress }: { c: CurrencyCode; isSelected: boolean; onPress: () => void }) {
+  const fill = useSharedValue(0);
+  const origin = useSharedValue<'left' | 'right'>('left');
+  const textAnim = useSharedValue(0); // 0 = code, 1 = symbol
+
+  const handlePress = () => {
+    cancelAnimation(fill);
+    cancelAnimation(textAnim);
+    fill.value = 0;
+    textAnim.value = 0;
+    origin.value = 'left';
+
+    // OFF+BRAND custom easing: snappy start, long elegant settle.
+    const customEase = Easing.bezier(0.16, 1, 0.3, 1);
+
+    // The background wipe
+    fill.value = withSequence(
+      withTiming(1, { duration: 500, easing: customEase }, () => {
+        origin.value = 'right';
+      }),
+      withDelay(
+        800,
+        withTiming(0, { duration: 400, easing: customEase })
+      )
+    );
+
+    // The text morph (slide up + fade)
+    textAnim.value = withSequence(
+      withDelay(400, withTiming(1, { duration: 300, easing: Easing.out(Easing.cubic) })),
+      withDelay(500, withTiming(0, { duration: 300, easing: Easing.out(Easing.cubic) }))
+    );
+
+    // Defer the heavy global state update to the next frame.
+    // This ensures Reanimated can push the animation start to the native UI thread
+    // *before* React blocks the JS thread diffing the global settings state.
+    requestAnimationFrame(() => {
+      onPress();
+    });
+  };
+
+  const fillStyle = useAnimatedStyle(() => ({
+    transformOrigin: origin.value,
+    transform: [{ scaleX: fill.value }],
+  }));
+
+  const codeStyle = useAnimatedStyle(() => ({
+    opacity: 1 - textAnim.value,
+    transform: [{ translateY: textAnim.value * -12 }],
+  }));
+
+  const symbolStyle = useAnimatedStyle(() => ({
+    opacity: textAnim.value,
+    transform: [{ translateY: (1 - textAnim.value) * 12 }],
+  }));
+
+  return (
+    <PressableScale
+      onPress={handlePress}
+      scaleTo={0.94}
+      style={[styles.curChip, isSelected && styles.curChipOn, { overflow: 'hidden' }]}
+    >
+      <Animated.View
+        style={[
+          { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.accent },
+          fillStyle,
+        ]}
+      />
+      <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+        {/* Invisible dummy text to preserve button height since the animated texts are absolute */}
+        <Text style={[styles.curText, { opacity: 0 }]}>{c}</Text>
+        <Animated.Text style={[styles.curText, isSelected && styles.curTextOn, { position: 'absolute' }, codeStyle]}>
+          {c}
+        </Animated.Text>
+        <Animated.Text style={[styles.curText, isSelected && styles.curTextOn, { position: 'absolute' }, symbolStyle]}>
+          {CURRENCY_SYMBOLS[c]}
+        </Animated.Text>
+      </View>
+    </PressableScale>
+  );
+}
 
 function Card({ children, index }: { children: React.ReactNode; index: number }) {
   return (
@@ -45,19 +137,14 @@ export default function SettingsScreen() {
         <Card index={0}>
           <Text style={[t.overline, styles.cardLabel]}>Default currency</Text>
           <View style={styles.segmentRow}>
-            {CURRENCIES.map((c) => {
-              const on = c === defaultCurrency;
-              return (
-                <PressableScale
-                  key={c}
-                  onPress={() => setDefaultCurrency(c)}
-                  scaleTo={0.94}
-                  style={[styles.curChip, on && styles.curChipOn]}
-                >
-                  <Text style={[styles.curText, on && styles.curTextOn]}>{c}</Text>
-                </PressableScale>
-              );
-            })}
+            {CURRENCIES.map((c) => (
+              <CurrencyButton
+                key={c}
+                c={c}
+                isSelected={c === defaultCurrency}
+                onPress={() => setDefaultCurrency(c)}
+              />
+            ))}
           </View>
         </Card>
 

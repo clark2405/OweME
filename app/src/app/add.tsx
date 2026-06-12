@@ -52,7 +52,7 @@ const LENT_PRESETS = [
 const CADENCES: { value: ReminderCadence; label: string }[] = [
   { value: 'off', label: 'Off' },
   { value: 'weekly', label: 'Weekly' },
-  { value: 'biweekly', label: 'Every 2 wks' },
+  { value: 'biweekly', label: 'Every 2 weeks' },
   { value: 'monthly', label: 'Monthly' },
 ];
 
@@ -522,7 +522,9 @@ const styles = StyleSheet.create({
   title: { marginBottom: space.sm },
   field: { marginTop: space.xs },
   input: {
-    ...t.body,
+    color: colors.ink,
+    fontSize: 16,
+    fontWeight: '500',
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     paddingHorizontal: space.lg,
@@ -610,7 +612,7 @@ const styles = StyleSheet.create({
   chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
   chipText: { ...t.small, color: colors.inkSoft },
   chipTextOn: { color: colors.surface },
-  notes: { minHeight: 80, textAlignVertical: 'top' },
+  notes: { minHeight: 80, textAlignVertical: 'top', lineHeight: 23 },
   footer: {
     paddingHorizontal: space.xl,
     paddingTop: space.md,

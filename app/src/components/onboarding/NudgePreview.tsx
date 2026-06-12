@@ -1,12 +1,12 @@
 /**
  * Page-3 visual: shows the killer idea in motion — the nudge comes *from
  * OweMe*, not from you. A phone-buzz reminder card hands off to a friendly,
- * pre-written message bubble that slides in and "sends" (the awkward part,
- * handled). Loops gently; stilled (shown in its resolved state) under reduced
- * motion.
+ * pre-written message bubble that inflates up and "sends" (the awkward part,
+ * handled). Plays ONCE, the first time this page is reached (`active`), then
+ * rests in its sent state; stilled (resolved) under reduced motion.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
@@ -14,8 +14,6 @@ import Animated, {
   useReducedMotion,
   useSharedValue,
   withDelay,
-  withRepeat,
-  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 import { Icon } from '../Icon';
@@ -24,29 +22,24 @@ import { colors, radius, shadow, space, type as t } from '../../lib/theme';
 // Back-out curve: overshoots past 1 then settles — the iMessage "inflate" pop.
 const backOut = Easing.bezier(0.34, 1.56, 0.64, 1);
 
-export function NudgePreview() {
+export function NudgePreview({ active }: { active?: boolean }) {
   const v = useSharedValue(0);
   const reduce = useReducedMotion();
+  const played = useRef(false);
 
   useEffect(() => {
     if (reduce) {
       v.value = 1;
       return;
     }
-    // notification settles → the bubble inflates up from the composer (overshoot
-    // pop, like sending an iMessage) → "Sent" tick → hold → reset → repeat.
-    v.value = withDelay(
-      900,
-      withRepeat(
-        withSequence(
-          withTiming(1, { duration: 560, easing: backOut }),
-          withDelay(2600, withTiming(0, { duration: 320, easing: Easing.in(Easing.quad) })),
-          withDelay(520, withTiming(0, { duration: 0 })),
-        ),
-        -1,
-      ),
-    );
-  }, [v, reduce]);
+    // Fire once, the moment the page becomes active (or on mount if used
+    // without `active`): a short settle, then the bubble inflates up from the
+    // composer and the "Sent" tick appears — and it stays sent. No loop.
+    if ((active === undefined || active) && !played.current) {
+      played.current = true;
+      v.value = withDelay(550, withTiming(1, { duration: 560, easing: backOut }));
+    }
+  }, [active, v, reduce]);
 
   const bubbleStyle = useAnimatedStyle(() => {
     const o = Math.min(1, Math.max(0, v.value));

@@ -61,6 +61,28 @@ export async function ensureNotifPermission(): Promise<boolean> {
   return granted;
 }
 
+export type NotifPermission = 'granted' | 'denied' | 'undetermined';
+
+/** Read the current OS permission without prompting. Also refreshes the session
+ *  cache, so re-enabling notifications in iOS Settings takes effect without an
+ *  app restart (the next schedule sees the fresh value). */
+export async function getNotifPermission(): Promise<NotifPermission> {
+  if (!IS_NATIVE) return 'granted';
+  const p = await Notifications.getPermissionsAsync();
+  granted = p.granted;
+  if (p.granted) return 'granted';
+  return p.status === 'undetermined' ? 'undetermined' : 'denied';
+}
+
+/** Prompt for permission (the OS only shows the dialog while undetermined). */
+export async function requestNotifPermission(): Promise<NotifPermission> {
+  if (!IS_NATIVE) return 'granted';
+  const p = await Notifications.requestPermissionsAsync();
+  granted = p.granted;
+  if (p.granted) return 'granted';
+  return p.status === 'undetermined' ? 'undetermined' : 'denied';
+}
+
 const idFor = (loanId: string) => `loan-${loanId}`;
 
 export function cancelLoanReminder(loanId: string) {

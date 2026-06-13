@@ -61,7 +61,7 @@ export default function BorrowerProfileScreen() {
 
       <Reveal index={1} from={26}>
         <View style={styles.hero}>
-          <Avatar name={borrower.name} emoji={borrower.emoji} size={76} />
+          <Avatar name={borrower.name} emoji={borrower.emoji} uri={borrower.avatarUrl} size={76} />
           <Text style={[t.title, styles.name]}>{borrower.name}</Text>
           <Text style={styles.reliability}>{reliability}</Text>
 

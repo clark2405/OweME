@@ -149,7 +149,7 @@ export default function ShameScreen() {
               <View style={styles.podiumHead}>
                 <Tombstone width={120} height={132} />
                 <View style={styles.podiumAvatar}>
-                  <Avatar name={worst.borrower.name} emoji={worst.borrower.emoji} size={58} />
+                  <Avatar name={worst.borrower.name} emoji={worst.borrower.emoji} uri={worst.borrower.avatarUrl} size={58} />
                 </View>
               </View>
               <Text style={styles.podiumName} numberOfLines={1}>
@@ -173,7 +173,7 @@ export default function ShameScreen() {
                     style={styles.row}
                   >
                     <RankBadge rank={i + 2} size={28} />
-                    <Avatar name={e.borrower.name} emoji={e.borrower.emoji} size={44} />
+                    <Avatar name={e.borrower.name} emoji={e.borrower.emoji} uri={e.borrower.avatarUrl} size={44} />
                     <View style={styles.body}>
                       <Text style={[t.h3, styles.rowName]} numberOfLines={1}>
                         {e.borrower.name}

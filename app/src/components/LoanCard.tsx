@@ -30,7 +30,7 @@ export function LoanCard({ data, onPress }: Props) {
       accessibilityRole="button"
       accessibilityLabel={`${loanLabel(loan)}, lent to ${borrower.name} ${relativeDays(loan.lentAt)}`}
     >
-      <Avatar name={borrower.name} emoji={borrower.emoji} size={40} />
+      <Avatar name={borrower.name} emoji={borrower.emoji} uri={borrower.avatarUrl} size={40} />
 
       <View style={styles.body}>
         <Text style={styles.label} numberOfLines={1}>

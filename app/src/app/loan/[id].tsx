@@ -160,7 +160,7 @@ export default function LoanDetailScreen() {
             <Text style={t.overline}>{loan.type === 'item' ? 'Item · out in the wild' : 'Money · still owed'}</Text>
             <Text style={[t.hero, styles.heroTitle]}>{loanLabel(loan)}</Text>
             <View style={styles.heroMeta}>
-              <Avatar name={borrower.name} emoji={borrower.emoji} size={26} />
+              <Avatar name={borrower.name} emoji={borrower.emoji} uri={borrower.avatarUrl} size={26} />
               <Text style={styles.heroWho}>
                 {borrower.name} · borrowed {relativeDays(loan.lentAt)}
               </Text>

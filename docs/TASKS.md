@@ -284,6 +284,73 @@ on the mock store, today.
 
 ---
 
+## P5 — Pre-backend frontend gaps (senior audit, 2026-06-13)
+
+> Result of a fresh screen-by-screen + spec (`PROJECT.md`) pass after P0–P4
+> landed. The mock-data frontend is close to feature-complete; these are the
+> remaining holes. **§A is buildable now on the mock store (do these before
+> the backend).** §B/§C are frontend-shaped but genuinely need Supabase, so
+> they belong to the backend phase. §D is acknowledged QA/deferrals.
+>
+> **Recommended order for §A:** A1 → A2 → A3 → A4.
+
+### A — Buildable now (no backend)
+
+- [x] **A1. Notification-permission UX** *(done 2026-06-13)*. `lib/notifications.ts`
+  gained `getNotifPermission()` / `requestNotifPermission()` (+ a `NotifPermission`
+  type); both refresh the session cache so re-enabling in iOS Settings takes
+  effect without a restart. `(tabs)/settings.tsx` now owns the toggle via a
+  `NudgeRemindersCard`: turning it on prompts for permission, and a re-checked-on-
+  focus hint ("🔕 Notifications are off in iOS Settings…", taps to
+  `Linking.openSettings()`) shows whenever the toggle is on but the OS is blocked.
+- [x] **A2a. People empty state** *(done 2026-06-13)*. `(tabs)/borrowers.tsx` shows
+  a friendly zero-state ("No one here yet…" + an "Add a person" CTA that opens the
+  sheet) when there are no borrowers, matching Home/History.
+- [ ] **A2b. Settings "ship" rows** — About / Help / Privacy / "Send feedback" /
+  "Rate OweMe". Deferred: these need real destinations (an About screen, privacy
+  URL, App Store id, support email) that don't exist pre-release — adding dead
+  rows now would be placeholder cruft. Revisit when there's content to point at.
+- [x] **A3. Borrower photo avatars** *(done 2026-06-13)*. `Avatar.tsx` gained a
+  `uri` prop (renders an `expo-image` disc, emoji fallback when absent);
+  `BorrowerEditSheet.tsx` got Photo / Gallery / Remove controls (square crop via
+  `expo-image-picker`, reused from the add flow) with the head avatar live-
+  previewing it; `addBorrower`/`updateBorrower` thread `avatarUrl`. Wired through
+  every borrower avatar call site (Home/LoanCard, People, profile, loan detail,
+  History, Hall of Shame board + share card, add-loan picker). Local URI for now;
+  Storage upload arrives with Supabase.
+- [x] **A4. "Due soon" surfacing** *(done 2026-06-13)*. `format.ts` gained
+  `isDueSoon(loan, withinDays=3)`; `AgeChip` now shows "Due today / Due tomorrow /
+  Due in Nd" (priority: overdue → due-soon → aging), so a due date reads on the
+  loan card *before* it's blown, everywhere `AgeChip` appears.
+
+### B — Signature flow, backend-coupled (do in backend phase)
+
+- [ ] **B1. Shareable nudge *link* + `/n/[token]` web page.** Today "Send a
+  nudge" shares **plain text** (`lib/nudge.ts`). The spec's core mechanic
+  (§3.2 / Flow B step 4) is a **tokenized link → Next.js `/n/[token]` page where
+  the borrower taps "Mark as returned" with zero install/signup**. The web app
+  (`web/`) and the `nudge_links` token both need the DB — the single biggest
+  remaining *product* gap, deferred to backend.
+
+### C — Auth shell (frontend screens, backend-coupled)
+
+- [ ] **C1. Login / email magic-link screens.** There's an onboarding tour but
+  no account entry. v1 uses Supabase email magic-link; the screens are frontend
+  but awkward to build without the auth client, so do them at the start of the
+  backend phase (avoid throwaway scaffolding).
+
+### D — Acknowledged QA / deferrals (tracked elsewhere too)
+
+- [ ] **D1. Android parity check** — custom tab bar, `elevation` shadows,
+  KeyboardAvoidingView, safe areas. Untested (also noted in P2).
+- [ ] **D2. Full VoiceOver run-through + contrast audit** — only a first cut done.
+- [ ] **D3. On-device verification** — haptics, scheduled notifications, app
+  icon/splash, quick action all need a dev rebuild to actually show/feel.
+- [ ] **D4. iOS widget** (P3.22) — intentionally parked.
+- [ ] **D5. Shame tone / rank-score decisions** — still flagged for Clark above.
+
+---
+
 *Done so far (for context): onboarding flow, home dashboard (tappable bento
 filters + pinned overdue group + capped lineup + "See all"), full
 active-loans screen with search/sort, swipe-to-return / swipe-to-nudge on

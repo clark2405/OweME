@@ -198,7 +198,7 @@ export default function HistoryScreen() {
                             {loanLabel(loan)}
                           </Text>
                           <View style={styles.metaRow}>
-                            <Avatar name={borrower.name} emoji={borrower.emoji} size={18} />
+                            <Avatar name={borrower.name} emoji={borrower.emoji} uri={borrower.avatarUrl} size={18} />
                             <Text style={styles.meta}>
                               {borrower.name}
                               {loan.returnedAt ? ` · ${shortDate(loan.returnedAt)}` : ''}

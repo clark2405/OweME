@@ -59,6 +59,13 @@ export function isOverdue(loan: Loan): boolean {
   return loan.status === 'active' && loan.dueAt != null && daysSince(loan.dueAt) > 0;
 }
 
+/** An active loan whose due date is within the next few days but not yet overdue
+ *  — the window to surface it before it's blown. */
+export function isDueSoon(loan: Loan, withinDays = 3): boolean {
+  if (loan.status !== 'active' || loan.dueAt == null || isOverdue(loan)) return false;
+  return daysUntil(loan.dueAt) <= withinDays;
+}
+
 /** "due today", "due in 3 days", "5 days overdue" — for the overdue surface. */
 export function dueRelative(isoDue: string): string {
   const overdueDays = daysSince(isoDue);

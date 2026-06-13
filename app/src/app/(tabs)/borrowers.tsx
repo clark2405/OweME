@@ -108,6 +108,27 @@ export default function BorrowersScreen() {
         </Reveal>
       )}
 
+      {borrowers.length === 0 && (
+        <Reveal index={1}>
+          <View style={styles.empty}>
+            <Text style={styles.emptyEmoji}>🧑‍🤝‍🧑</Text>
+            <Text style={styles.emptyText}>
+              No one here yet. Add the friends you lend to and OweMe keeps score.
+            </Text>
+            <PressableScale
+              onPress={() => setAddOpen(true)}
+              scaleTo={0.97}
+              style={styles.emptyBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Add a person"
+            >
+              <Icon name="plus" size={16} color={colors.surface} strokeWidth={2.4} />
+              <Text style={styles.emptyBtnText}>Add a person</Text>
+            </PressableScale>
+          </View>
+        </Reveal>
+      )}
+
       <View style={styles.list}>
         {borrowers.map((b, i) => {
           const stat = reliabilityFor(loans, b.id);
@@ -122,7 +143,7 @@ export default function BorrowersScreen() {
                 scaleTo={0.975}
                 style={styles.row}
               >
-                <Avatar name={b.name} emoji={b.emoji} size={52} />
+                <Avatar name={b.name} emoji={b.emoji} uri={b.avatarUrl} size={52} />
                 <View style={styles.body}>
                   <Text style={t.h3}>{b.name}</Text>
                   <Text style={styles.sub}>{holding}</Text>
@@ -204,4 +225,25 @@ const styles = StyleSheet.create({
   sub: { ...t.small, color: colors.inkSoft },
   rightCol: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   days: { ...t.small, color: colors.accent, fontWeight: '800' },
+  empty: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: space.xxl,
+    alignItems: 'center',
+    gap: space.md,
+    ...shadow.card,
+  },
+  emptyEmoji: { fontSize: 44 },
+  emptyText: { ...t.bodySoft, textAlign: 'center' },
+  emptyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    backgroundColor: colors.ink,
+    borderRadius: radius.pill,
+    paddingVertical: space.md,
+    paddingHorizontal: space.xl,
+    marginTop: space.xs,
+  },
+  emptyBtnText: { ...t.h3, fontSize: 15, color: colors.surface },
 });

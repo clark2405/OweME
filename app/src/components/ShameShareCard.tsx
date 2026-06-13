@@ -53,7 +53,7 @@ export const ShameShareCard = forwardRef<View, Props>(function ShameShareCard({ 
         <View style={styles.podiumHead}>
           <Tombstone width={108} height={120} />
           <View style={styles.podiumAvatar}>
-            <Avatar name={worst.borrower.name} emoji={worst.borrower.emoji} size={54} />
+            <Avatar name={worst.borrower.name} emoji={worst.borrower.emoji} uri={worst.borrower.avatarUrl} size={54} />
           </View>
         </View>
         <Text style={styles.podiumName} numberOfLines={1}>
@@ -71,7 +71,7 @@ export const ShameShareCard = forwardRef<View, Props>(function ShameShareCard({ 
           {rest.slice(0, 6).map((e, i) => (
             <View key={e.borrower.id} style={styles.row}>
               <RankBadge rank={i + 2} size={26} />
-              <Avatar name={e.borrower.name} emoji={e.borrower.emoji} size={40} />
+              <Avatar name={e.borrower.name} emoji={e.borrower.emoji} uri={e.borrower.avatarUrl} size={40} />
               <View style={styles.rowBody}>
                 <Text style={styles.rowName} numberOfLines={1}>
                   {e.borrower.name}

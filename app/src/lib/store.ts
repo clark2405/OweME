@@ -629,15 +629,15 @@ function commitBorrowers(next: Borrower[]) {
   emit();
 }
 
-export function addBorrower(name: string, emoji = '🙂', phone?: string): string {
+export function addBorrower(name: string, emoji = '🙂', phone?: string, avatarUrl?: string): string {
   const id = `b${Date.now()}`;
-  commitBorrowers([...borrowers, { id, name, emoji, phone }]);
+  commitBorrowers([...borrowers, { id, name, emoji, phone, avatarUrl }]);
   return id;
 }
 
 export function updateBorrower(
   id: string,
-  patch: Partial<Pick<Borrower, 'name' | 'emoji' | 'phone' | 'exempt'>>,
+  patch: Partial<Pick<Borrower, 'name' | 'emoji' | 'phone' | 'exempt' | 'avatarUrl'>>,
 ) {
   const clean: typeof patch = { ...patch };
   if ('phone' in clean) clean.phone = clean.phone?.trim() || undefined;

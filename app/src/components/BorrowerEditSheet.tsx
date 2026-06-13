@@ -15,9 +15,11 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import * as ImagePicker from 'expo-image-picker';
 import { PressableScale } from './PressableScale';
 import { Reveal } from './Reveal';
 import { Avatar } from './Avatar';
+import { Icon } from './Icon';
 import { Button } from './Button';
 import { addBorrower, deleteBorrower, loanCountFor, updateBorrower, useSettings } from '../lib/store';
 import { haptics } from '../lib/haptics';
@@ -49,6 +51,7 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
   const [emoji, setEmoji] = useState(borrower?.emoji ?? DEFAULT_EMOJI);
   const [phone, setPhone] = useState(borrower?.phone ?? '');
   const [exempt, setExempt] = useState(borrower?.exempt ?? false);
+  const [avatarUrl, setAvatarUrl] = useState<string | undefined>(borrower?.avatarUrl);
 
   // Re-seed the fields each time the sheet opens (a create sheet starts blank,
   // an edit sheet reflects the current borrower). Adjusting state during render
@@ -61,8 +64,28 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
       setEmoji(borrower?.emoji ?? DEFAULT_EMOJI);
       setPhone(borrower?.phone ?? '');
       setExempt(borrower?.exempt ?? false);
+      setAvatarUrl(borrower?.avatarUrl);
     }
   }
+
+  const photoOpts: ImagePicker.ImagePickerOptions = {
+    mediaTypes: ['images'],
+    allowsEditing: true,
+    aspect: [1, 1],
+    quality: 0.7,
+  };
+  const takePhoto = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) return;
+    const res = await ImagePicker.launchCameraAsync(photoOpts);
+    if (!res.canceled) setAvatarUrl(res.assets[0].uri);
+  };
+  const pickPhoto = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return;
+    const res = await ImagePicker.launchImageLibraryAsync(photoOpts);
+    if (!res.canceled) setAvatarUrl(res.assets[0].uri);
+  };
 
   // Animate the backdrop (fade) and the sheet (slide up) as separate layers so
   // the scrim doesn't slide in as a hard rectangle "line". Uses the app's
@@ -95,11 +118,11 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
     if (!name.trim()) return;
     haptics.tap();
     if (creating) {
-      const id = addBorrower(name.trim(), emoji, phone);
+      const id = addBorrower(name.trim(), emoji, phone, avatarUrl);
       onClose();
       onCreated?.(id);
     } else {
-      updateBorrower(borrower.id, { name, emoji, phone, exempt });
+      updateBorrower(borrower.id, { name, emoji, phone, exempt, avatarUrl });
       onClose();
     }
   };
@@ -127,7 +150,7 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
 
           <Reveal index={0}>
             <View style={styles.head}>
-              <Avatar name={name || '?'} emoji={emoji} size={56} />
+              <Avatar name={name || '?'} emoji={emoji} uri={avatarUrl} size={56} />
               <Text style={[t.overline, styles.headLabel]}>{creating ? 'Add person' : 'Edit person'}</Text>
             </View>
           </Reveal>
@@ -145,6 +168,23 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
 
           <Reveal index={2}>
             <Text style={[t.overline, styles.label]}>Avatar</Text>
+            <View style={styles.photoRow}>
+              <PressableScale onPress={takePhoto} scaleTo={0.96} style={styles.photoBtn} accessibilityLabel="Take a photo">
+                <Icon name="camera" size={18} color={colors.inkSoft} />
+                <Text style={styles.photoBtnText}>Photo</Text>
+              </PressableScale>
+              <PressableScale onPress={pickPhoto} scaleTo={0.96} style={styles.photoBtn} accessibilityLabel="Choose from gallery">
+                <Icon name="image" size={18} color={colors.inkSoft} />
+                <Text style={styles.photoBtnText}>Gallery</Text>
+              </PressableScale>
+              {avatarUrl && (
+                <PressableScale onPress={() => setAvatarUrl(undefined)} scaleTo={0.96} style={styles.photoBtn} accessibilityLabel="Remove photo">
+                  <Icon name="close" size={16} color={colors.inkSoft} strokeWidth={2.2} />
+                  <Text style={styles.photoBtnText}>Remove</Text>
+                </PressableScale>
+              )}
+            </View>
+            <Text style={styles.orLabel}>{avatarUrl ? 'Emoji fallback if the photo ever fails' : 'or pick an emoji'}</Text>
             <View style={styles.emojiWrap}>
               {EMOJI_CHOICES.map((e) => (
                 <PressableScale
@@ -249,6 +289,21 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.hairline,
   },
+  photoRow: { flexDirection: 'row', gap: space.sm, marginBottom: space.md },
+  photoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs + 2,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.md,
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.hairline,
+    backgroundColor: colors.surface,
+  },
+  photoBtnText: { ...t.small, color: colors.inkSoft },
+  orLabel: { ...t.small, color: colors.inkFaint, marginBottom: space.md },
   emojiWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   emojiCell: {
     width: 44,

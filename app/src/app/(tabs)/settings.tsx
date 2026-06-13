@@ -1,5 +1,6 @@
-import { useRouter } from 'expo-router';
-import { StyleSheet, Switch, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { Linking, StyleSheet, Switch, Text, View } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -23,6 +24,7 @@ import {
   useSettings,
 } from '../../lib/store';
 import { NUDGE_CHANNELS } from '../../lib/nudge';
+import { getNotifPermission, NotifPermission, requestNotifPermission } from '../../lib/notifications';
 import { resetOnboarding } from '../../lib/onboarding';
 import { colors, radius, shadow, space, type as t } from '../../lib/theme';
 
@@ -118,9 +120,61 @@ function Card({ children, index }: { children: React.ReactNode; index: number })
   );
 }
 
+/** Nudge toggle that also owns the OS permission: it prompts when turned on and
+ *  surfaces a fix-it hint when notifications are blocked (so the toggle can't
+ *  silently read "on" while iOS drops every reminder). */
+function NudgeRemindersCard({ index }: { index: number }) {
+  const { nudgesEnabled } = useSettings();
+  const [perm, setPerm] = useState<NotifPermission>('granted');
+
+  // Re-check on focus so returning from iOS Settings clears/sets the hint.
+  useFocusEffect(
+    useCallback(() => {
+      getNotifPermission().then(setPerm).catch(() => {});
+    }, []),
+  );
+
+  const onToggle = async (v: boolean) => {
+    setNudgesEnabled(v);
+    if (v) setPerm(await requestNotifPermission());
+  };
+
+  const blocked = nudgesEnabled && perm !== 'granted';
+
+  return (
+    <Card index={index}>
+      <View style={styles.toggleRow}>
+        <View style={styles.toggleText}>
+          <Text style={t.h3}>Nudge reminders</Text>
+          <Text style={styles.sub}>Let OweMe poke you when stuff ages 👀</Text>
+        </View>
+        <Switch
+          value={nudgesEnabled}
+          onValueChange={onToggle}
+          trackColor={{ true: colors.accent, false: colors.hairline }}
+        />
+      </View>
+      {blocked && (
+        <PressableScale
+          onPress={() => Linking.openSettings()}
+          scaleTo={0.98}
+          style={styles.permHint}
+          accessibilityRole="button"
+          accessibilityLabel="Turn on notifications in iOS Settings"
+        >
+          <Text style={styles.permHintText}>
+            🔕 Notifications are off in iOS Settings — turn them on so nudges can reach you.
+          </Text>
+          <Icon name="chevronRight" size={18} color={colors.accentPress} strokeWidth={2.2} />
+        </PressableScale>
+      )}
+    </Card>
+  );
+}
+
 export default function SettingsScreen() {
   const router = useRouter();
-  const { defaultCurrency, nudgesEnabled, channel, shameMode } = useSettings();
+  const { defaultCurrency, channel, shameMode } = useSettings();
 
   const replayTour = () => {
     resetOnboarding();
@@ -146,19 +200,7 @@ export default function SettingsScreen() {
           </View>
         </Card>
 
-        <Card index={1}>
-          <View style={styles.toggleRow}>
-            <View style={styles.toggleText}>
-              <Text style={t.h3}>Nudge reminders</Text>
-              <Text style={styles.sub}>Let OweMe poke you when stuff ages 👀</Text>
-            </View>
-            <Switch
-              value={nudgesEnabled}
-              onValueChange={setNudgesEnabled}
-              trackColor={{ true: colors.accent, false: colors.hairline }}
-            />
-          </View>
-        </Card>
+        <NudgeRemindersCard index={1} />
 
         <Card index={2}>
           <Text style={[t.overline, styles.cardLabel]}>Nudges go through</Text>
@@ -255,6 +297,16 @@ const styles = StyleSheet.create({
   },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
   toggleText: { flex: 1, gap: 4 },
+  permHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    backgroundColor: colors.accentSoft,
+    borderRadius: radius.md,
+    paddingVertical: space.md,
+    paddingHorizontal: space.md,
+  },
+  permHintText: { ...t.small, color: colors.accentPress, fontWeight: '600', flex: 1 },
   sub: { ...t.small, color: colors.inkSoft },
   footer: { ...t.small, color: colors.inkFaint, textAlign: 'center', marginTop: space.lg },
 });

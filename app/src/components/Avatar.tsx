@@ -3,7 +3,8 @@
  * Deterministic tint per name so each person reads as "theirs".
  */
 
-import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { colors, radius } from '../lib/theme';
 
 const TINTS = [colors.accentSoft, colors.sand, colors.mint, colors.surfaceWarm, colors.grave];
@@ -18,18 +19,24 @@ interface Props {
   name: string;
   emoji: string;
   size?: number;
-  style?: StyleProp<ViewStyle>;
+  /** Optional borrower photo; falls back to the emoji disc when absent. */
+  uri?: string;
 }
 
-export function Avatar({ name, emoji, size = 48, style }: Props) {
+export function Avatar({ name, emoji, size = 48, uri }: Props) {
+  const disc = { width: size, height: size, borderRadius: radius.pill, backgroundColor: tintFor(name) };
+  if (uri) {
+    return (
+      <Image
+        source={{ uri }}
+        style={disc}
+        contentFit="cover"
+        accessibilityLabel={`${name}'s photo`}
+      />
+    );
+  }
   return (
-    <View
-      style={[
-        styles.disc,
-        { width: size, height: size, borderRadius: radius.pill, backgroundColor: tintFor(name) },
-        style,
-      ]}
-    >
+    <View style={[styles.disc, disc]}>
       <Text style={{ fontSize: size * 0.5 }}>{emoji}</Text>
     </View>
   );

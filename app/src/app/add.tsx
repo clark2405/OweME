@@ -352,7 +352,7 @@ export default function AddLoanScreen() {
                       scaleTo={0.94}
                       style={[styles.borrowerChip, selected && styles.borrowerChipOn]}
                     >
-                      <Avatar name={b.name} emoji={b.emoji} size={24} />
+                      <Avatar name={b.name} emoji={b.emoji} uri={b.avatarUrl} size={24} />
                       <Text style={[styles.borrowerName, selected && styles.borrowerNameOn]}>
                         {b.name}
                       </Text>

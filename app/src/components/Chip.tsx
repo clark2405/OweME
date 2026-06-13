@@ -7,7 +7,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, radius, space } from '../lib/theme';
 import { Loan } from '../lib/types';
-import { daysSince } from '../lib/format';
+import { daysSince, daysUntil, isDueSoon, isOverdue } from '../lib/format';
 
 type Tone = 'sand' | 'mint' | 'grave' | 'warn';
 
@@ -34,11 +34,14 @@ export function StatusChip({ status }: { status: Loan['status'] }) {
   return <Chip label="Out in the wild" tone="sand" />;
 }
 
-/** Surfaces an overdue / aging signal without a second accent color. */
+/** Surfaces an overdue / due-soon / aging signal without a second accent color. */
 export function AgeChip({ loan }: { loan: Loan }) {
-  const days = daysSince(loan.lentAt);
-  if (loan.dueAt && daysSince(loan.dueAt) > 0) return <Chip label="Overdue 👀" tone="warn" />;
-  if (days >= 30) return <Chip label="Aging" tone="warn" />;
+  if (isOverdue(loan)) return <Chip label="Overdue 👀" tone="warn" />;
+  if (isDueSoon(loan)) {
+    const n = daysUntil(loan.dueAt!);
+    return <Chip label={n === 0 ? 'Due today' : n === 1 ? 'Due tomorrow' : `Due in ${n}d`} tone="warn" />;
+  }
+  if (daysSince(loan.lentAt) >= 30) return <Chip label="Aging" tone="warn" />;
   return null;
 }
 

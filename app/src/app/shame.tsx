@@ -6,9 +6,10 @@
  * (task C). Playful in copy, calm in layout — per OweMe's visual taste.
  */
 
-import { useRef } from 'react';
-import { useRouter } from 'expo-router';
+import { useCallback, useRef } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Share, StyleSheet, Text, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { requireOptionalNativeModule } from 'expo-modules-core';
 import { Screen } from '../components/Screen';
 import { Reveal } from '../components/Reveal';
@@ -16,10 +17,11 @@ import { PressableScale } from '../components/PressableScale';
 import { Avatar } from '../components/Avatar';
 import { Icon } from '../components/Icon';
 import { ShameShareCard } from '../components/ShameShareCard';
+import { GraveyardBackdrop, RankBadge, Tombstone, WiltedTree } from '../components/Graveyard';
 import { ShameEntry, shameBoard, useBorrowers, useLoans } from '../lib/store';
 import { money } from '../lib/format';
 import { haptics } from '../lib/haptics';
-import { colors, radius, shadow, space, type as t } from '../lib/theme';
+import { colors, graveyard as GRAVE, radius, shadow, space, type as t } from '../lib/theme';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
@@ -49,6 +51,24 @@ export default function ShameScreen() {
 
   const [worst, ...rest] = board;
   const cardRef = useRef<View>(null);
+
+  // iOS 26 push/pop transitions briefly round + reveal the ROOT view behind the
+  // screens at the device corners — `contentStyle` can't reach that layer, so a
+  // dark screen flashes the cream base there. Darken the root only while THIS
+  // (dark) board is focused, and restore the cream base on blur — so the normal
+  // cream screens pushed from here (a borrower, a loan) don't flash dark in turn.
+  // expo-system-ui resolves its native module at import time (and throws on a
+  // binary missing it), so probe first and lazy-require — degrade to no-op.
+  useFocusEffect(
+    useCallback(() => {
+      if (requireOptionalNativeModule('ExpoSystemUI') == null) return;
+      const SystemUI = require('expo-system-ui') as typeof import('expo-system-ui');
+      SystemUI.setBackgroundColorAsync(GRAVE.base).catch(() => {});
+      return () => {
+        SystemUI.setBackgroundColorAsync(colors.bg).catch(() => {});
+      };
+    }, []),
+  );
 
   // Share the branded card as a PNG; fall back to the plain-text leaderboard.
   // `expo-sharing`'s JS wrapper throws (and dev-redboxes) the moment it's loaded
@@ -83,16 +103,23 @@ export default function ShameScreen() {
   };
 
   return (
-    <Screen scroll ambient="shame" contentStyle={styles.content}>
+    <Screen
+      scroll
+      ambient="shame"
+      baseColor={GRAVE.base}
+      backdrop={<GraveyardBackdrop />}
+      contentStyle={styles.content}
+    >
+      <StatusBar style="light" />
       <Reveal index={0} from={8}>
         <PressableScale onPress={() => router.back()} scaleTo={0.9} style={styles.back}>
-          <Icon name="chevronLeft" size={20} color={colors.inkSoft} strokeWidth={2.2} />
+          <Icon name="chevronLeft" size={20} color={GRAVE.textSoft} strokeWidth={2.2} />
           <Text style={styles.backText}>People</Text>
         </PressableScale>
       </Reveal>
 
       <Reveal index={1} clip from={40}>
-        <Text style={t.overline}>Just between us 🤫</Text>
+        <Text style={styles.overline}>Just between us 🤫</Text>
         <Text style={[t.title, styles.title]}>Hall of Shame 😈</Text>
       </Reveal>
 
@@ -107,20 +134,29 @@ export default function ShameScreen() {
         </Reveal>
       ) : (
         <>
-          {/* #1 — the worst offender gets the dark podium. */}
+          {/* #1 — the worst offender gets the grave plot: a headstone, flanked
+              by bare trees, with an ember glow pooling at the base. */}
           <Reveal index={2} from={26}>
             <PressableScale
               onPress={() => router.push(`/borrower/${worst.borrower.id}`)}
               scaleTo={0.98}
               style={styles.podium}
             >
-              <Text style={styles.podiumCrown}>👑</Text>
-              <Avatar name={worst.borrower.name} emoji={worst.borrower.emoji} size={64} />
+              <View pointerEvents="none" style={styles.podiumGlow} />
+              <WiltedTree style={styles.podTreeL} width={46} height={78} opacity={0.6} />
+              <WiltedTree flip style={styles.podTreeR} width={40} height={66} opacity={0.55} />
+              {/* The headstone frames the worst offender's portrait. */}
+              <View style={styles.podiumHead}>
+                <Tombstone width={120} height={132} />
+                <View style={styles.podiumAvatar}>
+                  <Avatar name={worst.borrower.name} emoji={worst.borrower.emoji} size={58} />
+                </View>
+              </View>
               <Text style={styles.podiumName} numberOfLines={1}>
                 {worst.borrower.name}
               </Text>
               <View style={styles.podiumTitlePill}>
-                <Text style={styles.podiumTitleText}>🥇 Most Wanted · {worst.title}</Text>
+                <Text style={styles.podiumTitleText}>Most Wanted · {worst.title}</Text>
               </View>
               <Text style={styles.podiumHolding}>{holdingLine(worst)}</Text>
               <Text style={styles.podiumDays}>oldest out {worst.oldestActiveDays}d</Text>
@@ -136,10 +172,10 @@ export default function ShameScreen() {
                     scaleTo={0.975}
                     style={styles.row}
                   >
-                    <Text style={styles.rank}>{MEDALS[i + 1] ?? `#${i + 2}`}</Text>
+                    <RankBadge rank={i + 2} size={28} />
                     <Avatar name={e.borrower.name} emoji={e.borrower.emoji} size={44} />
                     <View style={styles.body}>
-                      <Text style={t.h3} numberOfLines={1}>
+                      <Text style={[t.h3, styles.rowName]} numberOfLines={1}>
                         {e.borrower.name}
                       </Text>
                       <Text style={styles.rowSub} numberOfLines={1}>
@@ -161,14 +197,14 @@ export default function ShameScreen() {
               accessibilityRole="button"
               accessibilityLabel="Post the board"
             >
-              <Text style={styles.postText}>Post the board 📢</Text>
+              <Text style={styles.postText}>Post the board</Text>
             </PressableScale>
           </Reveal>
 
           <Reveal from={16}>
             <Text style={styles.footnote}>
               Only you can see this — until you tap above. Ranked by how long the
-              oldest thing&apos;s been out. 📦
+              oldest thing&apos;s been out.
             </Text>
           </Reveal>
 
@@ -185,42 +221,64 @@ export default function ShameScreen() {
 const styles = StyleSheet.create({
   content: { paddingBottom: space.xxl },
   back: { flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: space.lg },
-  backText: { ...t.h3, color: colors.inkSoft },
-  title: { marginTop: space.sm, marginBottom: space.xl },
+  backText: { ...t.h3, color: GRAVE.textSoft },
+  overline: { ...t.overline, color: GRAVE.textFaint },
+  title: { marginTop: space.sm, marginBottom: space.xl, color: GRAVE.text },
   podium: {
-    backgroundColor: colors.ink,
+    backgroundColor: GRAVE.plot,
     borderRadius: radius.xl,
-    padding: space.xl,
+    paddingHorizontal: space.xl,
+    paddingTop: space.xl,
+    paddingBottom: space.xl,
     alignItems: 'center',
     gap: space.sm,
     marginBottom: space.lg,
-    ...shadow.card,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: GRAVE.hairline,
+    ...shadow.lifted,
   },
-  podiumCrown: { fontSize: 28, marginBottom: space.xs },
-  podiumName: { ...t.h2, color: colors.surface, marginTop: space.sm },
+  // Ember light pooling at the foot of the grave.
+  podiumGlow: {
+    position: 'absolute',
+    bottom: -90,
+    width: 240,
+    height: 200,
+    borderRadius: 120,
+    backgroundColor: '#FF6A2C',
+    opacity: 0.16,
+  },
+  podTreeL: { position: 'absolute', bottom: 0, left: 6 },
+  podTreeR: { position: 'absolute', bottom: 0, right: 6 },
+  // The headstone + portrait sit in one centered block; the avatar overlaps the
+  // lower face of the stone so it reads as a framed memorial.
+  podiumHead: { width: 120, height: 132, alignItems: 'center', justifyContent: 'flex-start' },
+  podiumAvatar: { position: 'absolute', left: 0, right: 0, bottom: 12, alignItems: 'center' },
+  podiumName: { ...t.h2, color: GRAVE.text, marginTop: space.xs },
   podiumTitlePill: {
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: radius.pill,
     paddingHorizontal: space.md,
     paddingVertical: 5,
     marginTop: space.xs,
   },
-  podiumTitleText: { ...t.small, color: colors.surface, fontWeight: '700' },
-  podiumHolding: { ...t.body, color: colors.surfaceWarm, marginTop: space.sm },
-  podiumDays: { ...t.small, color: colors.inkFaint },
+  podiumTitleText: { ...t.small, color: GRAVE.text, fontWeight: '700' },
+  podiumHolding: { ...t.body, color: GRAVE.textSoft, marginTop: space.sm },
+  podiumDays: { ...t.small, color: GRAVE.textFaint },
   list: { gap: space.md },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
-    backgroundColor: colors.surface,
+    backgroundColor: GRAVE.stone,
     borderRadius: radius.lg,
     padding: space.lg,
-    ...shadow.card,
+    borderWidth: 1,
+    borderColor: GRAVE.hairline,
   },
-  rank: { fontSize: 20, width: 28, textAlign: 'center' },
   body: { flex: 1, gap: 4 },
-  rowSub: { ...t.small, color: colors.inkSoft },
+  rowName: { color: GRAVE.text },
+  rowSub: { ...t.small, color: GRAVE.textSoft },
   days: { ...t.small, color: colors.accent, fontWeight: '800' },
   post: {
     backgroundColor: colors.accent,
@@ -230,17 +288,18 @@ const styles = StyleSheet.create({
     marginTop: space.xl,
     ...shadow.card,
   },
-  postText: { ...t.h3, color: colors.surface, fontWeight: '800' },
+  postText: { ...t.h3, color: colors.surface, fontWeight: '800', alignSelf: 'stretch', textAlign: 'center' },
   offscreen: { position: 'absolute', left: -9999, top: 0 },
-  footnote: { ...t.small, color: colors.inkFaint, textAlign: 'center', marginTop: space.lg },
+  footnote: { ...t.small, color: GRAVE.textFaint, textAlign: 'center', marginTop: space.lg },
   empty: {
-    backgroundColor: colors.surface,
+    backgroundColor: GRAVE.stone,
     borderRadius: radius.lg,
     padding: space.xxl,
     alignItems: 'center',
     gap: space.md,
-    ...shadow.card,
+    borderWidth: 1,
+    borderColor: GRAVE.hairline,
   },
   emptyEmoji: { fontSize: 44 },
-  emptyText: { ...t.bodySoft, textAlign: 'center' },
+  emptyText: { ...t.bodySoft, color: GRAVE.textSoft, textAlign: 'center' },
 });

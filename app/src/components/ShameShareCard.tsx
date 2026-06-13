@@ -3,21 +3,20 @@
  * captured to a PNG by `shame.tsx` via react-native-view-shot — so the share
  * sheet carries an OweMe-branded image, not a wall of plain text.
  *
- * Design follows `offbrand-design`: warm cream base + the ONE coral accent,
- * oversized grotesque headline, an uppercase micro-label, depth from layered
- * surfaces and the dark ink podium for #1, and a designed footer carrying the
- * brand motif. Capture-safe: depth comes from contrast + borders + tints, not
- * from shadows (which view-shot drops on some platforms).
+ * It mirrors the in-app Hall of Shame: a graveyard-at-night base, a headstone
+ * framing the #1 offender, SVG rank medallions, and bare trees for atmosphere —
+ * with the ONE coral accent (brand mark, top rule, day counts) carrying through.
+ * Capture-safe: depth comes from contrast + borders + flat tints + static SVG,
+ * never shadows or animation (which view-shot drops).
  */
 
 import { forwardRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Avatar } from './Avatar';
+import { RankBadge, Tombstone, WiltedTree } from './Graveyard';
 import { ShameEntry } from '../lib/store';
 import { money } from '../lib/format';
-import { colors, radius, space, type as t } from '../lib/theme';
-
-const MEDALS = ['🥇', '🥈', '🥉'];
+import { colors, graveyard as G, radius, space, type as t } from '../lib/theme';
 
 /** "3 things · ₱1,250" — what this person is sitting on right now. */
 function holding(e: ShameEntry): string {
@@ -46,15 +45,22 @@ export const ShameShareCard = forwardRef<View, Props>(function ShameShareCard({ 
       </View>
       <Text style={styles.title}>Who&apos;s holding{'\n'}my stuff 😈</Text>
 
-      {/* #1 — the dark ink podium for drama and depth. */}
+      {/* #1 — the grave plot: a headstone framing the worst offender. */}
       <View style={styles.podium}>
-        <Text style={styles.crown}>👑</Text>
-        <Avatar name={worst.borrower.name} emoji={worst.borrower.emoji} size={60} />
+        <View pointerEvents="none" style={styles.podiumGlow} />
+        <WiltedTree style={styles.podTreeL} width={42} height={70} opacity={0.6} />
+        <WiltedTree flip style={styles.podTreeR} width={36} height={60} opacity={0.55} />
+        <View style={styles.podiumHead}>
+          <Tombstone width={108} height={120} />
+          <View style={styles.podiumAvatar}>
+            <Avatar name={worst.borrower.name} emoji={worst.borrower.emoji} size={54} />
+          </View>
+        </View>
         <Text style={styles.podiumName} numberOfLines={1}>
           {worst.borrower.name}
         </Text>
         <View style={styles.podiumPill}>
-          <Text style={styles.podiumPillText}>🥇 Most Wanted · {worst.title}</Text>
+          <Text style={styles.podiumPillText}>Most Wanted · {worst.title}</Text>
         </View>
         <Text style={styles.podiumHolding}>{holding(worst)}</Text>
         <Text style={styles.podiumDays}>oldest out {worst.oldestActiveDays}d</Text>
@@ -64,7 +70,7 @@ export const ShameShareCard = forwardRef<View, Props>(function ShameShareCard({ 
         <View style={styles.list}>
           {rest.slice(0, 6).map((e, i) => (
             <View key={e.borrower.id} style={styles.row}>
-              <Text style={styles.rank}>{MEDALS[i + 1] ?? `#${i + 2}`}</Text>
+              <RankBadge rank={i + 2} size={26} />
               <Avatar name={e.borrower.name} emoji={e.borrower.emoji} size={40} />
               <View style={styles.rowBody}>
                 <Text style={styles.rowName} numberOfLines={1}>
@@ -93,7 +99,7 @@ const CARD_W = 360;
 const styles = StyleSheet.create({
   card: {
     width: CARD_W,
-    backgroundColor: colors.bg,
+    backgroundColor: G.base,
     borderRadius: radius.xl,
     paddingHorizontal: space.xl,
     paddingTop: space.xl,
@@ -116,57 +122,72 @@ const styles = StyleSheet.create({
     marginTop: space.sm,
   },
   brand: { ...t.h3, color: colors.accent, fontWeight: '800', letterSpacing: -0.4 },
-  overline: { ...t.overline },
-  title: { ...t.title, fontSize: 34, lineHeight: 37, marginTop: space.md, marginBottom: space.xl },
+  overline: { ...t.overline, color: G.textFaint },
+  title: { ...t.title, color: G.text, fontSize: 34, lineHeight: 37, marginTop: space.md, marginBottom: space.xl },
 
   podium: {
-    backgroundColor: colors.ink,
+    backgroundColor: G.plot,
     borderRadius: radius.lg,
     paddingVertical: space.xl,
     paddingHorizontal: space.lg,
     alignItems: 'center',
     gap: space.sm,
     marginBottom: space.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: G.hairline,
   },
-  crown: { fontSize: 26, marginBottom: space.xs },
-  podiumName: { ...t.h2, color: colors.surface, marginTop: space.sm },
+  podiumGlow: {
+    position: 'absolute',
+    bottom: -80,
+    width: 220,
+    height: 180,
+    borderRadius: 110,
+    backgroundColor: '#FF6A2C',
+    opacity: 0.16,
+  },
+  podTreeL: { position: 'absolute', bottom: 0, left: 8 },
+  podTreeR: { position: 'absolute', bottom: 0, right: 8 },
+  podiumHead: { width: 108, height: 120, alignItems: 'center', justifyContent: 'flex-start' },
+  podiumAvatar: { position: 'absolute', left: 0, right: 0, bottom: 10, alignItems: 'center' },
+  podiumName: { ...t.h2, color: G.text, marginTop: space.xs },
   podiumPill: {
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: radius.pill,
     paddingHorizontal: space.md,
     paddingVertical: 5,
     marginTop: space.xs,
   },
-  podiumPillText: { ...t.small, color: colors.surface, fontWeight: '700' },
-  podiumHolding: { ...t.body, color: colors.surfaceWarm, marginTop: space.sm },
-  podiumDays: { ...t.small, color: colors.inkFaint },
+  podiumPillText: { ...t.small, color: G.text, fontWeight: '700' },
+  podiumHolding: { ...t.body, color: G.textSoft, marginTop: space.sm },
+  podiumDays: { ...t.small, color: G.textFaint },
 
   list: { gap: space.sm },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
-    backgroundColor: colors.surface,
+    backgroundColor: G.stone,
     borderRadius: radius.md,
     paddingVertical: space.md,
     paddingHorizontal: space.lg,
-    borderWidth: 1.5,
-    borderColor: colors.hairline,
+    borderWidth: 1,
+    borderColor: G.hairline,
   },
-  rank: { fontSize: 18, width: 26, textAlign: 'center' },
   rowBody: { flex: 1, gap: 2 },
-  rowName: { ...t.h3 },
-  rowSub: { ...t.small, color: colors.inkSoft },
+  rowName: { ...t.h3, color: G.text },
+  rowSub: { ...t.small, color: G.textSoft },
   rowDays: { ...t.small, color: colors.accent, fontWeight: '800' },
 
   footer: {
     marginTop: space.xl,
     paddingTop: space.lg,
-    borderTopWidth: 1.5,
-    borderTopColor: colors.hairline,
+    borderTopWidth: 1,
+    borderTopColor: G.hairline,
+    alignSelf: 'stretch',
     alignItems: 'center',
     gap: 2,
   },
-  footerBig: { ...t.h3, color: colors.ink },
-  footerSub: { ...t.small, color: colors.inkFaint },
+  footerBig: { ...t.h3, color: G.text, alignSelf: 'stretch', textAlign: 'center' },
+  footerSub: { ...t.small, color: G.textFaint, alignSelf: 'stretch', textAlign: 'center' },
 });

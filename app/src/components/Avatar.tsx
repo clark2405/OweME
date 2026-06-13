@@ -3,7 +3,7 @@
  * Deterministic tint per name so each person reads as "theirs".
  */
 
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import { colors, radius } from '../lib/theme';
 
 const TINTS = [colors.accentSoft, colors.sand, colors.mint, colors.surfaceWarm, colors.grave];
@@ -18,14 +18,16 @@ interface Props {
   name: string;
   emoji: string;
   size?: number;
+  style?: StyleProp<ViewStyle>;
 }
 
-export function Avatar({ name, emoji, size = 48 }: Props) {
+export function Avatar({ name, emoji, size = 48, style }: Props) {
   return (
     <View
       style={[
         styles.disc,
         { width: size, height: size, borderRadius: radius.pill, backgroundColor: tintFor(name) },
+        style,
       ]}
     >
       <Text style={{ fontSize: size * 0.5 }}>{emoji}</Text>

@@ -11,7 +11,7 @@ import { Toaster } from '../components/Toaster';
 import { ACTION_RETURNED } from '../lib/notifications';
 import { markReturned, unreturn } from '../lib/store';
 import { showToast } from '../lib/toast';
-import { colors } from '../lib/theme';
+import { colors, graveyard } from '../lib/theme';
 
 const IS_NATIVE = Platform.OS === 'ios' || Platform.OS === 'android';
 
@@ -77,7 +77,12 @@ export default function RootLayout() {
               needing a second tap. Let the modal own its transition. */}
           <Stack.Screen name="add" options={{ presentation: 'modal' }} />
           <Stack.Screen name="loans" options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="shame" options={{ animation: 'slide_from_right' }} />
+          {/* Dark graveyard route: paint its native container dark too, so the
+              slide transition doesn't flash the cream base at the edges. */}
+          <Stack.Screen
+            name="shame"
+            options={{ animation: 'slide_from_right', contentStyle: { backgroundColor: graveyard.base } }}
+          />
           <Stack.Screen name="loan/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="borrower/[id]" options={{ animation: 'slide_from_right' }} />
         </Stack>

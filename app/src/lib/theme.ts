@@ -42,6 +42,22 @@ export const colors = {
   shadow: '#3A2A18',
 } as const;
 
+/**
+ * The Hall of Shame's graveyard-at-night palette — a dark room the warm base
+ * tokens don't cover. Shared by the shame screen and any screen reached from it
+ * (e.g. a borrower opened from the board) so the section reads as one dark place.
+ * Coral `accent` still carries through as the single eye-pull.
+ */
+export const graveyard = {
+  base: '#15101B',
+  plot: '#241833',
+  stone: '#221A2E',
+  text: '#F3ECDD',
+  textSoft: '#B9AFC2',
+  textFaint: '#897F93',
+  hairline: 'rgba(255,255,255,0.08)',
+} as const;
+
 export const space = {
   xs: 4,
   sm: 8,

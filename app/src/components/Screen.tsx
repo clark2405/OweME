@@ -20,6 +20,11 @@ interface Props {
   tabBarInset?: boolean;
   /** Re-voices the ambient layer per tab; base + accent stay constant. */
   ambient?: AmbientVariant;
+  /** Override the warm base — e.g. the Hall of Shame's dark graveyard night. */
+  baseColor?: string;
+  /** Fixed atmosphere drawn above the ambient layer but behind content (e.g. the
+   *  graveyard treeline) — stays put while content scrolls. */
+  backdrop?: ReactNode;
   /** Tab screens: transparent + no own ambient — a single persistent ambient
    *  lives in the tabs layout and cross-fades between tabs. */
   bare?: boolean;
@@ -32,6 +37,8 @@ export function Screen({
   edges = ['top'],
   tabBarInset = false,
   ambient = 'home',
+  baseColor,
+  backdrop,
   bare = false,
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -44,8 +51,9 @@ export function Screen({
   };
 
   return (
-    <View style={[styles.root, bare && styles.bare]}>
+    <View style={[styles.root, bare && styles.bare, baseColor != null && { backgroundColor: baseColor }]}>
       {!bare && <AmbientBackground variant={ambient} />}
+      {backdrop}
       <SafeAreaView style={styles.safe} edges={edges}>
         {scroll ? (
           <ScrollView

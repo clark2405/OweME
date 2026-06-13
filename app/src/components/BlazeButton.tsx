@@ -26,15 +26,24 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 import { PressableScale } from './PressableScale';
-import { colors, radius, shadow } from '../lib/theme';
+import { WiltedTree } from './Graveyard';
+import { graveyard, radius, shadow } from '../lib/theme';
 
 // Warm amber wash + a hotter spark core, layered over the deep-red base.
 const FLAME = '#FF9D3C';
 const SPARK = '#FFD15C';
 // Hot near-white for the lightning bolt + flash.
 const BOLT = '#FFF6D8';
-// A jagged bolt drawn in a 22×46 box (flipped horizontally on alternate strikes).
-const BOLT_PATH = 'M13 0 L3 24 L10 24 L6 46 L19 18 L11 18 Z';
+// Near-black for the dusk wash + the graveyard treeline silhouettes.
+const NIGHT = '#0B0710';
+// Jagged bolts drawn in a 100×40 box and stretched to span the full button width
+// (preserveAspectRatio="none"), so each strike rips clear across from one edge to
+// the other. A fresh variant + flip is picked per strike so it never repeats.
+const BOLTS = [
+  'M-4 6 L22 21 L13 24 L44 11 L34 30 L64 14 L55 23 L86 9 L77 27 L104 18',
+  'M-4 25 L20 11 L12 16 L42 5 L33 22 L62 9 L55 18 L84 4 L76 24 L104 13',
+  'M-4 14 L24 27 L14 21 L46 33 L36 11 L66 28 L57 19 L88 31 L79 9 L104 21',
+];
 
 interface Props {
   children: ReactNode;
@@ -60,8 +69,8 @@ export function BlazeButton({
   const lickL = useSharedValue(0);
   const lickR = useSharedValue(0);
   const bolt = useSharedValue(0);
-  // Where the next strike lands (0–1 across the width) + which way it leans.
-  const [strike, setStrike] = useState({ key: 0, x: 0.5, flip: false });
+  // The next bolt's shape + which way it rips across the width.
+  const [strike, setStrike] = useState({ key: 0, d: BOLTS[0], flip: false });
 
   useEffect(() => {
     if (reduce) return;
@@ -81,7 +90,11 @@ export function BlazeButton({
     const next = () => (alive ? 2600 + Math.random() * 4200 : 0);
     const fire = () => {
       if (!alive) return;
-      setStrike((s) => ({ key: s.key + 1, x: 0.16 + Math.random() * 0.68, flip: Math.random() > 0.5 }));
+      setStrike((s) => ({
+        key: s.key + 1,
+        d: BOLTS[Math.floor(Math.random() * BOLTS.length)],
+        flip: Math.random() > 0.5,
+      }));
       bolt.value = withSequence(
         withTiming(1, { duration: 55, easing: Easing.out(Easing.quad) }),
         withTiming(0.1, { duration: 80 }),
@@ -115,7 +128,7 @@ export function BlazeButton({
     ],
   }));
   // The whole button briefly brightens with each strike (distant-lightning glow).
-  const flashStyle = useAnimatedStyle(() => ({ opacity: bolt.value * 0.5 }));
+  const flashStyle = useAnimatedStyle(() => ({ opacity: bolt.value * 0.38 }));
   const boltStyle = useAnimatedStyle(() => ({ opacity: bolt.value }));
 
   return (
@@ -131,18 +144,21 @@ export function BlazeButton({
       <Animated.View pointerEvents="none" style={[styles.lickR, lickRStyle]} />
       {lightning && (
         <>
+          {/* Bare trees flanking the button, rising from the ember ground. */}
+          <WiltedTree style={styles.treeL} width={52} height={70} color={NIGHT} opacity={0.55} />
+          <WiltedTree style={styles.treeR} flip width={44} height={60} color={NIGHT} opacity={0.5} />
           <Animated.View pointerEvents="none" style={[styles.flash, flashStyle]} />
-          <Animated.View
-            key={strike.key}
-            pointerEvents="none"
-            style={[
-              styles.bolt,
-              boltStyle,
-              { left: `${strike.x * 100}%`, transform: [{ scaleX: strike.flip ? -1 : 1 }] },
-            ]}
-          >
-            <Svg width={22} height={46} viewBox="0 0 22 46">
-              <Path d={BOLT_PATH} fill={BOLT} />
+          <Animated.View key={strike.key} pointerEvents="none" style={[styles.boltLayer, boltStyle]}>
+            <Svg
+              width="100%"
+              height="100%"
+              viewBox="0 0 100 40"
+              preserveAspectRatio="none"
+              style={strike.flip ? styles.flip : undefined}
+            >
+              {/* soft halo under a hot bright core */}
+              <Path d={strike.d} stroke={BOLT} strokeWidth={5} fill="none" opacity={0.32} strokeLinecap="round" strokeLinejoin="round" />
+              <Path d={strike.d} stroke={BOLT} strokeWidth={2} fill="none" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
           </Animated.View>
         </>
@@ -154,11 +170,15 @@ export function BlazeButton({
 
 const styles = StyleSheet.create({
   base: {
-    backgroundColor: colors.accentPress,
+    // Dark graveyard plot — same room as the Hall of Shame interior — lit from
+    // below by the ember wash + flame licks.
+    backgroundColor: graveyard.plot,
     borderRadius: radius.lg,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: graveyard.hairline,
     ...shadow.card,
   },
   // Warm heat pooling up from the base.
@@ -191,6 +211,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     backgroundColor: FLAME,
   },
+  // Bare trees anchored to the bottom corners (ground line).
+  treeL: { position: 'absolute', bottom: -6, left: 2 },
+  treeR: { position: 'absolute', bottom: -4, right: 2 },
   // Full-cover brighten on each strike.
   flash: {
     position: 'absolute',
@@ -200,6 +223,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: BOLT,
   },
-  // The bolt descends from the top edge; `left` + flip are set per strike.
-  bolt: { position: 'absolute', top: 4 },
+  // The bolt spans the whole surface; the SVG stretches edge to edge.
+  boltLayer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  flip: { transform: [{ scaleX: -1 }] },
 });

@@ -212,11 +212,6 @@ export default function AddLoanScreen() {
             contentContainerStyle={styles.content}
             keyboardShouldPersistTaps="handled"
           >
-            <Reveal index={0} from={10}>
-              <Text style={t.overline}>
-                {editing ? 'Tweak the details' : template ? 'Round two 🔁' : 'The 15-second flow'}
-              </Text>
-            </Reveal>
             <Reveal index={1} clip from={40}>
               <Text style={[t.title, styles.title]}>
                 {editing ? 'Edit loan' : template ? 'Lend it again' : 'Lend something'}
@@ -240,9 +235,9 @@ export default function AddLoanScreen() {
                   <TextInput
                     value={itemName}
                     onChangeText={setItemName}
-                    placeholder="What did you lend? (e.g. cordless drill)"
+                    placeholder="What did you lend?"
                     placeholderTextColor={colors.inkFaint}
-                    style={styles.input}
+                    style={[styles.input, styles.itemInput]}
                     autoFocus={!editing}
                     returnKeyType="next"
                   />
@@ -536,7 +531,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   safe: { flex: 1 },
   flex: { flex: 1 },
-  handleRow: { alignItems: 'flex-end', paddingHorizontal: space.xl, paddingTop: space.sm },
+  handleRow: { alignItems: 'flex-end', paddingHorizontal: space.lg, paddingTop: space.sm },
   close: {
     width: 38,
     height: 38,
@@ -559,6 +554,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.hairline,
   },
+  itemInput: { textAlign: 'center' },
   suggestRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.sm },
   suggestChip: {
     flexDirection: 'row',

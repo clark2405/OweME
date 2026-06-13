@@ -34,6 +34,9 @@ interface BlobSpec {
   top: number;
   /** Phase offset so blobs don't drift in lockstep. */
   phase: number;
+  /** Base opacity override — used by the dark `shame` variant for low ember glows.
+   *  When omitted, the original cream-tab breathing range is kept. */
+  opacity?: number;
 }
 
 // All warm-family. Tint + placement shift per tab; the base never changes.
@@ -58,16 +61,17 @@ const VARIANTS: Record<AmbientVariant, BlobSpec[]> = {
     { color: colors.grave, size: 300, left: -120, top: 220, phase: 3200 },
     { color: colors.sand, size: 380, left: 60, top: 540, phase: 6800 },
   ],
-  // The Hall of Shame runs hotter: warm amber/coral embers instead of the cream
-  // family, so the room glows. Same one slow layer — just a fiery voicing.
+  // The Hall of Shame is a graveyard at night: a dark base (set on the Screen)
+  // with sparse low glows — deep purple sky, an ember ground haze, and an eerie
+  // green fog drifting at the treeline. Same one slow layer, just nocturnal.
   shame: [
-    { color: '#FFD7A1', size: 380, left: -120, top: -70, phase: 0 },
-    { color: colors.accentSoft, size: 320, left: 170, top: 180, phase: 3500 },
-    { color: '#FFBE96', size: 440, left: -70, top: 520, phase: 6500 },
+    { color: '#5B2A86', size: 360, left: 150, top: -70, phase: 0, opacity: 0.3 },
+    { color: '#FF6A2C', size: 380, left: -120, top: 360, phase: 3500, opacity: 0.2 },
+    { color: '#2E5D44', size: 440, left: -70, top: 560, phase: 6500, opacity: 0.18 },
   ],
 };
 
-function Blob({ color, size, left, top, phase }: BlobSpec) {
+function Blob({ color, size, left, top, phase, opacity }: BlobSpec) {
   const t = useSharedValue(0);
   const reduce = useReducedMotion();
 
@@ -89,7 +93,7 @@ function Blob({ color, size, left, top, phase }: BlobSpec) {
       { translateY: (t.value - 0.5) * 70 },
       { scale: 1 + t.value * 0.12 },
     ],
-    opacity: 0.5 + t.value * 0.25,
+    opacity: opacity == null ? 0.5 + t.value * 0.25 : opacity * (0.7 + t.value * 0.55),
   }));
 
   return (

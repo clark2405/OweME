@@ -6,14 +6,23 @@
  * Reused from the borrower profile and the People list.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import Animated, {
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { PressableScale } from './PressableScale';
+import { Reveal } from './Reveal';
 import { Avatar } from './Avatar';
 import { Button } from './Button';
 import { addBorrower, deleteBorrower, loanCountFor, updateBorrower, useSettings } from '../lib/store';
 import { haptics } from '../lib/haptics';
 import { Borrower } from '../lib/types';
+import { duration, expoOut, reduceMotion } from '../lib/motion';
 import { colors, radius, shadow, space, type as t } from '../lib/theme';
 
 const EMOJI_CHOICES = [
@@ -55,6 +64,30 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
     }
   }
 
+  // Animate the backdrop (fade) and the sheet (slide up) as separate layers so
+  // the scrim doesn't slide in as a hard rectangle "line". Uses the app's
+  // signature expo-out curve so it enters like every other surface (Reveal),
+  // and stays mounted through the close so the exit can play before unmount.
+  const [mounted, setMounted] = useState(visible);
+  const progress = useSharedValue(visible ? 1 : 0);
+  const [sheetH, setSheetH] = useState(600);
+
+  useEffect(() => {
+    if (visible) {
+      setMounted(true);
+      progress.value = withTiming(1, { duration: duration.base, easing: expoOut, reduceMotion });
+    } else {
+      progress.value = withTiming(0, { duration: duration.fast, easing: expoOut, reduceMotion }, (done) => {
+        if (done) runOnJS(setMounted)(false);
+      });
+    }
+  }, [visible, progress]);
+
+  const backdropStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: interpolate(progress.value, [0, 1], [sheetH, 0]) }],
+  }));
+
   const loanCount = borrower ? loanCountFor(borrower.id) : 0;
   const canDelete = !creating && loanCount === 0;
 
@@ -80,87 +113,104 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={mounted} transparent animationType="none" onRequestClose={onClose}>
       <View style={styles.root}>
-        <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close" />
+        <Animated.View style={[styles.backdrop, backdropStyle]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close" />
+        </Animated.View>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={styles.sheet}>
+          <Animated.View
+            style={[styles.sheet, sheetStyle]}
+            onLayout={(e) => setSheetH(e.nativeEvent.layout.height)}
+          >
           <View style={styles.grabber} />
 
-          <View style={styles.head}>
-            <Avatar name={name || '?'} emoji={emoji} size={56} />
-            <Text style={[t.overline, styles.headLabel]}>{creating ? 'Add person' : 'Edit person'}</Text>
-          </View>
+          <Reveal index={0}>
+            <View style={styles.head}>
+              <Avatar name={name || '?'} emoji={emoji} size={56} />
+              <Text style={[t.overline, styles.headLabel]}>{creating ? 'Add person' : 'Edit person'}</Text>
+            </View>
+          </Reveal>
 
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="Name"
-            placeholderTextColor={colors.inkFaint}
-            style={styles.input}
-            returnKeyType="done"
-          />
+          <Reveal index={1}>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="Name"
+              placeholderTextColor={colors.inkFaint}
+              style={styles.input}
+              returnKeyType="done"
+            />
+          </Reveal>
 
-          <Text style={[t.overline, styles.label]}>Avatar</Text>
-          <View style={styles.emojiWrap}>
-            {EMOJI_CHOICES.map((e) => (
-              <PressableScale
-                key={e}
-                onPress={() => setEmoji(e)}
-                scaleTo={0.85}
-                style={[styles.emojiCell, e === emoji && styles.emojiCellOn]}
-                accessibilityRole="button"
-                accessibilityLabel={`Avatar ${e}`}
-                accessibilityState={{ selected: e === emoji }}
-              >
-                <Text style={styles.emoji}>{e}</Text>
-              </PressableScale>
-            ))}
-          </View>
+          <Reveal index={2}>
+            <Text style={[t.overline, styles.label]}>Avatar</Text>
+            <View style={styles.emojiWrap}>
+              {EMOJI_CHOICES.map((e) => (
+                <PressableScale
+                  key={e}
+                  onPress={() => setEmoji(e)}
+                  scaleTo={0.85}
+                  style={[styles.emojiCell, e === emoji && styles.emojiCellOn]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Avatar ${e}`}
+                  accessibilityState={{ selected: e === emoji }}
+                >
+                  <Text style={styles.emoji}>{e}</Text>
+                </PressableScale>
+              ))}
+            </View>
+          </Reveal>
 
-          <Text style={[t.overline, styles.label]}>Phone (optional)</Text>
-          <TextInput
-            value={phone}
-            onChangeText={setPhone}
-            placeholder="So nudges go straight to them"
-            placeholderTextColor={colors.inkFaint}
-            style={styles.input}
-            keyboardType="phone-pad"
-          />
+          <Reveal index={3}>
+            <Text style={[t.overline, styles.label]}>Phone (optional)</Text>
+            <TextInput
+              value={phone}
+              onChangeText={setPhone}
+              placeholder="So nudges go straight to them"
+              placeholderTextColor={colors.inkFaint}
+              style={styles.input}
+              keyboardType="phone-pad"
+            />
+          </Reveal>
 
           {!creating && shameMode && (
-            <View style={styles.exemptRow}>
-              <View style={styles.exemptText}>
-                <Text style={t.h3}>Exempt from shame 😇</Text>
-                <Text style={styles.exemptSub}>Keep them off the Hall of Shame board.</Text>
+            <Reveal index={4}>
+              <View style={styles.exemptRow}>
+                <View style={styles.exemptText}>
+                  <Text style={t.h3}>Exempt from shame 😇</Text>
+                  <Text style={styles.exemptSub}>Keep them off the Hall of Shame board.</Text>
+                </View>
+                <Switch
+                  value={exempt}
+                  onValueChange={setExempt}
+                  trackColor={{ true: colors.accent, false: colors.hairline }}
+                />
               </View>
-              <Switch
-                value={exempt}
-                onValueChange={setExempt}
-                trackColor={{ true: colors.accent, false: colors.hairline }}
-              />
-            </View>
+            </Reveal>
           )}
 
-          <View style={styles.actions}>
-            <Button label={creating ? 'Add 🤝' : 'Save'} onPress={save} disabled={!name.trim()} />
-            {!creating && (
-              <PressableScale
-                onPress={canDelete ? remove : undefined}
-                disabled={!canDelete}
-                style={styles.delete}
-                accessibilityRole="button"
-                accessibilityLabel="Delete person"
-              >
-                <Text style={[styles.deleteText, !canDelete && styles.deleteOff]}>
-                  {canDelete
-                    ? 'Delete person'
-                    : `Can’t delete — ${loanCount} loan${loanCount === 1 ? '' : 's'} on record`}
-                </Text>
-              </PressableScale>
-            )}
+          <Reveal index={creating ? 4 : 5}>
+            <View style={styles.actions}>
+              <Button label={creating ? 'Add 🤝' : 'Save'} onPress={save} disabled={!name.trim()} />
+              {!creating && (
+                <PressableScale
+                  onPress={canDelete ? remove : undefined}
+                  disabled={!canDelete}
+                  style={styles.delete}
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete person"
+                >
+                  <Text style={[styles.deleteText, !canDelete && styles.deleteOff]}>
+                    {canDelete
+                      ? 'Delete person'
+                      : `Can’t delete — ${loanCount} loan${loanCount === 1 ? '' : 's'} on record`}
+                  </Text>
+                </PressableScale>
+              )}
             </View>
-          </View>
+          </Reveal>
+          </Animated.View>
         </KeyboardAvoidingView>
       </View>
     </Modal>

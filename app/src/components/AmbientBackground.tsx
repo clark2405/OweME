@@ -25,7 +25,7 @@ import Animated, {
 import { useEffect } from 'react';
 import { colors } from '../lib/theme';
 
-export type AmbientVariant = 'home' | 'people' | 'history' | 'settings';
+export type AmbientVariant = 'home' | 'people' | 'history' | 'settings' | 'shame';
 
 interface BlobSpec {
   color: string;
@@ -57,6 +57,13 @@ const VARIANTS: Record<AmbientVariant, BlobSpec[]> = {
     { color: colors.surfaceWarm, size: 360, left: 160, top: -80, phase: 0 },
     { color: colors.grave, size: 300, left: -120, top: 220, phase: 3200 },
     { color: colors.sand, size: 380, left: 60, top: 540, phase: 6800 },
+  ],
+  // The Hall of Shame runs hotter: warm amber/coral embers instead of the cream
+  // family, so the room glows. Same one slow layer — just a fiery voicing.
+  shame: [
+    { color: '#FFD7A1', size: 380, left: -120, top: -70, phase: 0 },
+    { color: colors.accentSoft, size: 320, left: 170, top: 180, phase: 3500 },
+    { color: '#FFBE96', size: 440, left: -70, top: 520, phase: 6500 },
   ],
 };
 

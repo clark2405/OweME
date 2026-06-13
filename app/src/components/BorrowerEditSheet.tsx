@@ -7,11 +7,11 @@
  */
 
 import { useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { PressableScale } from './PressableScale';
 import { Avatar } from './Avatar';
 import { Button } from './Button';
-import { addBorrower, deleteBorrower, loanCountFor, updateBorrower } from '../lib/store';
+import { addBorrower, deleteBorrower, loanCountFor, updateBorrower, useSettings } from '../lib/store';
 import { haptics } from '../lib/haptics';
 import { Borrower } from '../lib/types';
 import { colors, radius, shadow, space, type as t } from '../lib/theme';
@@ -35,9 +35,11 @@ const DEFAULT_EMOJI = '🙂';
 
 export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCreated }: Props) {
   const creating = borrower == null;
+  const { shameMode } = useSettings();
   const [name, setName] = useState(borrower?.name ?? '');
   const [emoji, setEmoji] = useState(borrower?.emoji ?? DEFAULT_EMOJI);
   const [phone, setPhone] = useState(borrower?.phone ?? '');
+  const [exempt, setExempt] = useState(borrower?.exempt ?? false);
 
   // Re-seed the fields each time the sheet opens (a create sheet starts blank,
   // an edit sheet reflects the current borrower). Adjusting state during render
@@ -49,6 +51,7 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
       setName(borrower?.name ?? '');
       setEmoji(borrower?.emoji ?? DEFAULT_EMOJI);
       setPhone(borrower?.phone ?? '');
+      setExempt(borrower?.exempt ?? false);
     }
   }
 
@@ -63,7 +66,7 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
       onClose();
       onCreated?.(id);
     } else {
-      updateBorrower(borrower.id, { name, emoji, phone });
+      updateBorrower(borrower.id, { name, emoji, phone, exempt });
       onClose();
     }
   };
@@ -124,6 +127,20 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
             style={styles.input}
             keyboardType="phone-pad"
           />
+
+          {!creating && shameMode && (
+            <View style={styles.exemptRow}>
+              <View style={styles.exemptText}>
+                <Text style={t.h3}>Exempt from shame 😇</Text>
+                <Text style={styles.exemptSub}>Keep them off the Hall of Shame board.</Text>
+              </View>
+              <Switch
+                value={exempt}
+                onValueChange={setExempt}
+                trackColor={{ true: colors.accent, false: colors.hairline }}
+              />
+            </View>
+          )}
 
           <View style={styles.actions}>
             <Button label={creating ? 'Add 🤝' : 'Save'} onPress={save} disabled={!name.trim()} />
@@ -195,6 +212,19 @@ const styles = StyleSheet.create({
   },
   emojiCellOn: { borderColor: colors.ink, backgroundColor: colors.surfaceWarm },
   emoji: { fontSize: 22 },
+  exemptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    marginTop: space.xl,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: space.lg,
+    borderWidth: 1.5,
+    borderColor: colors.hairline,
+  },
+  exemptText: { flex: 1, gap: 4 },
+  exemptSub: { ...t.small, color: colors.inkSoft },
   actions: { marginTop: space.xl, gap: space.md },
   delete: { alignSelf: 'center', paddingVertical: space.sm },
   deleteText: { ...t.small, color: colors.accentPress, fontWeight: '700' },

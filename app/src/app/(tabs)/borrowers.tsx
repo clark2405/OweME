@@ -7,12 +7,15 @@ import { Reveal } from '../../components/Reveal';
 import { PressableScale } from '../../components/PressableScale';
 import { Avatar } from '../../components/Avatar';
 import { Icon } from '../../components/Icon';
+import { BlazeButton } from '../../components/BlazeButton';
 import { BorrowerEditSheet } from '../../components/BorrowerEditSheet';
+import { SkeletonRow } from '../../components/Skeleton';
 import {
   mostWanted,
   reliabilityFor,
   slowestReturner,
   useBorrowers,
+  useHydrated,
   useLoans,
   useSettings,
 } from '../../lib/store';
@@ -25,9 +28,23 @@ export default function BorrowersScreen() {
   const borrowers = useBorrowers();
   const [addOpen, setAddOpen] = useState(false);
   const { shameMode } = useSettings();
+  const hydrated = useHydrated();
 
   const wanted = mostWanted(loans);
   const slowest = slowestReturner(loans, borrowers);
+
+  if (!hydrated) {
+    return (
+      <Screen scroll tabBarInset bare>
+        <Header overline="The usual suspects" title="People" />
+        <View style={styles.list}>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <SkeletonRow key={i} />
+          ))}
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen scroll tabBarInset bare>
@@ -75,20 +92,19 @@ export default function BorrowersScreen() {
       {/* Opt-in Hall of Shame entry — only when the setting is on. */}
       {shameMode && (
         <Reveal from={20}>
-          <PressableScale
+          <BlazeButton
             onPress={() => router.push('/shame')}
-            scaleTo={0.98}
             style={styles.shameCard}
-            accessibilityRole="button"
             accessibilityLabel="Open the Hall of Shame"
+            lightning
           >
             <Text style={styles.shameEmoji}>😈</Text>
             <View style={styles.shameBody}>
               <Text style={styles.shameTitle}>Open the Hall of Shame</Text>
               <Text style={styles.shameSub}>Who&apos;s holding your stuff longest — just for you</Text>
             </View>
-            <Icon name="chevronRight" size={20} color={colors.accentPress} strokeWidth={2.2} />
-          </PressableScale>
+            <Icon name="chevronRight" size={20} color={colors.onAccent} strokeWidth={2.2} />
+          </BlazeButton>
         </Reveal>
       )}
 
@@ -167,15 +183,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
-    backgroundColor: colors.accentSoft,
-    borderRadius: radius.lg,
     padding: space.lg,
     marginBottom: space.lg,
   },
   shameEmoji: { fontSize: 26 },
   shameBody: { flex: 1, gap: 2 },
-  shameTitle: { ...t.h3, color: colors.accentPress },
-  shameSub: { ...t.small, color: colors.accentPress, opacity: 0.8 },
+  shameTitle: { ...t.h3, color: colors.onAccent },
+  shameSub: { ...t.small, color: colors.onAccent, opacity: 0.85 },
   list: { gap: space.md },
   row: {
     flexDirection: 'row',

@@ -9,8 +9,9 @@ import { SwipeableLoanCard } from '../../components/SwipeableLoanCard';
 import { PressableScale } from '../../components/PressableScale';
 import { Icon } from '../../components/Icon';
 import { Fab } from '../../components/Fab';
+import { Skeleton, SkeletonRow } from '../../components/Skeleton';
 import { TAB_BAR_HEIGHT, tabBarBottomInset } from '../../components/TabBar';
-import { activeLoans, activeLoansBy, LoanTypeFilter, useLoans, useSettings } from '../../lib/store';
+import { activeLoans, activeLoansBy, LoanTypeFilter, useHydrated, useLoans, useSettings } from '../../lib/store';
 import { useLoanQuickActions } from '../../lib/quickActions';
 import { compactMoney, currencySymbol, isOverdue, moneyByCurrency } from '../../lib/format';
 import { reduceMotion } from '../../lib/motion';
@@ -38,6 +39,7 @@ function bentoFontSize(text: string): number {
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const hydrated = useHydrated();
   const loans = useLoans();
   const active = activeLoans(loans);
 
@@ -84,6 +86,39 @@ export default function HomeScreen() {
     filter === 'item' ? 'Things · oldest first'
     : filter === 'money' ? 'Money · oldest first'
     : 'The lineup · oldest first';
+
+  if (!hydrated) {
+    return (
+      <View style={styles.root}>
+        <Screen scroll bare contentStyle={{ paddingBottom: listClearance }}>
+          <View style={styles.skelHead}>
+            <Skeleton width={190} height={12} round={6} />
+            <Skeleton width={210} height={34} round={10} style={styles.skelTitle} />
+          </View>
+          <View style={styles.statRow}>
+            <View style={styles.statWrap}>
+              <View style={[styles.stat, styles.statLeft]}>
+                <Skeleton width={60} height={34} round={10} />
+                <Skeleton width="72%" height={11} style={styles.skelGap} />
+              </View>
+            </View>
+            <View style={styles.statWrap}>
+              <View style={[styles.stat, styles.statRight]}>
+                <Skeleton width={92} height={30} round={10} color="rgba(255,255,255,0.18)" />
+                <Skeleton width="72%" height={11} color="rgba(255,255,255,0.12)" style={styles.skelGap} />
+              </View>
+            </View>
+          </View>
+          <Skeleton width={150} height={12} round={6} style={styles.skelSection} />
+          <View style={styles.list}>
+            <SkeletonRow />
+            <SkeletonRow />
+            <SkeletonRow />
+          </View>
+        </Screen>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.root}>
@@ -266,6 +301,10 @@ function StatTile({
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  skelHead: { marginBottom: space.xl },
+  skelTitle: { marginTop: space.md },
+  skelGap: { marginTop: 8 },
+  skelSection: { marginBottom: space.lg },
   headline: { marginTop: space.sm, marginBottom: space.xl },
   statRow: { flexDirection: 'row', gap: space.md, marginBottom: space.xxl },
   statWrap: { flex: 1 },

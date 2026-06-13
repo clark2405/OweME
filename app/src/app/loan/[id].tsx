@@ -120,7 +120,7 @@ export default function LoanDetailScreen() {
             <View style={styles.topActions}>
               {loan.status === 'active' && (
                 <PressableScale
-                  onPress={() => router.push(`/add?id=${loan.id}`)}
+                  onPress={() => router.push({ pathname: '/add', params: { id: loan.id } })}
                   scaleTo={0.9}
                   style={styles.iconBtn}
                   accessibilityLabel="Edit loan"
@@ -237,7 +237,7 @@ export default function LoanDetailScreen() {
             </View>
             <Button
               label="Lend it again 🔁"
-              onPress={() => router.push(`/add?clone=${loan.id}`)}
+              onPress={() => router.push({ pathname: '/add', params: { clone: loan.id } })}
             />
             <PressableScale
               onPress={() => unreturn(loan.id)}
@@ -274,14 +274,10 @@ export default function LoanDetailScreen() {
         </Modal>
       )}
 
-      {celebrating && (
-        <Confetti
-          onDone={() => {
-            setCelebrating(false);
-            router.back();
-          }}
-        />
-      )}
+      {/* Stay put after the confetti: the store already flipped this loan to
+          returned, so the screen re-renders into its archived state (with
+          "Lend it again"). No router.back() — that used to bounce home. */}
+      {celebrating && <Confetti onDone={() => setCelebrating(false)} />}
     </View>
   );
 }
@@ -382,17 +378,22 @@ const styles = StyleSheet.create({
   homeBanner: {
     backgroundColor: colors.mint,
     borderRadius: radius.lg,
-    padding: space.lg,
+    paddingHorizontal: space.lg,
+    // Match the ghost button's height so the dock doesn't shift between the
+    // active and returned states (the buttons stay anchored in place).
+    minHeight: 56,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   homeText: { ...t.h3, color: colors.mintInk },
+  // Mirror writeOff's footprint (same padding, no extra top margin) so the
+  // returned dock is the same total height as the active one.
   undo: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    paddingVertical: space.md,
-    marginTop: space.sm,
+    paddingVertical: space.sm,
   },
   undoText: { ...t.small, color: colors.inkSoft },
   lightbox: {

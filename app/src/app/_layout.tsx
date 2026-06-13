@@ -71,10 +71,11 @@ export default function RootLayout() {
           {/* First launch detours here via the guard in (tabs)/_layout. */}
           <Stack.Screen name="onboarding" options={{ animation: 'fade', gestureEnabled: false }} />
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen
-            name="add"
-            options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-          />
+          {/* Modal presentation already slides up from the bottom; stacking an
+              explicit `animation` on top made the modal present-then-dismiss on
+              the first open when launched over a pushed card (RN 0.85 / iOS 26),
+              needing a second tap. Let the modal own its transition. */}
+          <Stack.Screen name="add" options={{ presentation: 'modal' }} />
           <Stack.Screen name="loans" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="shame" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="loan/[id]" options={{ animation: 'slide_from_right' }} />

@@ -8,11 +8,13 @@ import { PressableScale } from '../../components/PressableScale';
 import { Avatar } from '../../components/Avatar';
 import { Icon } from '../../components/Icon';
 import { StatusChip } from '../../components/Chip';
+import { SkeletonRow } from '../../components/Skeleton';
 import {
   archivedLoans,
   archivedLoansBy,
   archivedStats,
   ArchiveFilter,
+  useHydrated,
   useLoans,
 } from '../../lib/store';
 import { LoanWithBorrower } from '../../lib/types';
@@ -32,6 +34,7 @@ interface MonthGroup {
 
 export default function HistoryScreen() {
   const router = useRouter();
+  const hydrated = useHydrated();
   const loans = useLoans();
 
   const [filter, setFilter] = useState<ArchiveFilter>('all');
@@ -55,6 +58,19 @@ export default function HistoryScreen() {
 
   const recovered = stats.moneyRecovered[0];
   let rowIndex = 0;
+
+  if (!hydrated) {
+    return (
+      <Screen scroll tabBarInset bare>
+        <Header overline="The archive" title="History" />
+        <View style={styles.list}>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <SkeletonRow key={i} />
+          ))}
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen scroll tabBarInset bare>

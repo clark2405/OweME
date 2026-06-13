@@ -19,6 +19,8 @@ export interface Borrower {
   avatarUrl?: string;
   /** Emoji used as a fallback avatar when there's no photo. */
   emoji: string;
+  /** Opt this person out of the Hall of Shame board (task D) — tita, boss, etc. */
+  exempt?: boolean;
 }
 
 export interface LoanBase {

@@ -178,15 +178,45 @@ function commitSettings(next: Settings, persist = true) {
   if (persist) AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(next)).catch(() => {});
 }
 
-// Hydrate persisted settings once at startup; re-renders subscribers if they
-// differ from the defaults. Persisting back is skipped (it's what we just read).
-void AsyncStorage.getItem(SETTINGS_KEY)
-  .then((raw) => {
-    if (!raw) return;
-    const parsed = JSON.parse(raw) as Partial<Settings>;
-    commitSettings({ ...settings, ...parsed }, false);
-  })
-  .catch(() => {});
+// --- hydration gate --------------------------------------------------------
+// One-shot "is the initial data ready" flag, backing `useHydrated()`. Today it
+// resolves from memory + the AsyncStorage settings read; when the data layer
+// moves to Supabase this same gate becomes the first network fetch, and the
+// skeletons already wired to it light up for real. A small minimum window keeps
+// the loading state from flashing for a single frame — tune/zero as needed.
+const MIN_SKELETON_MS = 550;
+
+let hydrated = false;
+let hydratedSnapshot = hydrated;
+function getHydratedSnapshot() {
+  return hydratedSnapshot;
+}
+
+/** False until the store's initial data is ready — screens show skeletons. */
+export function useHydrated(): boolean {
+  return useSyncExternalStore(subscribe, getHydratedSnapshot, getHydratedSnapshot);
+}
+
+function markHydrated() {
+  if (hydrated) return;
+  hydrated = true;
+  hydratedSnapshot = true;
+  emit();
+}
+
+// Hydrate persisted settings once at startup (re-rendering subscribers if they
+// differ from the defaults; persisting back is skipped — it's what we just
+// read), then open the hydration gate after the minimum window.
+void Promise.all([
+  AsyncStorage.getItem(SETTINGS_KEY)
+    .then((raw) => {
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<Settings>;
+      commitSettings({ ...settings, ...parsed }, false);
+    })
+    .catch(() => {}),
+  new Promise<void>((resolve) => setTimeout(resolve, MIN_SKELETON_MS)),
+]).finally(markHydrated);
 
 export function setDefaultCurrency(c: CurrencyCode) {
   commitSettings({ ...settings, defaultCurrency: c });
@@ -419,6 +449,7 @@ function shameTitle(oldestDays: number): string {
 export function shameBoard(list: Loan[], people: Borrower[]): ShameEntry[] {
   const entries: ShameEntry[] = [];
   for (const b of people) {
+    if (b.exempt) continue; // opted out of the board (task D)
     const active = list.filter((l) => l.borrowerId === b.id && l.status === 'active');
     if (active.length === 0) continue;
 
@@ -606,7 +637,7 @@ export function addBorrower(name: string, emoji = '🙂', phone?: string): strin
 
 export function updateBorrower(
   id: string,
-  patch: Partial<Pick<Borrower, 'name' | 'emoji' | 'phone'>>,
+  patch: Partial<Pick<Borrower, 'name' | 'emoji' | 'phone' | 'exempt'>>,
 ) {
   const clean: typeof patch = { ...patch };
   if ('phone' in clean) clean.phone = clean.phone?.trim() || undefined;

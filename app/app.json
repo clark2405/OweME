@@ -39,11 +39,10 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
-          "android": {
-            "image": "./assets/images/splash-icon.png",
-            "imageWidth": 76
-          }
+          "backgroundColor": "#FFFBF5",
+          "image": "./assets/images/OweMeLogoSmall.png",
+          "imageWidth": 184,
+          "resizeMode": "contain"
         }
       ],
       [
@@ -66,7 +65,8 @@
         }
       ],
       "expo-image",
-      "expo-quick-actions"
+      "expo-quick-actions",
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,

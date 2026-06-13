@@ -14,7 +14,8 @@ import { SwipeableLoanCard } from '../components/SwipeableLoanCard';
 import { SegmentedToggle } from '../components/SegmentedToggle';
 import { PressableScale } from '../components/PressableScale';
 import { Icon } from '../components/Icon';
-import { activeLoansBy, LoanSort, LoanTypeFilter, useLoans } from '../lib/store';
+import { SkeletonRow } from '../components/Skeleton';
+import { activeLoansBy, LoanSort, LoanTypeFilter, useHydrated, useLoans } from '../lib/store';
 import { useLoanQuickActions } from '../lib/quickActions';
 import { isOverdue } from '../lib/format';
 import { colors, radius, shadow, space, type as t } from '../lib/theme';
@@ -34,6 +35,7 @@ export default function LoansScreen() {
   const params = useLocalSearchParams<{ type?: string }>();
   const loans = useLoans();
 
+  const hydrated = useHydrated();
   const [type, setType] = useState<LoanTypeFilter>(asTypeFilter(params.type));
   const [sort, setSort] = useState<LoanSort>('oldest');
   const [query, setQuery] = useState('');
@@ -44,6 +46,24 @@ export default function LoansScreen() {
   // behind the sort order.
   const overdue = results.filter((d) => isOverdue(d.loan));
   const rest = results.filter((d) => !isOverdue(d.loan));
+
+  if (!hydrated) {
+    return (
+      <Screen scroll contentStyle={styles.content}>
+        <PressableScale onPress={() => router.back()} scaleTo={0.9} style={styles.back}>
+          <Icon name="chevronLeft" size={20} color={colors.inkSoft} strokeWidth={2.2} />
+          <Text style={styles.backText}>Home</Text>
+        </PressableScale>
+        <Text style={t.overline}>Out in the wild</Text>
+        <Text style={[t.title, styles.title]}>Everything out</Text>
+        <View style={styles.list}>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <SkeletonRow key={i} />
+          ))}
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen scroll contentStyle={styles.content}>

@@ -68,11 +68,23 @@ on the mock store, today.
   key controls (tab items as tabs w/ selected state, FAB, loan cards, bento
   filters, search-clear; edit/delete/close/photo-remove already labeled).
   *Still TODO:* full VoiceOver run-through + contrast audit.
-- [ ] **App icon + splash screen** — still Expo defaults. Deferred: needs real
-  brand artwork (icon set + splash) before it's worth wiring.
-- [ ] **Skeleton/loading states** — deferred until the Supabase swap; there's
-  nothing async to load against the in-memory mock yet, so designing them now
-  would be guessing at the loading shape.
+- [x] **App icon + splash screen** — **iOS icon done**: branded box+coins mark
+  ships via `assets/OweMe.icon` (Icon Composer bundle, wired as `ios.icon`).
+  **Splash done**: warm cream `#FFFBF5` background + the OweMe mark centered
+  (`OweMeLogoSmall.png`, `imageWidth` 184), replacing the blank-white-on-blue
+  Expo default. *Native config — needs `npx expo prebuild` + a rebuild to show.*
+  *Follow-up (minor):* the top-level `icon.png` + Android `adaptiveIcon`
+  foreground are still the default Expo "A" (iOS overrides via `OweMe.icon`, so
+  the primary target is branded); swap them when there's full-bleed 1024px
+  artwork. Web favicon also default.
+- [x] **Skeleton/loading states** — `components/Skeleton.tsx`: a reusable
+  pulse-shimmer `Skeleton` block (no gradient dep; reduced-motion → static) +
+  `SkeletonRow` (loan-card silhouette). Backed by a real hydration gate:
+  `useHydrated()` in `store.ts` flips true once the initial (settings) read
+  resolves past a small anti-flicker floor (`MIN_SKELETON_MS`). Home, the full
+  loans list, History, and People render skeletons until hydrated. **This is
+  the Supabase seam** — today it hydrates from memory; when reads move to the
+  network the same gate becomes real latency and these light up unchanged.
 - [ ] **Android parity check** — deferred: needs an Android emulator/device to
   validate the custom tab bar, `elevation` shadows, KeyboardAvoidingView, and
   safe areas. Untested so far.
@@ -235,18 +247,35 @@ on the mock store, today.
   "Spotless… suspiciously reliable 😌" empty state. Reached from a gated
   `accentSoft` "😈 Open the Hall of Shame" card on the People tab.
 
-- [ ] **C. Shareable shame card (the "social" payoff)**
-  A "Post the board 📢" button on the shame screen → builds a text summary
-  ("🏆 OweMe Hall of Shame: 1. Miguel — 2 things, 34d 🐌 …") and opens the
-  share sheet (reuse the `Share`/`deliverNudge` pattern in `lib/nudge.ts`).
-  v1 = **text only**; a rendered image card (react-native-view-shot) is a
-  nice-to-have, park it if it balloons. This is the lender choosing to share —
-  keep it one deliberate tap, no auto-posting.
+- [x] **C. Shareable shame card (the "social" payoff)** — a `Post the board 📢`
+  accent button on `shame.tsx` shares a **rendered, OweMe-branded image** (the
+  plain-text path was too sterile). `components/ShameShareCard.tsx` is a poster
+  per `offbrand-design` (cream base + the one coral accent rule, oversized
+  headline "Who's holding my stuff 😈", a dark-ink #1 podium, medal/`#n` ranked
+  list, designed "Out in the wild 📦" footer). It's laid out off-screen and
+  captured to PNG via `react-native-view-shot` (`captureRef`), then handed to
+  the OS sheet through `expo-sharing`. Graceful fallback: if capture/sharing
+  isn't available (e.g. pre-rebuild binary) it drops to the old
+  `shameShareText()` text leaderboard. Pre-rebuild safety: the native side is
+  probed with `requireOptionalNativeModule('ExpoSharing')` (non-throwing) before
+  either lib is touched, so the screen never redboxes. One deliberate tap, no
+  auto-posting. **New native deps:** `react-native-view-shot` + `expo-sharing` —
+  *needs a dev rebuild to render/share the image; text fallback works meanwhile.*
+  **Emphasis pass:** `components/BlazeButton.tsx` — a deep-red CTA with a living
+  ember glow (warm wash breathing up + two offset flame licks) + opt-in random
+  **lightning strikes** (`lightning` prop: SVG bolt at a random x + a brief
+  full-button flash on an irregular timer, matching the 😈 vibe), reduced-motion
+  → static glow. Used for the People-tab "Open the Hall of Shame" entry (white
+  text on red). Inside the shame screen the "Post the board 📢" CTA stays the
+  plain readable accent button; instead the *screen itself* runs a hotter
+  ambient (`AmbientVariant 'shame'`: amber/coral embers via `ambient="shame"`)
+  so it no longer reads like the normal app background. Share card footer 📦
+  removed.
 
-- [ ] **D. (stretch) Per-borrower "exempt from shame" flag**
-  Some people you don't want on the board (your tita, your boss). Optional
-  `exempt?: boolean` on `Borrower`, a toggle in `BorrowerEditSheet`, filtered
-  out of `shameBoard`. Only if A–C land with time to spare.
+- [x] **D. Per-borrower "exempt from shame" flag** — optional `exempt?: boolean`
+  on `Borrower`; `shameBoard` skips exempt people; `BorrowerEditSheet` shows an
+  "Exempt from shame 😇" toggle (edit mode only, gated on `shameMode`) threaded
+  through `updateBorrower`. Keeps your tita/boss off the board.
 
 > **Decisions to confirm with Clark before building:** (1) does "public"
 > ever mean a real shared/Supabase link, or is share-sheet-only fine for v1?

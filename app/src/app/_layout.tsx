@@ -1,13 +1,15 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
 import * as QuickActions from 'expo-quick-actions';
 import { useQuickActionCallback } from 'expo-quick-actions/hooks';
+import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Toaster } from '../components/Toaster';
+import { AnimatedSplash } from '../components/AnimatedSplash';
 import { ACTION_RETURNED } from '../lib/notifications';
 import { markReturned, unreturn } from '../lib/store';
 import { showToast } from '../lib/toast';
@@ -15,8 +17,13 @@ import { colors, graveyard } from '../lib/theme';
 
 const IS_NATIVE = Platform.OS === 'ios' || Platform.OS === 'android';
 
+// Hold the native splash so our animated preloader can take over without a
+// blank frame in between (it hides the native splash once its first frame is up).
+void SplashScreen.preventAutoHideAsync().catch(() => {});
+
 export default function RootLayout() {
   const router = useRouter();
+  const [splashDone, setSplashDone] = useState(false);
 
   // Home-screen long-press shortcut: register the "Lend something" action, and
   // jump straight into the add flow when it (or a cold start from it) fires.
@@ -85,9 +92,15 @@ export default function RootLayout() {
           />
           <Stack.Screen name="loan/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="borrower/[id]" options={{ animation: 'slide_from_right' }} />
+          {/* Settings › About sub-screens (content/forms, frontend only). */}
+          <Stack.Screen name="about" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="privacy" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="feedback" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="rate" options={{ animation: 'slide_from_right' }} />
         </Stack>
         <Toaster />
       </SafeAreaProvider>
+      {!splashDone && <AnimatedSplash onDone={() => setSplashDone(true)} />}
     </GestureHandlerRootView>
   );
 }

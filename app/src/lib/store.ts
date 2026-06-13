@@ -26,6 +26,7 @@ let borrowers: Borrower[] = [
   { id: 'b3', name: 'Jollibee Squad', emoji: '🍗' },
   { id: 'b4', name: 'Tita Cora', emoji: '👒' },
   { id: 'b5', name: 'Paolo', emoji: '🎧' },
+  { id: 'b6', name: 'Dexter', emoji: '🎮' },
 ];
 
 let loans: Loan[] = [
@@ -73,6 +74,15 @@ let loans: Loan[] = [
     amount: 500,
     currency: 'PHP',
     lentAt: isoDaysAgo(9),
+    status: 'active',
+  },
+  {
+    id: 'l9',
+    borrowerId: 'b6',
+    type: 'item',
+    itemName: 'Nintendo Switch',
+    notes: 'Lent with Mario Kart. No pressure… mostly.',
+    lentAt: isoDaysAgo(20),
     status: 'active',
   },
   // Already-home history.

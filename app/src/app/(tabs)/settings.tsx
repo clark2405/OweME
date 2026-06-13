@@ -172,6 +172,34 @@ function NudgeRemindersCard({ index }: { index: number }) {
   );
 }
 
+// About / meta rows. Each opens its own sub-screen (content + forms are
+// frontend only for now — see the route files).
+const ABOUT_ROWS: { title: string; sub: string; href: '/about' | '/privacy' | '/feedback' | '/rate' }[] = [
+  { title: 'About OweMe', sub: 'What this little app is for', href: '/about' },
+  { title: 'Privacy', sub: 'Your stuff stays on your phone', href: '/privacy' },
+  { title: 'Send feedback', sub: 'Tell us what’s missing', href: '/feedback' },
+  { title: 'Rate OweMe ⭐', sub: 'Help others get their stuff back', href: '/rate' },
+];
+
+function AboutRow({ title, sub, href, last }: (typeof ABOUT_ROWS)[number] & { last: boolean }) {
+  const router = useRouter();
+  return (
+    <PressableScale
+      onPress={() => router.push(href)}
+      scaleTo={0.98}
+      style={[styles.aboutRow, !last && styles.aboutRowDivider]}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+    >
+      <View style={styles.toggleText}>
+        <Text style={t.h3}>{title}</Text>
+        <Text style={styles.sub}>{sub}</Text>
+      </View>
+      <Icon name="chevronRight" size={20} color={colors.inkFaint} strokeWidth={2.2} />
+    </PressableScale>
+  );
+}
+
 export default function SettingsScreen() {
   const router = useRouter();
   const { defaultCurrency, channel, shameMode } = useSettings();
@@ -256,7 +284,16 @@ export default function SettingsScreen() {
           </PressableScale>
         </Reveal>
 
-        <Reveal index={5} from={18}>
+        <Reveal index={5} from={20}>
+          <View style={styles.aboutCard}>
+            <Text style={[t.overline, styles.cardLabel, styles.aboutLabel]}>About</Text>
+            {ABOUT_ROWS.map((row, i) => (
+              <AboutRow key={row.title} {...row} last={i === ABOUT_ROWS.length - 1} />
+            ))}
+          </View>
+        </Reveal>
+
+        <Reveal index={6} from={18}>
           <Text style={styles.footer}>OweMe 📦 · v1.0 · made to get your stuff back</Text>
         </Reveal>
       </View>
@@ -307,6 +344,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
   },
   permHintText: { ...t.small, color: colors.accentPress, fontWeight: '600', flex: 1 },
+  aboutCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    paddingHorizontal: space.lg,
+    paddingTop: space.lg,
+    ...shadow.card,
+  },
+  aboutLabel: { marginBottom: space.xs },
+  aboutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.lg,
+    paddingVertical: space.md,
+  },
+  aboutRowDivider: { borderBottomWidth: 1, borderBottomColor: colors.hairline },
   sub: { ...t.small, color: colors.inkSoft },
   footer: { ...t.small, color: colors.inkFaint, textAlign: 'center', marginTop: space.lg },
 });

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { Screen } from '../../components/Screen';
@@ -19,8 +19,18 @@ import { colors, radius, shadow, space, type as t } from '../../lib/theme';
 
 const FAB_HEIGHT = 58;
 /** How many loans the home lineup shows before deferring to "See all". Home is
- *  a dashboard of what needs attention, not the full ledger. */
+ *  a dashboard of what needs attention, not the full ledger. Bigger screens get
+ *  one extra card (see `homeLimitFor`) since they'd otherwise leave dead space
+ *  above the FAB. */
 const HOME_LIMIT = 4;
+/** Window height (pt) at/above which a taller phone earns an extra lineup card.
+ *  Clears regular iPhones (~844–852pt) and lights up Plus/Pro Max-class (~926pt+,
+ *  incl. the iPhone 17 Pro at ~956pt). */
+const TALL_SCREEN_MIN = 900;
+
+function homeLimitFor(height: number): number {
+  return height >= TALL_SCREEN_MIN ? HOME_LIMIT + 1 : HOME_LIMIT;
+}
 
 /** Deterministic font size for a bento's hero number — keyed to length so it
  *  steps down predictably and never truncates (replaces flaky
@@ -39,6 +49,7 @@ function bentoFontSize(text: string): number {
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
   const hydrated = useHydrated();
   const loans = useLoans();
   const active = activeLoans(loans);
@@ -76,7 +87,7 @@ export default function HomeScreen() {
   // Overdue jumps the queue into its own pinned group; the rest form the lineup.
   const overdue = filtered.filter((d) => isOverdue(d.loan));
   const rest = filtered.filter((d) => !isOverdue(d.loan));
-  const shown = rest.slice(0, HOME_LIMIT);
+  const shown = rest.slice(0, homeLimitFor(height));
   const overflow = filtered.length - overdue.length - shown.length;
 
   const seeAll = () =>

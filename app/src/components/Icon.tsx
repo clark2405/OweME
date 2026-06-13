@@ -31,7 +31,12 @@ export type IconName =
   | 'trash'
   | 'camera'
   | 'image'
-  | 'check';
+  | 'check'
+  | 'ledger'
+  | 'eye'
+  | 'bug'
+  | 'bulb'
+  | 'heart';
 
 interface Props {
   name: IconName;
@@ -231,6 +236,54 @@ export function Icon({ name, size = 24, color = colors.ink, strokeWidth = 2, foc
       )}
 
       {name === 'check' && <Path d="M5 12.5 10 17.5 19.5 7" {...common} />}
+
+      {name === 'ledger' && (
+        <>
+          {/* a little notebook — what you lent, written down */}
+          <Path d="M6.5 4.5h10a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-10a1.5 1.5 0 0 1-1.5-1.5V6A1.5 1.5 0 0 1 6.5 4.5Z" {...common} />
+          <Line x1="8.5" y1="9" x2="14.5" y2="9" {...common} />
+          <Line x1="8.5" y1="12.3" x2="14.5" y2="12.3" {...common} />
+          <Line x1="8.5" y1="15.6" x2="12" y2="15.6" {...common} />
+        </>
+      )}
+
+      {name === 'eye' && (
+        <>
+          <Path d="M2.7 12S6.2 5.8 12 5.8 21.3 12 21.3 12 17.8 18.2 12 18.2 2.7 12 2.7 12Z" {...common} />
+          <Circle cx="12" cy="12" r="3.1" {...common} />
+        </>
+      )}
+
+      {name === 'bug' && (
+        <>
+          <Path d="M9.3 8.6a2.7 2.7 0 0 1 5.4 0" {...common} />
+          <Path d="M8 13a4 4 0 0 1 8 0v1a4 4 0 0 1-8 0Z" {...common} />
+          <Line x1="12" y1="10.4" x2="12" y2="18" {...common} />
+          <Path d="M10.1 7.1 8.9 5.6" {...common} />
+          <Path d="M13.9 7.1 15.1 5.6" {...common} />
+          <Line x1="8.1" y1="12.4" x2="5.4" y2="11.2" {...common} />
+          <Line x1="8" y1="15.2" x2="5.2" y2="15.2" {...common} />
+          <Line x1="8.1" y1="18" x2="5.4" y2="19.2" {...common} />
+          <Line x1="15.9" y1="12.4" x2="18.6" y2="11.2" {...common} />
+          <Line x1="16" y1="15.2" x2="18.8" y2="15.2" {...common} />
+          <Line x1="15.9" y1="18" x2="18.6" y2="19.2" {...common} />
+        </>
+      )}
+
+      {name === 'bulb' && (
+        <>
+          <Path d="M8.4 14.3a5 5 0 1 1 7.2 0c-.7.8-1.2 1.5-1.4 2.4H9.8c-.2-.9-.7-1.6-1.4-2.4Z" {...common} />
+          <Line x1="9.9" y1="18.6" x2="14.1" y2="18.6" {...common} />
+          <Line x1="10.7" y1="20.9" x2="13.3" y2="20.9" {...common} />
+        </>
+      )}
+
+      {name === 'heart' && (
+        <Path
+          d="M12 19.6C12 19.6 4.4 15 4.4 9.7A3.5 3.5 0 0 1 12 7.6a3.5 3.5 0 0 1 7.6 2.1C19.6 15 12 19.6 12 19.6Z"
+          {...common}
+        />
+      )}
     </Svg>
   );
 

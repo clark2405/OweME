@@ -73,9 +73,11 @@ export default function RootLayout() {
         <ThemeProvider>
           <ThemedNavigation />
           <Toaster />
+          {/* Inside ThemeProvider so the preloader resolves the active palette
+              (warm-charcoal in dark) instead of always painting cream. */}
+          {!splashDone && <AnimatedSplash onDone={() => setSplashDone(true)} />}
         </ThemeProvider>
       </SafeAreaProvider>
-      {!splashDone && <AnimatedSplash onDone={() => setSplashDone(true)} />}
     </GestureHandlerRootView>
   );
 }

@@ -6,6 +6,33 @@ working session. Frontend-only unless noted (no backend wired yet — see
 
 ---
 
+## 2026-06-14 — Branded loading screen + theme-aware splash
+
+Redesigned `components/AnimatedSplash.tsx` from a centered-logo-plus-bottom-bar
+(read generic) into a lively centered brand lockup that *arrives* (offbrand
+staggered masked entrance): the logo tile **pops in then breathes + floats**,
+four **token chips drawn from the line-icon set** (`box`/`money`/`ledger`/
+`camera` — no emoji) are **continuously gathered into the logo** (drift inward,
+shrink, vanish into the mark — "rounding up your stuff" made literal), the
+**"OweMe" wordmark reveals one letter at a time** out of clip masks (coral "Me"),
+and a `Rounding up your stuff` caption + a **running 3-dot cycle** fade up as the
+load cue. **No progress bar.** Hands off from the native splash; collapses fully
+under OS reduced-motion. Exit is gated on store-hydration + a min brand-moment.
+
+Made it **theme-aware**: it now lives inside `ThemeProvider` and uses
+`useThemedStyles`, so a dark-mode user gets a warm-charcoal splash instead of a
+cream one that snapped to dark. Added a `dark` variant to the
+`expo-splash-screen` plugin in `app.json` (`#17120D` base) so the *native* splash
+matches too. Type-check clean; `expo export` bundles clean. No new deps.
+
+**Native follow-up:** the new dark *native* splash needs **`npx expo prebuild`**
+(not just `run:ios`) to regenerate the splash assets — same prebuilt-`ios/`
+gotcha as the dark-mode `Info.plist`. The animated-splash redesign + its
+light/dark resolution are JS-only and show on a normal reload; only the native
+cream→dark *first frame* for dark users needs the prebuild.
+
+---
+
 ## 2026-06-14 — Dark mode (frontend only)
 
 The architecture change that was deferred below is now shipped. Type-check clean

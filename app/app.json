@@ -42,7 +42,13 @@
           "backgroundColor": "#FFFBF5",
           "image": "./assets/images/OweMeLogoSmall.png",
           "imageWidth": 184,
-          "resizeMode": "contain"
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#17120D",
+            "image": "./assets/images/OweMeLogoSmall.png",
+            "imageWidth": 184,
+            "resizeMode": "contain"
+          }
         }
       ],
       [

@@ -34,7 +34,8 @@ import {
 import { pickContact } from '../lib/contacts';
 import { ReminderCadence } from '../lib/types';
 import { currencySymbol, shortDate } from '../lib/format';
-import { colors, radius, space, type as t } from '../lib/theme';
+import { radius, space } from '../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
 
 type LoanType = 'item' | 'money';
 
@@ -66,6 +67,8 @@ function isoInDays(n: number): string {
 }
 
 export default function AddLoanScreen() {
+  const { colors, type: t } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const { id, clone } = useLocalSearchParams<{ id?: string; clone?: string }>();
   const loans = useLoans();
@@ -527,8 +530,8 @@ export default function AddLoanScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+const makeStyles = (th: Theme) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: th.colors.bg },
   safe: { flex: 1 },
   flex: { flex: 1 },
   handleRow: { alignItems: 'flex-end', paddingHorizontal: space.lg, paddingTop: space.sm },
@@ -536,7 +539,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: th.colors.surfaceWarm,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -544,15 +547,15 @@ const styles = StyleSheet.create({
   title: { marginBottom: space.sm },
   field: { marginTop: space.xs },
   input: {
-    color: colors.ink,
+    color: th.colors.ink,
     fontSize: 16,
     fontWeight: '500',
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.md,
     paddingHorizontal: space.lg,
     paddingVertical: space.lg,
     borderWidth: 1.5,
-    borderColor: colors.hairline,
+    borderColor: th.colors.hairline,
   },
   itemInput: { textAlign: 'center' },
   suggestRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.sm },
@@ -562,30 +565,30 @@ const styles = StyleSheet.create({
     paddingVertical: space.xs + 2,
     paddingHorizontal: space.md,
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: th.colors.surfaceWarm,
     borderWidth: 1,
-    borderColor: colors.hairline,
+    borderColor: th.colors.hairline,
   },
-  suggestText: { ...t.small, color: colors.inkSoft, maxWidth: 160 },
+  suggestText: { ...th.type.small, color: th.colors.inkSoft, maxWidth: 160 },
   moneyField: { gap: space.md },
   amountRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   curChip: {
     paddingVertical: space.sm,
     paddingHorizontal: space.lg,
     borderRadius: radius.pill,
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderWidth: 1.5,
-    borderColor: colors.hairline,
+    borderColor: th.colors.hairline,
   },
-  curChipText: { ...t.small, color: colors.inkSoft },
-  peso: { ...t.numeral, color: colors.inkSoft },
+  curChipText: { ...th.type.small, color: th.colors.inkSoft },
+  peso: { ...th.type.numeral, color: th.colors.inkSoft },
   amountInput: { flex: 1, fontSize: 34, lineHeight: 42, fontWeight: '800', letterSpacing: -1 },
   photoWrap: { alignSelf: 'flex-start' },
   photo: {
     width: 132,
     height: 99,
     borderRadius: radius.md,
-    backgroundColor: colors.bgSunken,
+    backgroundColor: th.colors.bgSunken,
   },
   photoRemove: {
     position: 'absolute',
@@ -594,7 +597,7 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: radius.pill,
-    backgroundColor: colors.ink,
+    backgroundColor: th.colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -610,10 +613,10 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: colors.hairline,
-    backgroundColor: colors.surface,
+    borderColor: th.colors.hairline,
+    backgroundColor: th.colors.surface,
   },
-  photoAddText: { ...t.small, color: colors.inkSoft },
+  photoAddText: { ...th.type.small, color: th.colors.inkSoft },
   label: { marginTop: space.md, marginBottom: space.md },
   borrowerWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   borrowerChip: {
@@ -623,14 +626,14 @@ const styles = StyleSheet.create({
     paddingVertical: space.sm,
     paddingHorizontal: space.md,
     borderRadius: radius.pill,
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderWidth: 1.5,
-    borderColor: colors.hairline,
+    borderColor: th.colors.hairline,
   },
-  borrowerChipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
+  borrowerChipOn: { backgroundColor: th.colors.ink, borderColor: th.colors.ink },
   newPersonChip: { borderStyle: 'dashed' },
-  borrowerName: { ...t.h3, fontSize: 15, color: colors.ink },
-  borrowerNameOn: { color: colors.surface },
+  borrowerName: { ...th.type.h3, fontSize: 15, color: th.colors.ink },
+  borrowerNameOn: { color: th.colors.surface },
   newPersonRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.sm },
   newPersonInput: { flex: 1, paddingVertical: space.md },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
@@ -638,19 +641,19 @@ const styles = StyleSheet.create({
     paddingVertical: space.sm,
     paddingHorizontal: space.lg,
     borderRadius: radius.pill,
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderWidth: 1.5,
-    borderColor: colors.hairline,
+    borderColor: th.colors.hairline,
   },
-  chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
-  chipText: { ...t.small, color: colors.inkSoft },
-  chipTextOn: { color: colors.surface },
+  chipOn: { backgroundColor: th.colors.ink, borderColor: th.colors.ink },
+  chipText: { ...th.type.small, color: th.colors.inkSoft },
+  chipTextOn: { color: th.colors.surface },
   notes: { minHeight: 80, textAlignVertical: 'top', lineHeight: 23 },
   footer: {
     paddingHorizontal: space.xl,
     paddingTop: space.md,
     borderTopWidth: 1,
-    borderTopColor: colors.hairline,
-    backgroundColor: colors.bg,
+    borderTopColor: th.colors.hairline,
+    backgroundColor: th.colors.bg,
   },
 });

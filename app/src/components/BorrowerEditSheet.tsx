@@ -25,7 +25,8 @@ import { addBorrower, deleteBorrower, loanCountFor, updateBorrower, useSettings 
 import { haptics } from '../lib/haptics';
 import { Borrower } from '../lib/types';
 import { duration, expoOut, reduceMotion } from '../lib/motion';
-import { colors, radius, shadow, space, type as t } from '../lib/theme';
+import { radius, space } from '../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
 
 const EMOJI_CHOICES = [
   '🙂', '😎', '🤓', '🥸', '🧑', '👩', '👨', '🧔',
@@ -45,6 +46,8 @@ interface Props {
 const DEFAULT_EMOJI = '🙂';
 
 export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCreated }: Props) {
+  const { colors, type: t } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const creating = borrower == null;
   const { shameMode } = useSettings();
   const [name, setName] = useState(borrower?.name ?? '');
@@ -257,37 +260,37 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   root: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(26,21,16,0.4)' },
+  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' },
   sheet: {
-    backgroundColor: colors.bg,
+    backgroundColor: th.colors.bg,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     paddingHorizontal: space.xl,
     paddingTop: space.md,
     paddingBottom: space.xxxl,
-    ...shadow.lifted,
+    ...th.shadow.lifted,
   },
   grabber: {
     alignSelf: 'center',
     width: 40,
     height: 5,
     borderRadius: radius.pill,
-    backgroundColor: colors.hairline,
+    backgroundColor: th.colors.hairline,
     marginBottom: space.lg,
   },
   head: { alignItems: 'center', gap: space.sm, marginBottom: space.lg },
   headLabel: {},
   label: { marginTop: space.lg, marginBottom: space.md },
   input: {
-    ...t.body,
-    backgroundColor: colors.surface,
+    ...th.type.body,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.md,
     paddingHorizontal: space.lg,
     paddingVertical: space.lg,
     borderWidth: 1.5,
-    borderColor: colors.hairline,
+    borderColor: th.colors.hairline,
   },
   photoRow: { flexDirection: 'row', gap: space.sm, marginBottom: space.md },
   photoBtn: {
@@ -299,11 +302,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: colors.hairline,
-    backgroundColor: colors.surface,
+    borderColor: th.colors.hairline,
+    backgroundColor: th.colors.surface,
   },
-  photoBtnText: { ...t.small, color: colors.inkSoft },
-  orLabel: { ...t.small, color: colors.inkFaint, marginBottom: space.md },
+  photoBtnText: { ...th.type.small, color: th.colors.inkSoft },
+  orLabel: { ...th.type.small, color: th.colors.inkFaint, marginBottom: space.md },
   emojiWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   emojiCell: {
     width: 44,
@@ -311,27 +314,27 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderWidth: 1.5,
-    borderColor: colors.hairline,
+    borderColor: th.colors.hairline,
   },
-  emojiCellOn: { borderColor: colors.ink, backgroundColor: colors.surfaceWarm },
+  emojiCellOn: { borderColor: th.colors.ink, backgroundColor: th.colors.surfaceWarm },
   emoji: { fontSize: 22 },
   exemptRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
     marginTop: space.xl,
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.md,
     padding: space.lg,
     borderWidth: 1.5,
-    borderColor: colors.hairline,
+    borderColor: th.colors.hairline,
   },
   exemptText: { flex: 1, gap: 4 },
-  exemptSub: { ...t.small, color: colors.inkSoft },
+  exemptSub: { ...th.type.small, color: th.colors.inkSoft },
   actions: { marginTop: space.xl, gap: space.md },
   delete: { alignSelf: 'center', paddingVertical: space.sm },
-  deleteText: { ...t.small, color: colors.accentPress, fontWeight: '700' },
-  deleteOff: { color: colors.inkFaint, fontWeight: '600' },
+  deleteText: { ...th.type.small, color: th.colors.accentPress, fontWeight: '700' },
+  deleteOff: { color: th.colors.inkFaint, fontWeight: '600' },
 });

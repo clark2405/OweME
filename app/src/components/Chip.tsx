@@ -5,20 +5,21 @@
  */
 
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, radius, space } from '../lib/theme';
+import { radius, space } from '../lib/theme';
+import { useTheme } from '../lib/theme-context';
 import { Loan } from '../lib/types';
 import { daysSince, daysUntil, isDueSoon, isOverdue } from '../lib/format';
 
 type Tone = 'sand' | 'mint' | 'grave' | 'warn';
 
-const TONES: Record<Tone, { bg: string; fg: string }> = {
-  sand: { bg: colors.sand, fg: colors.sandInk },
-  mint: { bg: colors.mint, fg: colors.mintInk },
-  grave: { bg: colors.grave, fg: colors.graveInk },
-  warn: { bg: colors.accentSoft, fg: colors.accentPress },
-};
-
 export function Chip({ label, tone = 'sand' }: { label: string; tone?: Tone }) {
+  const { colors } = useTheme();
+  const TONES: Record<Tone, { bg: string; fg: string }> = {
+    sand: { bg: colors.sand, fg: colors.sandInk },
+    mint: { bg: colors.mint, fg: colors.mintInk },
+    grave: { bg: colors.grave, fg: colors.graveInk },
+    warn: { bg: colors.accentSoft, fg: colors.accentPress },
+  };
   const c = TONES[tone];
   return (
     <View style={[styles.chip, { backgroundColor: c.bg }]}>

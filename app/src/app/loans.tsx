@@ -18,7 +18,8 @@ import { SkeletonRow } from '../components/Skeleton';
 import { activeLoansBy, LoanSort, LoanTypeFilter, useHydrated, useLoans } from '../lib/store';
 import { useLoanQuickActions } from '../lib/quickActions';
 import { isOverdue } from '../lib/format';
-import { colors, radius, shadow, space, type as t } from '../lib/theme';
+import { radius, space } from '../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
 
 const TYPES: { value: LoanTypeFilter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -31,8 +32,10 @@ function asTypeFilter(v: string | undefined): LoanTypeFilter {
 }
 
 export default function LoansScreen() {
+  const { colors, type: t } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const router = useRouter();
-  const params = useLocalSearchParams<{ type?: string }>();
+  const params = useLocalSearchParams<{ type?: string; focus?: string }>();
   const loans = useLoans();
 
   const hydrated = useHydrated();
@@ -91,6 +94,7 @@ export default function LoansScreen() {
             style={styles.searchInput}
             autoCorrect={false}
             returnKeyType="search"
+            autoFocus={params.focus === 'search'}
           />
           {query.length > 0 && (
             <PressableScale
@@ -192,28 +196,28 @@ export default function LoansScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   content: { paddingBottom: space.xxl },
   back: { flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: space.lg },
-  backText: { ...t.h3, color: colors.inkSoft },
+  backText: { ...th.type.h3, color: th.colors.inkSoft },
   title: { marginTop: space.sm, marginBottom: space.xl },
   search: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.pill,
     paddingHorizontal: space.lg,
     height: 50,
     marginBottom: space.md,
-    ...shadow.card,
+    ...th.shadow.card,
   },
-  searchInput: { flex: 1, ...t.body, paddingVertical: 0 },
+  searchInput: { flex: 1, ...th.type.body, paddingVertical: 0 },
   clear: {
     width: 22,
     height: 22,
     borderRadius: radius.pill,
-    backgroundColor: colors.bgSunken,
+    backgroundColor: th.colors.bgSunken,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -222,25 +226,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingVertical: space.sm,
     borderRadius: radius.pill,
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderWidth: 1.5,
-    borderColor: colors.hairline,
+    borderColor: th.colors.hairline,
   },
-  chipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
-  chipText: { ...t.small, color: colors.inkSoft },
-  chipTextActive: { color: colors.surface },
+  chipActive: { backgroundColor: th.colors.ink, borderColor: th.colors.ink },
+  chipText: { ...th.type.small, color: th.colors.inkSoft },
+  chipTextActive: { color: th.colors.surface },
   sort: { marginBottom: space.xl },
-  overdueLabel: { color: colors.accentPress, marginBottom: space.md },
+  overdueLabel: { color: th.colors.accentPress, marginBottom: space.md },
   restLabel: { marginTop: space.xl, marginBottom: space.md },
   list: { gap: space.md },
   empty: {
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.lg,
     padding: space.xxl,
     alignItems: 'center',
     gap: space.md,
-    ...shadow.card,
+    ...th.shadow.card,
   },
   emptyEmoji: { fontSize: 44 },
-  emptyText: { ...t.bodySoft, textAlign: 'center' },
+  emptyText: { ...th.type.bodySoft, textAlign: 'center' },
 });

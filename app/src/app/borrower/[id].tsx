@@ -11,9 +11,12 @@ import { Icon } from '../../components/Icon';
 import { BorrowerEditSheet } from '../../components/BorrowerEditSheet';
 import { getBorrower, reliabilityFor, useLoans, withBorrower } from '../../lib/store';
 import { loanLabel } from '../../lib/format';
-import { colors, radius, shadow, space, type as t } from '../../lib/theme';
+import { radius, space } from '../../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../../lib/theme-context';
 
 export default function BorrowerProfileScreen() {
+  const { colors, type: t } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const loans = useLoans();
@@ -134,7 +137,7 @@ export default function BorrowerProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -148,27 +151,27 @@ const styles = StyleSheet.create({
     paddingVertical: space.sm,
     paddingRight: space.md,
   },
-  backText: { ...t.h3, color: colors.inkSoft },
+  backText: { ...th.type.h3, color: th.colors.inkSoft },
   editBtn: {
     width: 38,
     height: 38,
     borderRadius: radius.pill,
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderWidth: 1,
-    borderColor: colors.hairline,
+    borderColor: th.colors.hairline,
     alignItems: 'center',
     justifyContent: 'center',
   },
   hero: {
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.xl,
     padding: space.xl,
     alignItems: 'center',
     gap: space.sm,
-    ...shadow.card,
+    ...th.shadow.card,
   },
   name: { marginTop: space.sm },
-  reliability: { ...t.bodySoft, color: colors.accent, fontWeight: '700' },
+  reliability: { ...th.type.bodySoft, color: th.colors.accent, fontWeight: '700' },
   statRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -176,18 +179,18 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   statCell: { flex: 1, alignItems: 'center', gap: 4 },
-  statLabel: { ...t.small, color: colors.inkSoft },
-  divider: { width: 1, height: 36, backgroundColor: colors.hairline },
+  statLabel: { ...th.type.small, color: th.colors.inkSoft },
+  divider: { width: 1, height: 36, backgroundColor: th.colors.hairline },
   section: { marginTop: space.xl, marginBottom: space.md },
   list: { gap: space.md },
   pastRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.lg,
     padding: space.lg,
-    ...shadow.card,
+    ...th.shadow.card,
   },
   pastName: { flex: 1 },
 });

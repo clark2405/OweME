@@ -30,9 +30,7 @@ import Animated, {
   useSharedValue,
   withSpring,
   withTiming,
-  LinearTransition,
   FadeIn,
-  FadeOut,
 } from 'react-native-reanimated';
 import { AmbientBackground } from '../components/AmbientBackground';
 import { Reveal } from '../components/Reveal';
@@ -45,7 +43,8 @@ import { FloatingChips } from '../components/onboarding/FloatingChips';
 import { NudgePreview } from '../components/onboarding/NudgePreview';
 import { markOnboardingSeen } from '../lib/onboarding';
 import { spring, expoOut } from '../lib/motion';
-import { colors, radius, shadow, space, type as t } from '../lib/theme';
+import { radius, space } from '../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
 
 type Visual = 'chips' | 'preview' | 'nudge' | 'tour';
 
@@ -122,6 +121,8 @@ const TOUR: { icon: IconName; label: string; blurb: string; details: string }[] 
 ];
 
 export default function OnboardingScreen() {
+  const { type: t } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -276,6 +277,8 @@ export default function OnboardingScreen() {
 
 /** Progress dot that stretches into a pill when active (morphs, not fades). */
 function Dot({ active }: { active: boolean }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const style = useAnimatedStyle(() => ({
     width: withSpring(active ? 26 : 8, spring.press),
     backgroundColor: withTiming(active ? colors.accent : colors.hairline, { duration: 200 }),
@@ -292,6 +295,8 @@ interface TourRowProps {
 }
 
 function TourRow({ stop, isExpanded, onPress, active, index }: TourRowProps) {
+  const { colors, type: t } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const clickProgress = useSharedValue(0);
 
   const handlePress = () => {
@@ -310,44 +315,42 @@ function TourRow({ stop, isExpanded, onPress, active, index }: TourRowProps) {
 
   return (
     <Reveal active={active} index={index} from={16}>
-      <Animated.View layout={LinearTransition.springify().damping(22).stiffness(160)}>
-        <PressableScale onPress={handlePress} style={styles.tourRow} scaleTo={0.98}>
-          <View style={styles.tourRowMain}>
-            <View style={[styles.tourIcon, stop.icon === 'plus' && styles.tourIconAccent]}>
-              <Icon
-                name={stop.icon}
-                size={18}
-                color={stop.icon === 'plus' ? colors.onAccent : colors.inkSoft}
-                clickProgress={clickProgress}
-              />
-            </View>
-            <View style={styles.tourText}>
-              <Text style={t.h3}>{stop.label}</Text>
-              <Text style={t.small}>{stop.blurb}</Text>
-            </View>
-            <Animated.View style={chevronStyle}>
-              <Icon name="chevronRight" size={16} color={colors.inkFaint} />
-            </Animated.View>
+      {/* No row-level layout animation here: nesting a Reanimated layout
+          transition inside Reveal's animated (transformed) view could collapse
+          every row to zero height on expand — the whole tour page would blank.
+          The details just fade in; the row resizes instantly. */}
+      <PressableScale onPress={handlePress} style={styles.tourRow} scaleTo={0.98}>
+        <View style={styles.tourRowMain}>
+          <View style={[styles.tourIcon, stop.icon === 'plus' && styles.tourIconAccent]}>
+            <Icon
+              name={stop.icon}
+              size={18}
+              color={stop.icon === 'plus' ? colors.onAccent : colors.inkSoft}
+              clickProgress={clickProgress}
+            />
           </View>
+          <View style={styles.tourText}>
+            <Text style={t.h3}>{stop.label}</Text>
+            <Text style={t.small}>{stop.blurb}</Text>
+          </View>
+          <Animated.View style={chevronStyle}>
+            <Icon name="chevronRight" size={16} color={colors.inkFaint} />
+          </Animated.View>
+        </View>
 
-          {isExpanded && (
-            <Animated.View
-              entering={FadeIn.duration(150)}
-              exiting={FadeOut.duration(120)}
-              style={styles.tourDetails}
-            >
-              <View style={styles.divider} />
-              <Text style={styles.detailsText}>{stop.details}</Text>
-            </Animated.View>
-          )}
-        </PressableScale>
-      </Animated.View>
+        {isExpanded && (
+          <Animated.View entering={FadeIn.duration(150)} style={styles.tourDetails}>
+            <View style={styles.divider} />
+            <Text style={styles.detailsText}>{stop.details}</Text>
+          </Animated.View>
+        )}
+      </PressableScale>
     </Reveal>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+const makeStyles = (th: Theme) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: th.colors.bg },
   safe: { flex: 1 },
   topBar: {
     flexDirection: 'row',
@@ -357,14 +360,14 @@ const styles = StyleSheet.create({
     paddingTop: space.md,
     minHeight: 44,
   },
-  counterDim: { color: colors.inkFaint },
+  counterDim: { color: th.colors.inkFaint },
   skip: {
     paddingHorizontal: space.lg,
     paddingVertical: space.sm,
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: th.colors.surfaceWarm,
   },
-  skipLabel: { ...t.small, color: colors.inkSoft },
+  skipLabel: { ...th.type.small, color: th.colors.inkSoft },
   pager: { flex: 1 },
   page: { flex: 1 },
   pageContent: {
@@ -382,9 +385,9 @@ const styles = StyleSheet.create({
   flexSpacerTop: { flex: 2, minHeight: space.lg },
   staticSpacerTop: { height: space.xl },
   flexSpacerBottom: { flex: 3, minHeight: space.lg },
-  kicker: { color: colors.accent },
+  kicker: { color: th.colors.accent },
   headline: { marginTop: space.xs, fontSize: 38, lineHeight: 42 },
-  accent: { color: colors.accent },
+  accent: { color: th.colors.accent },
   body: { fontSize: 15.5, lineHeight: 23, maxWidth: 340 },
 
   previewBlock: { gap: space.xl },
@@ -395,20 +398,20 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: colors.accent,
+    backgroundColor: th.colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  legendNum: { fontSize: 11, fontWeight: '900', color: colors.onAccent },
-  legendText: { ...t.small, flex: 1, color: colors.inkSoft, lineHeight: 17 },
+  legendNum: { fontSize: 11, fontWeight: '900', color: th.colors.onAccent },
+  legendText: { ...th.type.small, flex: 1, color: th.colors.inkSoft, lineHeight: 17 },
 
   tour: { gap: space.md },
   tourRow: {
     flexDirection: 'column',
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.md,
     padding: space.md,
-    ...shadow.card,
+    ...th.shadow.card,
   },
   tourRowMain: {
     flexDirection: 'row',
@@ -421,22 +424,22 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: colors.hairline,
+    backgroundColor: th.colors.hairline,
   },
   detailsText: {
-    ...t.small,
-    color: colors.inkSoft,
+    ...th.type.small,
+    color: th.colors.inkSoft,
     lineHeight: 18,
   },
   tourIcon: {
     width: 38,
     height: 38,
     borderRadius: radius.sm,
-    backgroundColor: colors.bgSunken,
+    backgroundColor: th.colors.bgSunken,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tourIconAccent: { backgroundColor: colors.accent },
+  tourIconAccent: { backgroundColor: th.colors.accent },
   tourText: { flex: 1, gap: 2 },
   bottom: {
     paddingHorizontal: space.xl,

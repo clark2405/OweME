@@ -19,7 +19,8 @@ import {
 } from '../../lib/store';
 import { LoanWithBorrower } from '../../lib/types';
 import { compactMoney, loanLabel, monthLabel, shortDate } from '../../lib/format';
-import { colors, radius, shadow, space, type as t } from '../../lib/theme';
+import { radius, space } from '../../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../../lib/theme-context';
 
 const FILTERS: { value: ArchiveFilter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -33,6 +34,8 @@ interface MonthGroup {
 }
 
 export default function HistoryScreen() {
+  const { colors, type: t } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const hydrated = useHydrated();
   const loans = useLoans();
@@ -219,24 +222,24 @@ export default function HistoryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   payoff: {
-    backgroundColor: colors.ink,
+    backgroundColor: th.colors.feature,
     borderRadius: radius.lg,
     padding: space.xl,
     marginBottom: space.lg,
     gap: space.md,
-    ...shadow.card,
+    ...th.shadow.card,
   },
-  payoffOverline: { ...t.overline, color: colors.inkFaint },
+  payoffOverline: { ...th.type.overline, color: th.colors.onFeatureDim },
   payoffRow: { flexDirection: 'row', alignItems: 'center' },
   payoffCell: { flex: 1, alignItems: 'center', gap: 4 },
-  payoffNum: { ...t.numeral, color: colors.surface, fontSize: 34, lineHeight: 38 },
-  payoffLabel: { ...t.small, color: colors.inkFaint },
+  payoffNum: { ...th.type.numeral, color: th.colors.onFeature, fontSize: 34, lineHeight: 38 },
+  payoffLabel: { ...th.type.small, color: th.colors.onFeatureDim },
   payoffDivider: { width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.12)' },
   payoffLoss: {
-    ...t.small,
-    color: colors.surfaceWarm,
+    ...th.type.small,
+    color: th.colors.onFeature,
     textAlign: 'center',
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.1)',
@@ -246,19 +249,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.pill,
     paddingHorizontal: space.lg,
     height: 50,
     marginBottom: space.md,
-    ...shadow.card,
+    ...th.shadow.card,
   },
-  searchInput: { flex: 1, ...t.body, paddingVertical: 0 },
+  searchInput: { flex: 1, ...th.type.body, paddingVertical: 0 },
   clear: {
     width: 22,
     height: 22,
     borderRadius: radius.pill,
-    backgroundColor: colors.bgSunken,
+    backgroundColor: th.colors.bgSunken,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -267,13 +270,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingVertical: space.sm,
     borderRadius: radius.pill,
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderWidth: 1.5,
-    borderColor: colors.hairline,
+    borderColor: th.colors.hairline,
   },
-  chipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
-  chipText: { ...t.small, color: colors.inkSoft },
-  chipTextActive: { color: colors.surface },
+  chipActive: { backgroundColor: th.colors.ink, borderColor: th.colors.ink },
+  chipText: { ...th.type.small, color: th.colors.inkSoft },
+  chipTextActive: { color: th.colors.surface },
   group: { marginBottom: space.lg },
   monthLabel: { marginBottom: space.md },
   list: { gap: space.md },
@@ -281,30 +284,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.lg,
     padding: space.lg,
-    ...shadow.card,
+    ...th.shadow.card,
   },
   archiveBadge: {
     width: 44,
     height: 44,
     borderRadius: radius.md,
-    backgroundColor: colors.bgSunken,
+    backgroundColor: th.colors.bgSunken,
     alignItems: 'center',
     justifyContent: 'center',
   },
   body: { flex: 1, gap: 6 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  meta: { ...t.small, color: colors.inkSoft },
+  meta: { ...th.type.small, color: th.colors.inkSoft },
   empty: {
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.lg,
     padding: space.xxl,
     alignItems: 'center',
     gap: space.md,
-    ...shadow.card,
+    ...th.shadow.card,
   },
   emptyEmoji: { fontSize: 44 },
-  emptyText: { ...t.bodySoft, textAlign: 'center' },
+  emptyText: { ...th.type.bodySoft, textAlign: 'center' },
 });

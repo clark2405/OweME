@@ -15,7 +15,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { PressableScale } from './PressableScale';
 import { Icon, IconName } from './Icon';
-import { colors, radius, shadow, space } from '../lib/theme';
+import { radius, space } from '../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
 import { reduceMotion, spring, expoOut } from '../lib/motion';
 
 /** Approx height of the floating pill (icon + label + padding), used by screens
@@ -52,6 +53,8 @@ function TabItem({
   routeName: string;
   onPress: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const clickProgress = useSharedValue(0);
 
   const handlePress = () => {
@@ -120,6 +123,7 @@ interface TabBarProps {
 }
 
 export function TabBar({ state, navigation }: TabBarProps) {
+  const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
 
   return (
@@ -141,7 +145,7 @@ export function TabBar({ state, navigation }: TabBarProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   wrap: {
     position: 'absolute',
     left: 0,
@@ -159,13 +163,13 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 460,
     alignSelf: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.pill,
     paddingHorizontal: space.xs,
     paddingVertical: space.sm,
     borderWidth: 1,
-    borderColor: colors.hairline,
-    ...shadow.lifted,
+    borderColor: th.colors.hairline,
+    ...th.shadow.lifted,
   },
   item: {
     // Evenly distribute across whatever width the bar takes.
@@ -175,6 +179,6 @@ const styles = StyleSheet.create({
     gap: 3,
     paddingVertical: 8,
   },
-  label: { fontSize: 12, fontWeight: '700', color: colors.inkSoft, letterSpacing: -0.1 },
-  labelActive: { color: colors.ink },
+  label: { fontSize: 12, fontWeight: '700', color: th.colors.inkSoft, letterSpacing: -0.1 },
+  labelActive: { color: th.colors.ink },
 });

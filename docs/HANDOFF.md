@@ -61,6 +61,21 @@ Real screens start once the backend is wired.
 5. Then auth (email magic link) → home screen → add-loan flow. See the checklist
    in `CLAUDE.md` "Current status".
 
+### Frontend backup/restore already exists — wire it through, don't reinvent
+
+There's a working **Back up & restore** screen (`app/src/app/backup.tsx`,
+Settings › Your data) on top of the mock store. When swapping `store.ts` for
+Supabase, carry these through (full detail in `CHANGELOG.md`):
+- `importData()` (in `store.ts`) currently replaces the in-memory arrays. With a
+  backend it becomes a **transactional wipe-and-insert scoped to
+  `owner_id = auth.uid()`** so a failed restore can't half-replace the ledger.
+- The backup format (`lib/export.ts`, `buildLedgerBackup`/`parseLedgerBackup`,
+  `BACKUP_VERSION`) **strips photos** today because they're local file URIs. Once
+  Supabase **Storage** is live, stop stripping `photo_url`/`avatar_url` — store
+  resolvable Storage URLs so images round-trip across devices.
+- This is **manual** backup/restore, **not** live multi-device sync (that's a
+  separate later concern). Bump `BACKUP_VERSION` on any incompatible shape change.
+
 ## How to resume on a new machine
 
 ```bash

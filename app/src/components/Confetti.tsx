@@ -16,9 +16,8 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { colors } from '../lib/theme';
+import { useTheme } from '../lib/theme-context';
 
-const COLORS = [colors.accent, colors.mintInk, colors.sandInk, '#F4B740', colors.accentPress];
 const COUNT = 28;
 const { width } = Dimensions.get('window');
 
@@ -64,20 +63,20 @@ function ConfettiPiece({ piece, onLast }: { piece: Piece; onLast?: () => void })
 }
 
 export function Confetti({ onDone }: { onDone?: () => void }) {
+  const { colors } = useTheme();
   const reduce = useReducedMotion();
 
-  const pieces = useMemo<Piece[]>(
-    () =>
-      Array.from({ length: COUNT }, (_, i) => ({
-        x: Math.random() * width,
-        size: 7 + Math.random() * 7,
-        color: COLORS[i % COLORS.length],
-        delay: Math.random() * 250,
-        rotate: (Math.random() - 0.5) * 720,
-        drift: (Math.random() - 0.5) * 160,
-      })),
-    [],
-  );
+  const pieces = useMemo<Piece[]>(() => {
+    const palette = [colors.accent, colors.mintInk, colors.sandInk, '#F4B740', colors.accentPress];
+    return Array.from({ length: COUNT }, (_, i) => ({
+      x: Math.random() * width,
+      size: 7 + Math.random() * 7,
+      color: palette[i % palette.length],
+      delay: Math.random() * 250,
+      rotate: (Math.random() - 0.5) * 720,
+      drift: (Math.random() - 0.5) * 160,
+    }));
+  }, [colors]);
 
   useEffect(() => {
     if (reduce) {

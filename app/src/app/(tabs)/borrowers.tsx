@@ -20,9 +20,12 @@ import {
   useSettings,
 } from '../../lib/store';
 import { loanLabel, relativeDays } from '../../lib/format';
-import { colors, radius, shadow, space, type as t } from '../../lib/theme';
+import { radius, space } from '../../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../../lib/theme-context';
 
 export default function BorrowersScreen() {
+  const { colors, type: t } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const loans = useLoans();
   const borrowers = useBorrowers();
@@ -169,37 +172,37 @@ export default function BorrowersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   addBtn: {
     width: 40,
     height: 40,
     borderRadius: radius.pill,
-    backgroundColor: colors.ink,
+    backgroundColor: th.colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadow.card,
+    ...th.shadow.card,
   },
   wantedCard: {
-    backgroundColor: colors.ink,
+    backgroundColor: th.colors.feature,
     borderRadius: radius.lg,
     padding: space.xl,
     marginBottom: space.lg,
     gap: 4,
-    ...shadow.card,
+    ...th.shadow.card,
   },
   wantedOverline: {
-    ...t.overline,
-    color: colors.inkFaint,
+    ...th.type.overline,
+    color: th.colors.onFeatureDim,
     marginBottom: space.xs,
   },
-  wantedTitle: { ...t.h2, color: colors.surface },
-  wantedSub: { ...t.small, color: colors.inkFaint },
+  wantedTitle: { ...th.type.h2, color: th.colors.onFeature },
+  wantedSub: { ...th.type.small, color: th.colors.onFeatureDim },
   wantedDivider: {
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.1)',
     marginVertical: space.md,
   },
-  wantedSlow: { ...t.small, color: colors.surfaceWarm },
+  wantedSlow: { ...th.type.small, color: th.colors.onFeature },
   shameCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -209,41 +212,41 @@ const styles = StyleSheet.create({
   },
   shameEmoji: { fontSize: 26 },
   shameBody: { flex: 1, gap: 2 },
-  shameTitle: { ...t.h3, color: colors.onAccent },
-  shameSub: { ...t.small, color: colors.onAccent, opacity: 0.85 },
+  shameTitle: { ...th.type.h3, color: th.colors.onAccent },
+  shameSub: { ...th.type.small, color: th.colors.onAccent, opacity: 0.85 },
   list: { gap: space.md },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.lg,
     padding: space.lg,
-    ...shadow.card,
+    ...th.shadow.card,
   },
   body: { flex: 1, gap: 4 },
-  sub: { ...t.small, color: colors.inkSoft },
+  sub: { ...th.type.small, color: th.colors.inkSoft },
   rightCol: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  days: { ...t.small, color: colors.accent, fontWeight: '800' },
+  days: { ...th.type.small, color: th.colors.accent, fontWeight: '800' },
   empty: {
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.lg,
     padding: space.xxl,
     alignItems: 'center',
     gap: space.md,
-    ...shadow.card,
+    ...th.shadow.card,
   },
   emptyEmoji: { fontSize: 44 },
-  emptyText: { ...t.bodySoft, textAlign: 'center' },
+  emptyText: { ...th.type.bodySoft, textAlign: 'center' },
   emptyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    backgroundColor: colors.ink,
+    backgroundColor: th.colors.ink,
     borderRadius: radius.pill,
     paddingVertical: space.md,
     paddingHorizontal: space.xl,
     marginTop: space.xs,
   },
-  emptyBtnText: { ...t.h3, fontSize: 15, color: colors.surface },
+  emptyBtnText: { ...th.type.h3, fontSize: 15, color: th.colors.surface },
 });

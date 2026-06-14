@@ -7,7 +7,7 @@
 
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import Animated, { SharedValue, useAnimatedStyle, useSharedValue, useAnimatedReaction, withTiming } from 'react-native-reanimated';
-import { colors } from '../lib/theme';
+import { useTheme } from '../lib/theme-context';
 import { expoOut } from '../lib/motion';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path) as any;
@@ -47,9 +47,10 @@ interface Props {
   clickProgress?: SharedValue<number>;
 }
 
-export function Icon({ name, size = 24, color = colors.ink, strokeWidth = 2, focused = false, clickProgress }: Props) {
+export function Icon({ name, size = 24, color, strokeWidth = 2, focused = false, clickProgress }: Props) {
+  const { colors } = useTheme();
   const common = {
-    stroke: color,
+    stroke: color ?? colors.ink,
     strokeWidth,
     strokeLinecap: 'round' as const,
     strokeLinejoin: 'round' as const,

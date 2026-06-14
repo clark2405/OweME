@@ -9,7 +9,8 @@ import { ScrollView, StyleSheet, View, ViewStyle } from 'react-native';
 import { Edge, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AmbientBackground, AmbientVariant } from './AmbientBackground';
 import { TAB_BAR_HEIGHT, tabBarBottomInset } from './TabBar';
-import { colors, space } from '../lib/theme';
+import { space } from '../lib/theme';
+import { useTheme } from '../lib/theme-context';
 
 interface Props {
   children: ReactNode;
@@ -41,6 +42,7 @@ export function Screen({
   backdrop,
   bare = false,
 }: Props) {
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   // Clearance so scrolled content settles a comfortable gap above the floating
   // tab bar: its bottom offset + pill height + breathing room.
@@ -51,7 +53,7 @@ export function Screen({
   };
 
   return (
-    <View style={[styles.root, bare && styles.bare, baseColor != null && { backgroundColor: baseColor }]}>
+    <View style={[styles.root, { backgroundColor: colors.bg }, bare && styles.bare, baseColor != null && { backgroundColor: baseColor }]}>
       {!bare && <AmbientBackground variant={ambient} />}
       {backdrop}
       <SafeAreaView style={styles.safe} edges={edges}>
@@ -71,7 +73,7 @@ export function Screen({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1 },
   bare: { backgroundColor: 'transparent' },
   safe: { flex: 1 },
   flex: { flex: 1 },

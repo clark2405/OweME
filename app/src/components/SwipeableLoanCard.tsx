@@ -20,7 +20,8 @@ import ReanimatedSwipeable, {
 import { LoanCard } from './LoanCard';
 import { Icon } from './Icon';
 import { haptics } from '../lib/haptics';
-import { colors, radius, shadow, space, type as t } from '../lib/theme';
+import { radius, space } from '../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
 import { LoanWithBorrower } from '../lib/types';
 
 interface Props {
@@ -31,6 +32,8 @@ interface Props {
 }
 
 export function SwipeableLoanCard({ data, onPress, onReturn, onNudge }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const ref = useRef<SwipeableMethods>(null);
   const reduce = useReducedMotion();
 
@@ -82,9 +85,9 @@ export function SwipeableLoanCard({ data, onPress, onReturn, onNudge }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   // Holds the shadow outside the swipeable's clip so it hugs the rounded card.
-  wrapper: { borderRadius: radius.lg, backgroundColor: colors.surface, ...shadow.card },
+  wrapper: { borderRadius: radius.lg, backgroundColor: th.colors.surface, ...th.shadow.card },
   // Rounds the swipeable's clip so the revealed actions follow the card's corners.
   clip: { borderRadius: radius.lg },
   action: {
@@ -96,7 +99,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     marginVertical: 1,
   },
-  returnAction: { backgroundColor: colors.mint, justifyContent: 'flex-start' },
-  nudgeAction: { backgroundColor: colors.ink, justifyContent: 'flex-end' },
-  label: { ...t.small, fontWeight: '800' },
+  returnAction: { backgroundColor: th.colors.mint, justifyContent: 'flex-start' },
+  nudgeAction: { backgroundColor: th.colors.ink, justifyContent: 'flex-end' },
+  label: { ...th.type.small, fontWeight: '800' },
 });

@@ -153,6 +153,9 @@ export function useBorrowers(): Borrower[] {
 
 export type CurrencyCode = 'PHP' | 'USD' | 'EUR';
 
+/** Display theme: follow the OS, or force light/dark. Device-local. */
+export type Appearance = 'system' | 'light' | 'dark';
+
 export interface Settings {
   /** Currency new money loans default to. */
   defaultCurrency: CurrencyCode;
@@ -162,6 +165,8 @@ export interface Settings {
   channel: NudgeChannel;
   /** Opt-in: surface the (lender-private) Hall of Shame leaderboard. */
   shameMode: boolean;
+  /** Display theme (device-local; not carried in a backup). */
+  appearance: Appearance;
 }
 
 const SETTINGS_KEY = 'oweme.settings.v1';
@@ -171,6 +176,7 @@ let settings: Settings = {
   nudgesEnabled: true,
   channel: 'share',
   shameMode: false,
+  appearance: 'system',
 };
 let settingsSnapshot = settings;
 function getSettingsSnapshot() {
@@ -247,6 +253,10 @@ export function setNudgeChannel(c: NudgeChannel) {
 
 export function setShameMode(v: boolean) {
   commitSettings({ ...settings, shameMode: v });
+}
+
+export function setAppearance(v: Appearance) {
+  commitSettings({ ...settings, appearance: v });
 }
 
 /** Re-mirror every active loan's cadence into pending notifications. */
@@ -616,6 +626,35 @@ export function updateLoan(id: string, input: NewLoanInput) {
 export function deleteLoan(id: string) {
   commit(loans.filter((l) => l.id !== id));
   cancelLoanReminder(id);
+}
+
+/** Reschedule (or pause, with `off`) a loan's nudge cadence in place — the quick
+ *  path from loan detail, without opening the full edit flow. Re-syncs the
+ *  pending notification to match. */
+export function setLoanReminder(id: string, reminder: ReminderCadence) {
+  commit(loans.map((l) => (l.id === id ? { ...l, reminder } : l)));
+  const loan = loans.find((l) => l.id === id);
+  if (loan) syncReminderFor(loan);
+}
+
+/**
+ * Restore the whole ledger from a parsed backup (replace-all). Borrowers load
+ * first so reminder re-sync can resolve names; any backed-up settings merge over
+ * the current ones; then notifications are re-mirrored to the imported state.
+ *
+ * (In-memory mock today — when Supabase lands, this maps to a transactional
+ * wipe-and-insert scoped to the owner. See docs/CHANGELOG.md "Future work".)
+ */
+export function importData(data: {
+  borrowers: Borrower[];
+  loans: Loan[];
+  settings?: Partial<Settings>;
+}) {
+  commitBorrowers(data.borrowers);
+  commit(data.loans);
+  if (data.settings) commitSettings({ ...settings, ...data.settings });
+  cancelAllReminders();
+  resyncAllReminders();
 }
 
 /** Re-insert a just-deleted loan (undo). Reminders re-sync from its state. */

@@ -11,7 +11,8 @@ import { PressableScale } from './PressableScale';
 import { Avatar } from './Avatar';
 import { AgeChip } from './Chip';
 import { Icon } from './Icon';
-import { colors, radius, shadow, space, type as t } from '../lib/theme';
+import { radius, space } from '../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
 import { LoanWithBorrower } from '../lib/types';
 import { loanLabel, relativeDays } from '../lib/format';
 
@@ -21,6 +22,8 @@ interface Props {
 }
 
 export function LoanCard({ data, onPress }: Props) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { loan, borrower } = data;
   return (
     <PressableScale
@@ -47,18 +50,18 @@ export function LoanCard({ data, onPress }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.lg,
     paddingVertical: space.md + 2,
     paddingHorizontal: space.lg,
-    ...shadow.card,
+    ...th.shadow.card,
   },
   body: { flex: 1, gap: 3 },
-  label: { ...t.h3, fontSize: 17 },
-  meta: { ...t.small, color: colors.inkSoft },
+  label: { ...th.type.h3, fontSize: 17 },
+  meta: { ...th.type.small, color: th.colors.inkSoft },
 });

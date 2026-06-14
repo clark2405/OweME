@@ -17,9 +17,11 @@ import Animated, {
 import { PressableScale } from './PressableScale';
 import { dismissToast, useToast } from '../lib/toast';
 import { haptics } from '../lib/haptics';
-import { colors, radius, shadow, space, type as t } from '../lib/theme';
+import { radius, space } from '../lib/theme';
+import { Theme, useThemedStyles } from '../lib/theme-context';
 
 export function Toaster() {
+  const styles = useThemedStyles(makeStyles);
   const toast = useToast();
   const insets = useSafeAreaInsets();
   const progress = useSharedValue(0);
@@ -72,26 +74,26 @@ export function Toaster() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   wrap: { position: 'absolute', left: space.lg, right: space.lg, alignItems: 'center' },
   toast: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
     alignSelf: 'stretch',
-    backgroundColor: colors.ink,
+    backgroundColor: th.colors.ink,
     borderRadius: radius.pill,
     paddingVertical: space.md,
     paddingLeft: space.xl,
     paddingRight: space.sm,
-    ...shadow.lifted,
+    ...th.shadow.lifted,
   },
-  message: { ...t.small, color: colors.surface, flex: 1 },
+  message: { ...th.type.small, color: th.colors.surface, flex: 1 },
   action: {
     paddingVertical: space.sm,
     paddingHorizontal: space.lg,
     borderRadius: radius.pill,
     backgroundColor: 'rgba(255,255,255,0.14)',
   },
-  actionText: { ...t.small, color: colors.accent, fontWeight: '800' },
+  actionText: { ...th.type.small, color: th.colors.accent, fontWeight: '800' },
 });

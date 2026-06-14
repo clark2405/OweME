@@ -17,9 +17,12 @@ import Animated, {
 import { PressableScale } from './PressableScale';
 import { Icon } from './Icon';
 import { haptics } from '../lib/haptics';
-import { colors, radius, shadow, space, type as t } from '../lib/theme';
+import { radius, space } from '../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
 
 export function Fab({ onPress }: { onPress?: () => void }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const breath = useSharedValue(0);
   const reduce = useReducedMotion();
 
@@ -60,7 +63,7 @@ export function Fab({ onPress }: { onPress?: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   wrap: { alignSelf: 'center' },
   fab: {
     flexDirection: 'row',
@@ -71,8 +74,8 @@ const styles = StyleSheet.create({
     paddingRight: space.xl,
     paddingHorizontal: space.sm,
     borderRadius: radius.pill,
-    backgroundColor: colors.accent,
-    ...shadow.lifted,
+    backgroundColor: th.colors.accent,
+    ...th.shadow.lifted,
   },
   plus: {
     width: 42,
@@ -82,5 +85,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  label: { ...t.h3, color: colors.onAccent, paddingRight: space.md },
+  label: { ...th.type.h3, color: th.colors.onAccent, paddingRight: space.md },
 });

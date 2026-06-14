@@ -17,7 +17,8 @@ import { PressableScale } from '../components/PressableScale';
 import { Button } from '../components/Button';
 import { Icon, IconName } from '../components/Icon';
 import { showToast } from '../lib/toast';
-import { colors, radius, shadow, space, type as t } from '../lib/theme';
+import { radius, space } from '../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
 
 type Category = 'bug' | 'idea' | 'love';
 
@@ -28,6 +29,8 @@ const CATEGORIES: { value: Category; label: string; icon: IconName }[] = [
 ];
 
 export default function FeedbackScreen() {
+  const { colors, type: t } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const [category, setCategory] = useState<Category>('idea');
   const [text, setText] = useState('');
@@ -107,10 +110,10 @@ export default function FeedbackScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   content: { paddingBottom: space.xxl },
   title: { marginTop: space.sm, marginBottom: space.lg },
-  lead: { ...t.bodySoft, fontSize: 15.5, lineHeight: 24, marginBottom: space.xl },
+  lead: { ...th.type.bodySoft, fontSize: 15.5, lineHeight: 24, marginBottom: space.xl },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginBottom: space.lg },
   chip: {
     flexDirection: 'row',
@@ -119,21 +122,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingVertical: space.sm,
     borderRadius: radius.pill,
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderWidth: 1.5,
-    borderColor: colors.hairline,
+    borderColor: th.colors.hairline,
   },
-  chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
-  chipText: { ...t.small, color: colors.inkSoft },
-  chipTextOn: { color: colors.surface },
+  chipOn: { backgroundColor: th.colors.ink, borderColor: th.colors.ink },
+  chipText: { ...th.type.small, color: th.colors.inkSoft },
+  chipTextOn: { color: th.colors.surface },
   field: {
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.lg,
     padding: space.lg,
     minHeight: 150,
     marginBottom: space.xl,
-    ...shadow.card,
+    ...th.shadow.card,
   },
-  input: { ...t.body, minHeight: 118, padding: 0 },
-  note: { ...t.small, color: colors.inkFaint, textAlign: 'center', marginTop: space.lg },
+  input: { ...th.type.body, minHeight: 118, padding: 0 },
+  note: { ...th.type.small, color: th.colors.inkFaint, textAlign: 'center', marginTop: space.lg },
 });

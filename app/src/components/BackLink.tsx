@@ -7,9 +7,12 @@ import { StyleSheet, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import { PressableScale } from './PressableScale';
 import { Icon } from './Icon';
-import { colors, space, type as t } from '../lib/theme';
+import { space } from '../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
 
 export function BackLink({ label = 'Settings' }: { label?: string }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   return (
     <PressableScale
@@ -25,7 +28,7 @@ export function BackLink({ label = 'Settings' }: { label?: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   back: { flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: space.lg },
-  backText: { ...t.h3, color: colors.inkSoft },
+  backText: { ...th.type.h3, color: th.colors.inkSoft },
 });

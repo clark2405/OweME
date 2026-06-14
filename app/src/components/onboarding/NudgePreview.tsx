@@ -17,12 +17,15 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Icon } from '../Icon';
-import { colors, radius, shadow, space, type as t } from '../../lib/theme';
+import { radius, space } from '../../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../../lib/theme-context';
 
 // Back-out curve: overshoots past 1 then settles — the iMessage "inflate" pop.
 const backOut = Easing.bezier(0.34, 1.56, 0.64, 1);
 
 export function NudgePreview({ active }: { active?: boolean }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const v = useSharedValue(0);
   const reduce = useReducedMotion();
   const played = useRef(false);
@@ -82,40 +85,40 @@ export function NudgePreview({ active }: { active?: boolean }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   wrap: { gap: space.md, marginTop: space.sm },
   notif: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.lg,
     padding: space.md,
-    ...shadow.card,
+    ...th.shadow.card,
   },
   notifIcon: {
     width: 38,
     height: 38,
     borderRadius: radius.sm,
-    backgroundColor: colors.bgSunken,
+    backgroundColor: th.colors.bgSunken,
     alignItems: 'center',
     justifyContent: 'center',
   },
   notifEmoji: { fontSize: 20 },
   notifBody: { flex: 1, gap: 1 },
-  notifTitle: { ...t.small, color: colors.ink, fontWeight: '800' },
-  notifText: { fontSize: 12.5, lineHeight: 16, fontWeight: '500', color: colors.inkSoft },
+  notifTitle: { ...th.type.small, color: th.colors.ink, fontWeight: '800' },
+  notifText: { fontSize: 12.5, lineHeight: 16, fontWeight: '500', color: th.colors.inkSoft },
   bubble: {
     alignSelf: 'flex-end',
     maxWidth: '88%',
-    backgroundColor: colors.accent,
+    backgroundColor: th.colors.accent,
     borderRadius: radius.lg,
     borderBottomRightRadius: 6,
     padding: space.md,
     gap: space.sm,
-    ...shadow.card,
+    ...th.shadow.card,
   },
-  bubbleText: { fontSize: 13.5, lineHeight: 19, fontWeight: '600', color: colors.onAccent },
+  bubbleText: { fontSize: 13.5, lineHeight: 19, fontWeight: '600', color: th.colors.onAccent },
   sent: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-end' },
   sentText: { fontSize: 10.5, fontWeight: '700', color: 'rgba(255,255,255,0.85)' },
 });

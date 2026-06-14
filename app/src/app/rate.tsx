@@ -11,7 +11,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
@@ -40,18 +40,20 @@ import { Icon } from '../components/Icon';
 import { Button } from '../components/Button';
 import { showToast } from '../lib/toast';
 import { expoOut, reduceMotion, spring } from '../lib/motion';
-import { colors, space, type as t } from '../lib/theme';
+import { space } from '../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
 
 const STAR_PATH =
   'M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z';
 
-// Mood ramp, indexed by rating 0→5. 0 is the untouched warm cream; 1 is cold
-// and gloomy; it warms and brightens up to a celebratory gold at 5.
+// Mood ramp, indexed by rating 0→5. Stop 0 is the untouched resting state and
+// adapts to the app theme (see RateScreen); 1 is cold and gloomy; it warms and
+// brightens up to a celebratory gold at 5. These dramatic mid/high stops are
+// intentional mood, not theme tokens, so they stay fixed in both light and dark.
 const STOPS = [0, 1, 2, 3, 4, 5];
-const BG = ['#FFFBF5', '#1E1B25', '#42384A', '#8A766B', '#FFDFBE', '#FFCE83'];
-const HEADING = ['#1A1714', '#FFF4E8', '#FFF4E8', '#FFF8EF', '#1A1714', '#1A1714'];
-const SOFT = [
-  '#6B6157',
+const BG_RAMP = ['#1E1B25', '#42384A', '#8A766B', '#FFDFBE', '#FFCE83'];
+const HEADING_RAMP = ['#FFF4E8', '#FFF4E8', '#FFF8EF', '#1A1714', '#1A1714'];
+const SOFT_RAMP = [
   'rgba(255,244,232,0.78)',
   'rgba(255,244,232,0.78)',
   'rgba(255,248,239,0.86)',
@@ -81,6 +83,7 @@ function Star({
   wave: SharedValue<number>;
   idle: boolean;
 }) {
+  const { colors } = useTheme();
   const reduce = useReducedMotion();
   const pop = useSharedValue(1);
 
@@ -120,10 +123,17 @@ function Star({
 }
 
 export default function RateScreen() {
+  const { colors, type: t, scheme } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const reduce = useReducedMotion();
   const [rating, setRating] = useState(0);
+
+  // Stop 0 (resting) tracks the app theme; the dramatic ramp is appended after.
+  const BG = [colors.bg, ...BG_RAMP];
+  const HEADING = [colors.ink, ...HEADING_RAMP];
+  const SOFT = [colors.inkSoft, ...SOFT_RAMP];
 
   // Animated mirror of the rating that the background/colors lerp toward.
   const level = useSharedValue(0);
@@ -168,11 +178,23 @@ export default function RateScreen() {
     runOnJS(setRating)(r);
   };
 
-  // minDistance(0) so a plain tap registers too; onUpdate handles the slide.
+  // Slide across the row to rate; onBegin handles a press-and-drag.
   const pan = Gesture.Pan()
     .minDistance(0)
     .onBegin((e) => pick(e.x))
     .onUpdate((e) => pick(e.x));
+  // A plain tap on a star. Without this the tap fell through to the empty-canvas
+  // reset below and cleared the rating the instant you set it.
+  const tap = Gesture.Tap().onEnd((e) => pick(e.x));
+  const starGesture = Gesture.Race(pan, tap);
+
+  // Tap the empty canvas (not the stars or the CTAs) to clear back to resting.
+  const reset = () => {
+    if (rating === 0) return;
+    setRating(0);
+    lastR.value = 0;
+    level.value = withTiming(0, { duration: 280, easing: expoOut, reduceMotion });
+  };
 
   const high = rating >= 4;
   // Status bar + back chevron flip to light over the dark mid-range backgrounds.
@@ -205,8 +227,10 @@ export default function RateScreen() {
       <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, ambientStyle]}>
         <AmbientBackground variant="settings" />
       </Animated.View>
-      <Animated.View pointerEvents="none" style={[styles.glow, glowStyle]} />
-      <StatusBar style={darkUI ? 'light' : 'dark'} animated />
+      <View pointerEvents="none" style={styles.glowWrap}>
+        <Animated.View style={[styles.glow, glowStyle]} />
+      </View>
+      <StatusBar style={darkUI ? 'light' : high ? 'dark' : scheme === 'dark' ? 'light' : 'dark'} animated />
 
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={[styles.content, { paddingBottom: insets.bottom + space.xl }]}>
@@ -228,88 +252,119 @@ export default function RateScreen() {
             <Animated.Text style={[t.title, styles.title, headingStyle]}>Rate OweMe</Animated.Text>
           </Reveal>
 
-          <Reveal index={2} from={16}>
-            <Animated.Text style={[t.h3, styles.prompt, headingStyle]}>
-              How’s OweMe treating you?
-            </Animated.Text>
-          </Reveal>
+          {/* Centered interactive block — fills the space below the title. The
+              top spacer balances the tappable bottom one so the block sits in
+              the middle. */}
+          <View style={styles.middle}>
+            <View style={styles.spacer} pointerEvents="none" />
 
-          <Reveal index={3} from={18}>
-            <GestureDetector gesture={pan}>
-              <View
-                style={styles.stars}
-                onLayout={(e) => {
-                  rowW.value = e.nativeEvent.layout.width;
-                }}
-              >
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <Star key={n} index={n - 1} filled={n <= rating} wave={wave} idle={rating === 0} />
-                ))}
-              </View>
-            </GestureDetector>
-          </Reveal>
-
-          {rating === 0 ? (
-            <Reveal index={4} from={12}>
-              <Animated.Text style={[styles.hint, softStyle]}>Tap a star, or slide across ⭐</Animated.Text>
-            </Reveal>
-          ) : (
-            <Animated.View
-              // Re-key on rating so the copy re-arrives as it changes.
-              key={rating}
-              entering={FadeIn.duration(240)}
-              style={styles.followup}
-            >
-              <Animated.Text style={[t.overline, styles.followOver, softStyle]}>
-                {COPY[rating].over}
+            <Reveal index={2} from={16}>
+              <Animated.Text style={[t.h3, styles.prompt, headingStyle]}>
+                How’s OweMe treating you?
               </Animated.Text>
-              {/* Fixed height (fits two lines) so the button never shifts as the
-                  copy changes length between ratings. */}
-              <View style={styles.followTextWrap}>
-                <Animated.Text style={[styles.followText, headingStyle]}>{COPY[rating].line}</Animated.Text>
-              </View>
-              {high ? (
-                <Button
-                  label="Rate on the App Store ⭐"
-                  onPress={() => showToast({ message: 'App Store listing coming soon ✨' })}
-                />
+            </Reveal>
+
+            <Reveal index={3} from={18}>
+              <GestureDetector gesture={starGesture}>
+                <View
+                  style={styles.stars}
+                  onLayout={(e) => {
+                    rowW.value = e.nativeEvent.layout.width;
+                  }}
+                >
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <Star key={n} index={n - 1} filled={n <= rating} wave={wave} idle={rating === 0} />
+                  ))}
+                </View>
+              </GestureDetector>
+            </Reveal>
+
+            {/* Fixed-height zone so the stars above never shift as the result
+                swaps between the resting hint and the rated follow-up. */}
+            <View style={styles.resultZone}>
+              {rating === 0 ? (
+                <Reveal index={4} from={12}>
+                  <Animated.Text style={[styles.hint, softStyle]}>Tap a star, or slide across</Animated.Text>
+                </Reveal>
               ) : (
-                <Button label="Share what’s wrong" onPress={() => router.push('/feedback')} />
+                // No key: the block stays mounted across rating changes, so the
+                // copy just updates in place — the CTA never remounts or jumps
+                // while you slide. It fades in once, when you first rate.
+                <Animated.View entering={FadeIn.duration(240)} style={styles.followup}>
+                  <Animated.Text style={[t.overline, styles.followOver, softStyle]}>
+                    {COPY[rating].over}
+                  </Animated.Text>
+                  {/* Fixed height (fits two lines) so the button never shifts as the
+                      copy changes length between ratings. */}
+                  <View style={styles.followTextWrap}>
+                    <Animated.Text style={[styles.followText, headingStyle]}>{COPY[rating].line}</Animated.Text>
+                  </View>
+                  {high ? (
+                    <Button
+                      label="Rate on the App Store"
+                      onPress={() => showToast({ message: 'App Store listing coming soon' })}
+                    />
+                  ) : (
+                    <Button label="Share what’s wrong" onPress={() => router.push('/feedback')} />
+                  )}
+                </Animated.View>
               )}
-            </Animated.View>
-          )}
+            </View>
+
+            {/* Tappable bottom half — tap here (off the stars/CTA) to clear. */}
+            <Pressable
+              style={styles.spacer}
+              onPress={reset}
+              accessibilityRole="button"
+              accessibilityLabel="Clear rating"
+            />
+          </View>
         </View>
       </SafeAreaView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+const makeStyles = (th: Theme) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: th.colors.bg },
   safe: { flex: 1 },
   content: { flex: 1, paddingHorizontal: space.xl },
-  glow: {
+  // Full-screen centered layer for the soft mood glow behind the stars.
+  glowWrap: {
     position: 'absolute',
-    top: 150,
-    alignSelf: 'center',
-    width: 320,
-    height: 320,
-    borderRadius: 160,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  glow: { width: 320, height: 320, borderRadius: 160 },
   back: { flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: space.lg },
-  backText: { ...t.h3 },
-  title: { marginTop: space.sm, marginBottom: space.xxl },
+  backText: { ...th.type.h3 },
+  title: { marginTop: space.sm, marginBottom: space.lg },
+  // Holds the block between two flex spacers so it sits centered; the bottom
+  // spacer is the (only) tap-to-clear zone.
+  middle: { flex: 1 },
+  spacer: { flex: 1 },
   prompt: { textAlign: 'center', marginBottom: space.lg },
   stars: {
     flexDirection: 'row',
     justifyContent: 'center',
+    // Shrink-wrap to the stars themselves (not full width) so the gesture's
+    // measured width === the stars' width — otherwise the empty centering margin
+    // throws off the x→rating math and a tap on star 1 reads as 2.
+    alignSelf: 'center',
     gap: space.sm,
     paddingVertical: space.sm,
     marginBottom: space.xl,
   },
-  hint: { ...t.small, textAlign: 'center' },
+  hint: { ...th.type.small, textAlign: 'center' },
+  // Reserves room for the tallest result (rated follow-up + CTA) so the stars
+  // stay put whether resting or rated.
+  resultZone: { minHeight: 160 },
   followup: { gap: space.md, alignItems: 'stretch' },
   followOver: { textAlign: 'center' },
   followTextWrap: { minHeight: 48, justifyContent: 'center', marginBottom: space.sm },
-  followText: { ...t.bodySoft, fontSize: 16, lineHeight: 24, textAlign: 'center' },
+  followText: { ...th.type.bodySoft, fontSize: 16, lineHeight: 24, textAlign: 'center' },
 });

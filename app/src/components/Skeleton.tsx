@@ -20,7 +20,8 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { colors, radius, shadow, space } from '../lib/theme';
+import { radius, space } from '../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
 import { expoOut } from '../lib/motion';
 
 interface SkeletonProps {
@@ -33,7 +34,8 @@ interface SkeletonProps {
   style?: ViewStyle;
 }
 
-export function Skeleton({ width = '100%', height = 14, round = 8, color = colors.bgSunken, style }: SkeletonProps) {
+export function Skeleton({ width = '100%', height = 14, round = 8, color, style }: SkeletonProps) {
+  const { colors } = useTheme();
   const reduce = useReducedMotion();
   const pulse = useSharedValue(0);
 
@@ -58,13 +60,14 @@ export function Skeleton({ width = '100%', height = 14, round = 8, color = color
 
   return (
     <Animated.View
-      style={[{ width, height, borderRadius: round, backgroundColor: color }, anim, style]}
+      style={[{ width, height, borderRadius: round, backgroundColor: color ?? colors.bgSunken }, anim, style]}
     />
   );
 }
 
 /** A loan-card-shaped placeholder: avatar dot, two text lines, a trailing chip. */
 export function SkeletonRow() {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.row}>
       <Skeleton width={40} height={40} round={radius.pill} />
@@ -77,16 +80,16 @@ export function SkeletonRow() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.md,
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.lg,
     paddingVertical: space.md + 2,
     paddingHorizontal: space.lg,
-    ...shadow.card,
+    ...th.shadow.card,
   },
   body: { flex: 1, gap: 8 },
 });

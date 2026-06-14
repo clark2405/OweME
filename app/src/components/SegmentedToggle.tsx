@@ -14,7 +14,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { PressableScale } from './PressableScale';
 import { Icon, IconName } from './Icon';
-import { colors, radius, space, type as t } from '../lib/theme';
+import { radius, space } from '../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
 import { duration, expoOut, reduceMotion } from '../lib/motion';
 
 export interface Segment<T extends string> {
@@ -30,6 +31,8 @@ interface Props<T extends string> {
 }
 
 export function SegmentedToggle<T extends string>({ options, value, onChange }: Props<T>) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [w, setW] = useState(0);
   const reduce = useReducedMotion();
   const activeIndex = options.findIndex((o) => o.value === value);
@@ -80,10 +83,10 @@ export function SegmentedToggle<T extends string>({ options, value, onChange }: 
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   track: {
     flexDirection: 'row',
-    backgroundColor: colors.bgSunken,
+    backgroundColor: th.colors.bgSunken,
     borderRadius: radius.pill,
     padding: 4,
   },
@@ -92,7 +95,7 @@ const styles = StyleSheet.create({
     top: 4,
     left: 4,
     bottom: 4,
-    backgroundColor: colors.ink,
+    backgroundColor: th.colors.ink,
     borderRadius: radius.pill,
   },
   segment: {
@@ -103,7 +106,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  label: { ...t.h3, fontSize: 16 },
-  labelActive: { color: colors.surface },
-  labelIdle: { color: colors.inkSoft },
+  label: { ...th.type.h3, fontSize: 16 },
+  labelActive: { color: th.colors.surface },
+  labelIdle: { color: th.colors.inkSoft },
 });

@@ -21,10 +21,15 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Icon, IconName } from '../Icon';
-import { colors, radius, shadow } from '../../lib/theme';
+import { radius } from '../../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../../lib/theme-context';
+
+// The dynamic island is a real-device part — always black, in both themes.
+const ISLAND = '#0A0806';
 
 /** A small coral badge with a number, pinned to the corner of its target. */
 function Hotspot({ n, style }: { n: number; style?: object }) {
+  const styles = useThemedStyles(makeStyles);
   const pulse = useSharedValue(0);
   const reduce = useReducedMotion();
   useEffect(() => {
@@ -49,6 +54,8 @@ function Hotspot({ n, style }: { n: number; style?: object }) {
 }
 
 function MiniTab({ icon, on }: { icon: IconName; on?: boolean }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.miniTab}>
       <Icon name={icon} size={15} color={on ? colors.ink : colors.inkFaint} strokeWidth={on ? 2.2 : 1.9} />
@@ -57,6 +64,8 @@ function MiniTab({ icon, on }: { icon: IconName; on?: boolean }) {
 }
 
 export function AppPreview() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const float = useSharedValue(0);
   const reduce = useReducedMotion();
   useEffect(() => {
@@ -140,17 +149,19 @@ export function AppPreview() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   frame: {
     width: 192,
     // Real-phone proportions (W:H ≈ 0.49) so it never reads as squished,
     // independent of how much content is inside.
     aspectRatio: 0.49,
     alignSelf: 'center',
-    backgroundColor: colors.ink,
+    // The device bezel: a warm dark slab that stays visible against the cream
+    // page (light) and lifts off the dark page (dark) — the `feature` token.
+    backgroundColor: th.colors.feature,
     borderRadius: 36,
     padding: 6,
-    ...shadow.lifted,
+    ...th.shadow.lifted,
   },
   notch: {
     position: 'absolute',
@@ -160,11 +171,11 @@ const styles = StyleSheet.create({
     width: 58,
     height: 15,
     borderRadius: radius.pill,
-    backgroundColor: colors.ink,
+    backgroundColor: ISLAND,
   },
   screen: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: th.colors.bg,
     borderRadius: 32,
     paddingHorizontal: 13,
     paddingTop: 28,
@@ -174,30 +185,30 @@ const styles = StyleSheet.create({
   topGroup: {},
   spacer: { flex: 1, minHeight: 8 },
   bottomGroup: {},
-  overline: { fontSize: 7.5, fontWeight: '800', letterSpacing: 1, color: colors.inkFaint },
-  title: { fontSize: 22, lineHeight: 25, fontWeight: '800', letterSpacing: -1, color: colors.ink, marginTop: 4, marginBottom: 12 },
+  overline: { fontSize: 7.5, fontWeight: '800', letterSpacing: 1, color: th.colors.inkFaint },
+  title: { fontSize: 22, lineHeight: 25, fontWeight: '800', letterSpacing: -1, color: th.colors.ink, marginTop: 4, marginBottom: 12 },
 
   bentoRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  bento: { flex: 1, borderRadius: 16, padding: 11, gap: 2, ...shadow.card },
-  bentoLight: { backgroundColor: colors.surface },
-  bentoDark: { backgroundColor: colors.ink },
-  bentoNumDark: { fontSize: 26, lineHeight: 28, fontWeight: '800', letterSpacing: -1, color: colors.ink },
-  bentoNumLight: { fontSize: 20, lineHeight: 24, fontWeight: '800', letterSpacing: -1, color: colors.surface },
-  bentoLabel: { fontSize: 8, fontWeight: '600', color: colors.inkSoft },
-  bentoLabelLight: { fontSize: 8, fontWeight: '600', color: colors.inkFaint },
+  bento: { flex: 1, borderRadius: 16, padding: 11, gap: 2, ...th.shadow.card },
+  bentoLight: { backgroundColor: th.colors.surface },
+  bentoDark: { backgroundColor: th.colors.feature },
+  bentoNumDark: { fontSize: 26, lineHeight: 28, fontWeight: '800', letterSpacing: -1, color: th.colors.ink },
+  bentoNumLight: { fontSize: 20, lineHeight: 24, fontWeight: '800', letterSpacing: -1, color: th.colors.onFeature },
+  bentoLabel: { fontSize: 8, fontWeight: '600', color: th.colors.inkSoft },
+  bentoLabelLight: { fontSize: 8, fontWeight: '600', color: th.colors.onFeatureDim },
 
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: 14,
     padding: 9,
-    ...shadow.card,
+    ...th.shadow.card,
   },
   cardGhost: {
     height: 38,
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: 14,
     marginTop: 8,
     opacity: 0.5,
@@ -206,28 +217,28 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: radius.pill,
-    backgroundColor: colors.accentSoft,
+    backgroundColor: th.colors.accentSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarEmoji: { fontSize: 13 },
   cardBody: { flex: 1, gap: 1 },
-  cardTitle: { fontSize: 12, fontWeight: '700', letterSpacing: -0.2, color: colors.ink },
-  cardMeta: { fontSize: 8.5, fontWeight: '600', color: colors.inkSoft },
-  cardChip: { backgroundColor: colors.accentSoft, borderRadius: radius.pill, paddingHorizontal: 7, paddingVertical: 3 },
-  cardChipText: { fontSize: 8, fontWeight: '800', color: colors.accentPress },
+  cardTitle: { fontSize: 12, fontWeight: '700', letterSpacing: -0.2, color: th.colors.ink },
+  cardMeta: { fontSize: 8.5, fontWeight: '600', color: th.colors.inkSoft },
+  cardChip: { backgroundColor: th.colors.accentSoft, borderRadius: radius.pill, paddingHorizontal: 7, paddingVertical: 3 },
+  cardChipText: { fontSize: 8, fontWeight: '800', color: th.colors.accentPress },
 
   fab: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
     gap: 6,
-    backgroundColor: colors.accent,
+    backgroundColor: th.colors.accent,
     borderRadius: radius.pill,
     paddingLeft: 5,
     paddingRight: 14,
     paddingVertical: 5,
-    ...shadow.lifted,
+    ...th.shadow.lifted,
   },
   fabPlus: {
     width: 22,
@@ -237,35 +248,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  fabLabel: { fontSize: 11, fontWeight: '800', color: colors.onAccent },
+  fabLabel: { fontSize: 11, fontWeight: '800', color: th.colors.onAccent },
 
   tabBar: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.pill,
     paddingVertical: 6,
     marginTop: 14,
     borderWidth: 1,
-    borderColor: colors.hairline,
-    ...shadow.card,
+    borderColor: th.colors.hairline,
+    ...th.shadow.card,
   },
   miniTab: { width: 26, alignItems: 'center' },
 
   // Hotspots
   hotspot: { position: 'absolute', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, zIndex: 5 },
-  hotspotRing: { position: 'absolute', width: 20, height: 20, borderRadius: 10, backgroundColor: colors.accent },
+  hotspotRing: { position: 'absolute', width: 20, height: 20, borderRadius: 10, backgroundColor: th.colors.accent },
   hotspotDot: {
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: colors.accent,
+    backgroundColor: th.colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: colors.bg,
+    borderColor: th.colors.bg,
   },
-  hotspotNum: { fontSize: 10, fontWeight: '900', color: colors.onAccent },
+  hotspotNum: { fontSize: 10, fontWeight: '900', color: th.colors.onAccent },
   spotBento: { top: -8, right: -8 },
   spotCard: { top: -9, right: -9 },
   spotFab: { top: -9, right: -9 },

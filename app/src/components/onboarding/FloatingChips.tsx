@@ -34,7 +34,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { G, Line, Path, Polygon, Text as SvgText } from 'react-native-svg';
 import { PressableScale } from '../PressableScale';
-import { colors, radius, shadow, space, type as t } from '../../lib/theme';
+import { radius, space } from '../../lib/theme';
+import { Theme, useThemedStyles } from '../../lib/theme-context';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
@@ -145,6 +146,7 @@ const boxPose = (ov: number, entry: number) => {
 };
 
 function Chip({ spec, index, o }: { spec: ChipSpec; index: number; o: SharedValue<number> }) {
+  const styles = useThemedStyles(makeStyles);
   const v = useSharedValue(0);
   const reduce = useReducedMotion();
 
@@ -293,6 +295,7 @@ function IsoBox({ o }: { o: SharedValue<number> }) {
 }
 
 function OrganizeButton({ onPress }: { onPress: () => void }) {
+  const styles = useThemedStyles(makeStyles);
   const pulse = useSharedValue(0);
   useEffect(() => {
     pulse.value = withRepeat(
@@ -319,6 +322,7 @@ function OrganizeButton({ onPress }: { onPress: () => void }) {
 }
 
 export function FloatingChips() {
+  const styles = useThemedStyles(makeStyles);
   const reduce = useReducedMotion();
   const o = useSharedValue(reduce ? 2 : 0);
   const boxEntry = useSharedValue(reduce ? 1 : 0);
@@ -424,7 +428,7 @@ export function FloatingChips() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   root: { height: WRAP_H, alignSelf: 'stretch' },
   wrap: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   boxWrap: {
@@ -445,19 +449,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.pill,
     paddingHorizontal: space.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.hairline,
-    shadowColor: colors.shadow,
+    borderColor: th.colors.hairline,
+    shadowColor: th.colors.shadow,
     shadowOpacity: 0.06,
     shadowRadius: 5,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
   emoji: { fontSize: 16 },
-  label: { ...t.small, color: colors.ink, fontWeight: '700', letterSpacing: -0.1 },
+  label: { ...th.type.small, color: th.colors.ink, fontWeight: '700', letterSpacing: -0.1 },
 
   cta: {
     position: 'absolute',
@@ -470,16 +474,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.pill,
     paddingVertical: 11,
     paddingHorizontal: space.lg,
     borderWidth: 1,
-    borderColor: colors.hairline,
-    ...shadow.lifted,
+    borderColor: th.colors.hairline,
+    ...th.shadow.lifted,
   },
   ctaIcon: { fontSize: 16 },
-  ctaLabel: { ...t.h3, fontSize: 15, color: colors.accent, letterSpacing: -0.2 },
+  ctaLabel: { ...th.type.h3, fontSize: 15, color: th.colors.accent, letterSpacing: -0.2 },
 
   logoBlock: {
     position: 'absolute',
@@ -496,13 +500,13 @@ const styles = StyleSheet.create({
     height: TILE + 30,
     borderRadius: (TILE + 30) / 2,
     borderWidth: 3,
-    borderColor: colors.accent,
+    borderColor: th.colors.accent,
     borderTopColor: 'transparent',
     borderLeftColor: 'transparent',
   },
-  tileShadow: { ...shadow.lifted },
+  tileShadow: { ...th.shadow.lifted },
   tileImg: { width: TILE, height: TILE },
-  name: { fontSize: 27, lineHeight: 32, fontWeight: '800', letterSpacing: -0.8, color: colors.ink },
-  nameAccent: { color: colors.accent },
-  tagline: { ...t.small, color: colors.inkSoft },
+  name: { fontSize: 27, lineHeight: 32, fontWeight: '800', letterSpacing: -0.8, color: th.colors.ink },
+  nameAccent: { color: th.colors.accent },
+  tagline: { ...th.type.small, color: th.colors.inkSoft },
 });

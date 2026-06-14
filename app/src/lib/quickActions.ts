@@ -32,5 +32,24 @@ export function useLoanQuickActions() {
     }
   };
 
-  return { onReturn, onNudge };
+  // Clear the overdue pile in one go: fire each loan's composer in turn. The OS
+  // only lets one message be sent at a time, so this is sequential — for the
+  // share channel each sheet hands control back when dismissed, so it reads as
+  // "rapid-fire, one tap each" rather than a true silent batch.
+  const onNudgeAll = async (list: LoanWithBorrower[]) => {
+    if (list.length === 0) return;
+    haptics.tap();
+    let sent = 0;
+    for (const { loan, borrower } of list) {
+      if (await deliverNudge(loan, borrower, 'friendly', channel)) {
+        recordNudge(loan.id);
+        sent += 1;
+      }
+    }
+    if (sent > 0) {
+      showToast({ message: `Nudged ${sent} ${sent === 1 ? 'person' : 'people'} 📨` });
+    }
+  };
+
+  return { onReturn, onNudge, onNudgeAll };
 }

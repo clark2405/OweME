@@ -5,7 +5,7 @@ import { TabBar } from '../../components/TabBar';
 import { TabAmbient } from '../../components/TabAmbient';
 import { AmbientVariant } from '../../components/AmbientBackground';
 import { useHasSeenOnboarding } from '../../lib/onboarding';
-import { colors } from '../../lib/theme';
+import { useTheme } from '../../lib/theme-context';
 
 const ROUTE_VARIANT: Record<string, AmbientVariant> = {
   index: 'home',
@@ -15,16 +15,17 @@ const ROUTE_VARIANT: Record<string, AmbientVariant> = {
 };
 
 export default function TabsLayout() {
+  const { colors } = useTheme();
   const [variant, setVariant] = useState<AmbientVariant>('home');
   const seenOnboarding = useHasSeenOnboarding();
 
   // Guard at the destination: however the app lands on the tabs (cold start,
   // deep link, dev-client URL), first launch detours through the welcome.
-  if (seenOnboarding === null) return <View style={styles.root} />;
+  if (seenOnboarding === null) return <View style={[styles.root, { backgroundColor: colors.bg }]} />;
   if (!seenOnboarding) return <Redirect href="/onboarding" />;
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colors.bg }]}>
       {/* One ambient layer for all tabs; cross-fades on tab change. */}
       <TabAmbient variant={variant} />
 
@@ -57,5 +58,5 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
+  root: { flex: 1 },
 });

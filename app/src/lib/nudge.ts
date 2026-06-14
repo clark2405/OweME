@@ -58,6 +58,23 @@ export function nudgeMessage(tone: NudgeTone, what: string, who: string, when: s
   }
 }
 
+/** Open `channel`'s composer prefilled with `message` (one tap to send), falling
+ *  back to the share sheet when the channel can't prefill or its app is missing.
+ *  Returns true if a composer/sheet actually opened. */
+async function deliver(message: string, channel: NudgeChannel, phone?: string): Promise<boolean> {
+  const url = channelUrl(channel, message, phone);
+  if (url) {
+    try {
+      await Linking.openURL(url);
+      return true;
+    } catch {
+      // app not installed — fall through to the share sheet
+    }
+  }
+  const res = await Share.share({ message });
+  return res.action !== Share.dismissedAction;
+}
+
 /**
  * Send a nudge for `loan` via the chosen channel: opens that app's composer
  * prefilled (one tap to send), or the share sheet for `share` / when the app
@@ -72,15 +89,21 @@ export async function deliverNudge(
 ): Promise<boolean> {
   const what = loanLabel(loan);
   const message = nudgeMessage(tone, what, borrower.name, shortDate(loan.lentAt));
-  const url = channelUrl(channel, message, borrower.phone);
-  if (url) {
-    try {
-      await Linking.openURL(url);
-      return true;
-    } catch {
-      // app not installed — fall through to the share sheet
-    }
-  }
-  const res = await Share.share({ message });
-  return res.action !== Share.dismissedAction;
+  return deliver(message, channel, borrower.phone);
+}
+
+/** The pre-written thank-you, sent once a loan comes home — the warm bookend to
+ *  a nudge, so the last word in the thread isn't a reminder. */
+export function thanksMessage(what: string, who: string): string {
+  return `Thanks ${who}! 🙏 Got my ${what} back — OweMe can rest easy now. 💛`;
+}
+
+/** Send a thank-you for a returned `loan` via the chosen channel. Same delivery
+ *  path as a nudge (prefilled composer or share sheet). */
+export async function deliverThanks(
+  loan: Loan,
+  borrower: Borrower,
+  channel: NudgeChannel,
+): Promise<boolean> {
+  return deliver(thanksMessage(loanLabel(loan), borrower.name), channel, borrower.phone);
 }

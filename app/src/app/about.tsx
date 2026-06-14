@@ -8,7 +8,8 @@ import { Screen } from '../components/Screen';
 import { Reveal } from '../components/Reveal';
 import { BackLink } from '../components/BackLink';
 import { Icon, IconName } from '../components/Icon';
-import { colors, radius, shadow, space, type as t } from '../lib/theme';
+import { radius, space } from '../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
 
 const APP_VERSION = '1.0.0';
 
@@ -19,6 +20,8 @@ const DOES: { icon: IconName; text: string }[] = [
 ];
 
 export default function AboutScreen() {
+  const { colors, type: t } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   return (
     <Screen scroll contentStyle={styles.content}>
       <Reveal index={0} from={8}>
@@ -78,35 +81,35 @@ export default function AboutScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   content: { paddingBottom: space.xxl },
   title: { marginTop: space.sm, marginBottom: space.xl },
-  lead: { ...t.bodySoft, fontSize: 16, lineHeight: 25, marginBottom: space.xl },
+  lead: { ...th.type.bodySoft, fontSize: 16, lineHeight: 25, marginBottom: space.xl },
   card: {
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.lg,
     paddingHorizontal: space.lg,
-    ...shadow.card,
+    ...th.shadow.card,
     marginBottom: space.xl,
   },
   doRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: space.md },
-  doDivider: { borderBottomWidth: 1, borderBottomColor: colors.hairline },
+  doDivider: { borderBottomWidth: 1, borderBottomColor: th.colors.hairline },
   doBadge: {
     width: 38,
     height: 38,
     borderRadius: radius.pill,
-    backgroundColor: colors.accentSoft,
+    backgroundColor: th.colors.accentSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  doText: { ...t.body, flex: 1 },
-  note: { ...t.bodySoft, fontSize: 15.5, lineHeight: 24, marginBottom: space.xl },
-  em: { color: colors.accent, fontWeight: '700' },
+  doText: { ...th.type.body, flex: 1 },
+  note: { ...th.type.bodySoft, fontSize: 15.5, lineHeight: 24, marginBottom: space.xl },
+  em: { color: th.colors.accent, fontWeight: '700' },
   metaCard: {
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.lg,
     paddingHorizontal: space.lg,
-    ...shadow.card,
+    ...th.shadow.card,
     marginBottom: space.xl,
   },
   metaRow: {
@@ -115,8 +118,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: space.md,
   },
-  metaDivider: { borderTopWidth: 1, borderTopColor: colors.hairline },
-  metaKey: { ...t.small, color: colors.inkSoft },
-  metaVal: { ...t.h3, fontSize: 15 },
-  footer: { ...t.small, color: colors.inkFaint, textAlign: 'center' },
+  metaDivider: { borderTopWidth: 1, borderTopColor: th.colors.hairline },
+  metaKey: { ...th.type.small, color: th.colors.inkSoft },
+  metaVal: { ...th.type.h3, fontSize: 15 },
+  footer: { ...th.type.small, color: th.colors.inkFaint, textAlign: 'center' },
 });

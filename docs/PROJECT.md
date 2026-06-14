@@ -164,6 +164,18 @@ create table nudge_links (
 
 **Row Level Security:** every table gets RLS where `owner_id = auth.uid()`. The Next.js nudge page reads via a server-side service role scoped to a single token lookup.
 
+**Backup / restore (frontend already built):** the app has a Back up & restore
+screen (Settings › Your data) that exports a versioned JSON backup of
+`borrowers` + `loans` + `settings` and restores it via **replace-all**. It runs
+on the mock store today. When wiring this table to Supabase:
+- restore (`importData` in `app/src/lib/store.ts`) should become a **transactional
+  wipe-and-insert scoped to `owner_id = auth.uid()`**;
+- photos (`photo_url` / `avatar_url`) are **stripped from backups for now** because
+  they're local file URIs — once **Supabase Storage** holds them, keep resolvable
+  Storage URLs in the backup so images survive a device hop;
+- this is manual backup/restore, **not** live sync (a separate later concern).
+See `docs/CHANGELOG.md` ("Backend note") for the full handoff.
+
 ---
 
 ## 7. Screens (v1)
@@ -209,7 +221,9 @@ Plus one **web page** (Next.js): `/n/[token]` — the borrower-facing nudge page
 
 ### Someday / maybe
 - Group visibility ("public shame mode," opt-in 😈)
-- Export/backup
+- Export/backup — *frontend round-trip shipped (JSON export + paste-restore,
+  replace-all, photos excluded; see §6 + CHANGELOG). Remaining: real-file
+  pick/share + photo hosting once Supabase Storage exists.*
 
 ---
 

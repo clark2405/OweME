@@ -8,7 +8,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Screen } from '../components/Screen';
 import { Reveal } from '../components/Reveal';
 import { BackLink } from '../components/BackLink';
-import { colors, space, type as t } from '../lib/theme';
+import { space } from '../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
 
 const SECTIONS: { h: string; b: string }[] = [
   {
@@ -42,6 +43,8 @@ const SECTIONS: { h: string; b: string }[] = [
 ];
 
 export default function PrivacyScreen() {
+  const { type: t } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   return (
     <Screen scroll contentStyle={styles.content}>
       <Reveal index={0} from={8}>
@@ -71,12 +74,12 @@ export default function PrivacyScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   content: { paddingBottom: space.xxl },
   title: { marginTop: space.sm },
-  updated: { ...t.small, color: colors.inkFaint, marginTop: space.md, marginBottom: space.xl },
+  updated: { ...th.type.small, color: th.colors.inkFaint, marginTop: space.md, marginBottom: space.xl },
   sections: { gap: space.xl },
   block: { gap: space.xs },
-  h: { ...t.h3, fontSize: 17 },
-  b: { ...t.bodySoft, fontSize: 15, lineHeight: 23 },
+  h: { ...th.type.h3, fontSize: 17 },
+  b: { ...th.type.bodySoft, fontSize: 15, lineHeight: 23 },
 });

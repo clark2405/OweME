@@ -6,7 +6,8 @@
 
 import { StyleSheet, Text, View } from 'react-native';
 import { Reveal } from './Reveal';
-import { space, type as t } from '../lib/theme';
+import { space } from '../lib/theme';
+import { useTheme } from '../lib/theme-context';
 
 interface Props {
   overline: string;
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export function Header({ overline, title, trailing }: Props) {
+  const { type: t } = useTheme();
   return (
     <View style={styles.wrap}>
       <Reveal index={0} from={10}>

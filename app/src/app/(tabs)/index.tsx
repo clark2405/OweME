@@ -15,7 +15,8 @@ import { activeLoans, activeLoansBy, LoanTypeFilter, useHydrated, useLoans, useS
 import { useLoanQuickActions } from '../../lib/quickActions';
 import { compactMoney, currencySymbol, isOverdue, moneyByCurrency } from '../../lib/format';
 import { reduceMotion } from '../../lib/motion';
-import { colors, radius, shadow, space, type as t } from '../../lib/theme';
+import { radius, space } from '../../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../../lib/theme-context';
 
 const FAB_HEIGHT = 58;
 /** How many loans the home lineup shows before deferring to "See all". Home is
@@ -47,6 +48,8 @@ function bentoFontSize(text: string): number {
 }
 
 export default function HomeScreen() {
+  const { colors, type: t } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
@@ -81,7 +84,7 @@ export default function HomeScreen() {
     : `${currencySymbol(defaultCurrency)}0`;
   const othersText = others.map((c) => `+${compactMoney(c.total, c.currency)}`).join(' ');
 
-  const { onReturn, onNudge } = useLoanQuickActions();
+  const { onReturn, onNudge, onNudgeAll } = useLoanQuickActions();
 
   const filtered = activeLoansBy(loans, { type: filter });
   // Overdue jumps the queue into its own pinned group; the rest form the lineup.
@@ -138,7 +141,18 @@ export default function HomeScreen() {
           <Text style={t.overline}>OweMe 📦 · Out in the wild</Text>
         </Reveal>
         <Reveal index={1} clip from={44}>
-          <Text style={[t.title, styles.headline]}>You&apos;re owed</Text>
+          <View style={styles.headRow}>
+            <Text style={[t.title, styles.headline]}>You&apos;re owed</Text>
+            <PressableScale
+              onPress={() => router.push('/loans?focus=search')}
+              scaleTo={0.9}
+              style={styles.searchBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Search everything you've lent"
+            >
+              <Icon name="search" size={20} color={colors.inkSoft} strokeWidth={2.2} />
+            </PressableScale>
+          </View>
         </Reveal>
 
         {/* Stat tiles double as filters — material depth, never flat boxes. */}
@@ -204,9 +218,23 @@ export default function HomeScreen() {
             {overdue.length > 0 && (
               <>
                 <Reveal index={3} from={18}>
-                  <Text style={[t.overline, styles.overdueLabel]}>
-                    👀 {overdue.length} overdue
-                  </Text>
+                  <View style={styles.overdueHead}>
+                    <Text style={[t.overline, styles.overdueLabel]}>
+                      👀 {overdue.length} overdue
+                    </Text>
+                    {overdue.length > 1 && (
+                      <PressableScale
+                        onPress={() => onNudgeAll(overdue)}
+                        scaleTo={0.95}
+                        style={styles.nudgeAll}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Nudge all ${overdue.length} overdue`}
+                      >
+                        <Icon name="send" size={14} color={colors.accent} strokeWidth={2} />
+                        <Text style={styles.nudgeAllText}>Nudge all</Text>
+                      </PressableScale>
+                    )}
+                  </View>
                 </Reveal>
                 <View style={styles.list}>
                   {overdue.map((data, i) => (
@@ -284,6 +312,8 @@ function StatTile({
   dark: boolean;
   onPress: () => void;
 }) {
+  const { shadow } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const anim = useAnimatedStyle(() => ({
     opacity: withTiming(dimmed ? 0.5 : 1, { duration: 200, reduceMotion }),
     transform: [{ scale: withTiming(selected ? 1.02 : 1, { duration: 200, reduceMotion }) }],
@@ -310,13 +340,31 @@ function StatTile({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   root: { flex: 1 },
   skelHead: { marginBottom: space.xl },
   skelTitle: { marginTop: space.md },
   skelGap: { marginTop: 8 },
   skelSection: { marginBottom: space.lg },
-  headline: { marginTop: space.sm, marginBottom: space.xl },
+  headRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: space.sm,
+    marginBottom: space.xl,
+  },
+  headline: { flex: 1 },
+  searchBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: th.colors.surface,
+    borderWidth: 1,
+    borderColor: th.colors.hairline,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...th.shadow.card,
+  },
   statRow: { flexDirection: 'row', gap: space.md, marginBottom: space.xxl },
   statWrap: { flex: 1 },
   stat: {
@@ -325,19 +373,35 @@ const styles = StyleSheet.create({
     gap: 4,
     borderWidth: 2,
     borderColor: 'transparent',
-    ...shadow.card,
+    ...th.shadow.card,
   },
-  statLeft: { backgroundColor: colors.surface },
-  statRight: { backgroundColor: colors.ink },
-  statRing: { borderColor: colors.ink },
-  statRingDark: { borderColor: colors.surfaceWarm },
-  statMoney: { color: colors.surface },
-  statOthers: { ...t.small, color: colors.inkFaint, fontWeight: '700', marginTop: 2 },
-  statLabel: { ...t.small, color: colors.inkSoft },
-  statLabelOnDark: { color: colors.inkFaint },
+  statLeft: { backgroundColor: th.colors.surface },
+  statRight: { backgroundColor: th.colors.feature },
+  statRing: { borderColor: th.colors.ink },
+  statRingDark: { borderColor: th.colors.surfaceWarm },
+  statMoney: { color: th.colors.onFeature },
+  statOthers: { ...th.type.small, color: th.colors.onFeatureDim, fontWeight: '700', marginTop: 2 },
+  statLabel: { ...th.type.small, color: th.colors.inkSoft },
+  statLabelOnDark: { color: th.colors.onFeatureDim },
   sectionLabel: { marginBottom: space.lg },
   sectionLabelTop: { marginTop: space.xl },
-  overdueLabel: { color: colors.accentPress, marginBottom: space.lg },
+  overdueHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: space.lg,
+  },
+  overdueLabel: { color: th.colors.accentPress },
+  nudgeAll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 6,
+    paddingHorizontal: space.md,
+    borderRadius: radius.pill,
+    backgroundColor: th.colors.accentSoft,
+  },
+  nudgeAllText: { ...th.type.small, color: th.colors.accent, fontWeight: '700' },
   list: { gap: space.md },
   seeAll: {
     flexDirection: 'row',
@@ -347,17 +411,17 @@ const styles = StyleSheet.create({
     paddingVertical: space.md,
     marginTop: space.xs,
   },
-  seeAllText: { ...t.h3, fontSize: 15, color: colors.accent },
+  seeAllText: { ...th.type.h3, fontSize: 15, color: th.colors.accent },
   empty: {
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.lg,
     padding: space.xxl,
     alignItems: 'center',
     gap: space.md,
-    ...shadow.card,
+    ...th.shadow.card,
   },
   emptyEmoji: { fontSize: 44 },
-  emptyText: { ...t.bodySoft, textAlign: 'center' },
+  emptyText: { ...th.type.bodySoft, textAlign: 'center' },
   fabSlot: {
     position: 'absolute',
     left: 0,

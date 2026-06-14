@@ -9,7 +9,8 @@ import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { PressableScale } from './PressableScale';
 import { Icon } from './Icon';
-import { colors, radius, shadow, space, type as t } from '../lib/theme';
+import { radius, space } from '../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTHS = [
@@ -38,6 +39,8 @@ interface Props {
 }
 
 export function DateSheet({ visible, value, title = 'Pick a date', minDate, maxDate, onSelect, onClose }: Props) {
+  const { colors, type: t } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [view, setView] = useState(() => startMonth(value));
 
   const firstWeekday = new Date(view.y, view.m, 1).getDay();
@@ -112,24 +115,24 @@ export function DateSheet({ visible, value, title = 'Pick a date', minDate, maxD
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   root: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(26,21,16,0.4)' },
+  backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)' },
   sheet: {
-    backgroundColor: colors.bg,
+    backgroundColor: th.colors.bg,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     paddingHorizontal: space.xl,
     paddingTop: space.md,
     paddingBottom: space.xxxl,
-    ...shadow.lifted,
+    ...th.shadow.lifted,
   },
   grabber: {
     alignSelf: 'center',
     width: 40,
     height: 5,
     borderRadius: radius.pill,
-    backgroundColor: colors.hairline,
+    backgroundColor: th.colors.hairline,
     marginBottom: space.lg,
   },
   title: { marginBottom: space.md },
@@ -138,15 +141,15 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: radius.pill,
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderWidth: 1,
-    borderColor: colors.hairline,
+    borderColor: th.colors.hairline,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  monthLabel: { ...t.h3 },
+  monthLabel: { ...th.type.h3 },
   weekRow: { flexDirection: 'row', marginBottom: space.sm },
-  weekday: { flex: 1, textAlign: 'center', ...t.small, color: colors.inkFaint },
+  weekday: { flex: 1, textAlign: 'center', ...th.type.small, color: th.colors.inkFaint },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   cell: { width: `${100 / 7}%`, aspectRatio: 1, alignItems: 'center', justifyContent: 'center' },
   dayDot: {
@@ -156,8 +159,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  daySelected: { backgroundColor: colors.ink },
-  dayText: { ...t.body, fontWeight: '600' },
-  dayTextSelected: { color: colors.surface, fontWeight: '800' },
-  dayOff: { color: colors.inkFaint, opacity: 0.4 },
+  daySelected: { backgroundColor: th.colors.ink },
+  dayText: { ...th.type.body, fontWeight: '600' },
+  dayTextSelected: { color: th.colors.surface, fontWeight: '800' },
+  dayOff: { color: th.colors.inkFaint, opacity: 0.4 },
 });

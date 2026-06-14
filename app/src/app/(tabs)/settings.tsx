@@ -16,7 +16,9 @@ import { Reveal } from '../../components/Reveal';
 import { PressableScale } from '../../components/PressableScale';
 import { Icon } from '../../components/Icon';
 import {
+  Appearance,
   CurrencyCode,
+  setAppearance,
   setDefaultCurrency,
   setNudgeChannel,
   setNudgesEnabled,
@@ -26,12 +28,21 @@ import {
 import { NUDGE_CHANNELS } from '../../lib/nudge';
 import { getNotifPermission, NotifPermission, requestNotifPermission } from '../../lib/notifications';
 import { resetOnboarding } from '../../lib/onboarding';
-import { colors, radius, shadow, space, type as t } from '../../lib/theme';
+import { radius, space } from '../../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../../lib/theme-context';
 
 const CURRENCIES: CurrencyCode[] = ['PHP', 'USD', 'EUR'];
 const CURRENCY_SYMBOLS: Record<CurrencyCode, string> = { PHP: '₱', USD: '$', EUR: '€' };
 
+const APPEARANCES: { value: Appearance; label: string }[] = [
+  { value: 'system', label: 'System' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+];
+
 function CurrencyButton({ c, isSelected, onPress }: { c: CurrencyCode; isSelected: boolean; onPress: () => void }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const fill = useSharedValue(0);
   const origin = useSharedValue<'left' | 'right'>('left');
   const textAnim = useSharedValue(0); // 0 = code, 1 = symbol
@@ -113,6 +124,7 @@ function CurrencyButton({ c, isSelected, onPress }: { c: CurrencyCode; isSelecte
 }
 
 function Card({ children, index }: { children: React.ReactNode; index: number }) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <Reveal index={index} from={22}>
       <View style={styles.card}>{children}</View>
@@ -124,6 +136,8 @@ function Card({ children, index }: { children: React.ReactNode; index: number })
  *  surfaces a fix-it hint when notifications are blocked (so the toggle can't
  *  silently read "on" while iOS drops every reminder). */
 function NudgeRemindersCard({ index }: { index: number }) {
+  const { colors, type: t } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { nudgesEnabled } = useSettings();
   const [perm, setPerm] = useState<NotifPermission>('granted');
 
@@ -182,6 +196,8 @@ const ABOUT_ROWS: { title: string; sub: string; href: '/about' | '/privacy' | '/
 ];
 
 function AboutRow({ title, sub, href, last }: (typeof ABOUT_ROWS)[number] & { last: boolean }) {
+  const { colors, type: t } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   return (
     <PressableScale
@@ -200,9 +216,36 @@ function AboutRow({ title, sub, href, last }: (typeof ABOUT_ROWS)[number] & { la
   );
 }
 
-export default function SettingsScreen() {
+/** Entry to the back-up & restore screen — the only safety net for a local-first,
+ *  no-account ledger. */
+function DataRow({ index }: { index: number }) {
+  const { colors, type: t } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const router = useRouter();
-  const { defaultCurrency, channel, shameMode } = useSettings();
+  return (
+    <Reveal index={index} from={20}>
+      <PressableScale
+        onPress={() => router.push('/backup')}
+        scaleTo={0.98}
+        style={styles.row}
+        accessibilityRole="button"
+        accessibilityLabel="Back up and restore your ledger"
+      >
+        <View style={styles.toggleText}>
+          <Text style={t.h3}>Back up &amp; restore</Text>
+          <Text style={styles.sub}>Save your ledger, or bring it to a new phone</Text>
+        </View>
+        <Icon name="chevronRight" size={20} color={colors.inkFaint} strokeWidth={2.2} />
+      </PressableScale>
+    </Reveal>
+  );
+}
+
+export default function SettingsScreen() {
+  const { colors, type: t } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  const router = useRouter();
+  const { defaultCurrency, channel, shameMode, appearance } = useSettings();
 
   const replayTour = () => {
     resetOnboarding();
@@ -215,6 +258,30 @@ export default function SettingsScreen() {
 
       <View style={styles.stack}>
         <Card index={0}>
+          <Text style={[t.overline, styles.cardLabel]}>Appearance</Text>
+          <View style={styles.segmentRow}>
+            {APPEARANCES.map((a) => {
+              const on = a.value === appearance;
+              return (
+                <PressableScale
+                  key={a.value}
+                  onPress={() => setAppearance(a.value)}
+                  scaleTo={0.94}
+                  style={[styles.curChip, on && styles.curChipOn]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                >
+                  <Text style={[styles.curText, styles.channelText, on && styles.curTextOn]}>
+                    {a.label}
+                  </Text>
+                </PressableScale>
+              );
+            })}
+          </View>
+          <Text style={styles.sub}>System follows your phone&apos;s light/dark switch.</Text>
+        </Card>
+
+        <Card index={1}>
           <Text style={[t.overline, styles.cardLabel]}>Default currency</Text>
           <View style={styles.segmentRow}>
             {CURRENCIES.map((c) => (
@@ -228,9 +295,9 @@ export default function SettingsScreen() {
           </View>
         </Card>
 
-        <NudgeRemindersCard index={1} />
+        <NudgeRemindersCard index={2} />
 
-        <Card index={2}>
+        <Card index={3}>
           <Text style={[t.overline, styles.cardLabel]}>Nudges go through</Text>
           <View style={styles.segmentRow}>
             {NUDGE_CHANNELS.map((c) => {
@@ -257,7 +324,7 @@ export default function SettingsScreen() {
           </Text>
         </Card>
 
-        <Card index={3}>
+        <Card index={4}>
           <View style={styles.toggleRow}>
             <View style={styles.toggleText}>
               <Text style={t.h3}>Public shame mode 😈</Text>
@@ -274,7 +341,7 @@ export default function SettingsScreen() {
           </View>
         </Card>
 
-        <Reveal index={4} from={20}>
+        <Reveal index={5} from={20}>
           <PressableScale onPress={replayTour} scaleTo={0.98} style={styles.row}>
             <View style={styles.toggleText}>
               <Text style={t.h3}>Replay the tour</Text>
@@ -284,7 +351,9 @@ export default function SettingsScreen() {
           </PressableScale>
         </Reveal>
 
-        <Reveal index={5} from={20}>
+        <DataRow index={6} />
+
+        <Reveal index={7} from={20}>
           <View style={styles.aboutCard}>
             <Text style={[t.overline, styles.cardLabel, styles.aboutLabel]}>About</Text>
             {ABOUT_ROWS.map((row, i) => (
@@ -293,7 +362,7 @@ export default function SettingsScreen() {
           </View>
         </Reveal>
 
-        <Reveal index={6} from={18}>
+        <Reveal index={8} from={18}>
           <Text style={styles.footer}>OweMe 📦 · v1.0 · made to get your stuff back</Text>
         </Reveal>
       </View>
@@ -301,14 +370,14 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   stack: { gap: space.md },
   card: {
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.lg,
     padding: space.lg,
     gap: space.md,
-    ...shadow.card,
+    ...th.shadow.card,
   },
   cardLabel: {},
   segmentRow: { flexDirection: 'row', gap: space.sm },
@@ -316,21 +385,21 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: space.md,
     borderRadius: radius.md,
-    backgroundColor: colors.bgSunken,
+    backgroundColor: th.colors.bgSunken,
     alignItems: 'center',
   },
-  curChipOn: { backgroundColor: colors.ink },
-  curText: { ...t.h3, fontSize: 15, color: colors.inkSoft },
+  curChipOn: { backgroundColor: th.colors.ink },
+  curText: { ...th.type.h3, fontSize: 15, color: th.colors.inkSoft },
   channelText: { fontSize: 12 },
-  curTextOn: { color: colors.surface },
+  curTextOn: { color: th.colors.surface },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.lg,
     padding: space.lg,
-    ...shadow.card,
+    ...th.shadow.card,
   },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
   toggleText: { flex: 1, gap: 4 },
@@ -338,18 +407,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    backgroundColor: colors.accentSoft,
+    backgroundColor: th.colors.accentSoft,
     borderRadius: radius.md,
     paddingVertical: space.md,
     paddingHorizontal: space.md,
   },
-  permHintText: { ...t.small, color: colors.accentPress, fontWeight: '600', flex: 1 },
+  permHintText: { ...th.type.small, color: th.colors.accentPress, fontWeight: '600', flex: 1 },
   aboutCard: {
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderRadius: radius.lg,
     paddingHorizontal: space.lg,
     paddingTop: space.lg,
-    ...shadow.card,
+    ...th.shadow.card,
   },
   aboutLabel: { marginBottom: space.xs },
   aboutRow: {
@@ -358,7 +427,7 @@ const styles = StyleSheet.create({
     gap: space.lg,
     paddingVertical: space.md,
   },
-  aboutRowDivider: { borderBottomWidth: 1, borderBottomColor: colors.hairline },
-  sub: { ...t.small, color: colors.inkSoft },
-  footer: { ...t.small, color: colors.inkFaint, textAlign: 'center', marginTop: space.lg },
+  aboutRowDivider: { borderBottomWidth: 1, borderBottomColor: th.colors.hairline },
+  sub: { ...th.type.small, color: th.colors.inkSoft },
+  footer: { ...th.type.small, color: th.colors.inkFaint, textAlign: 'center', marginTop: space.lg },
 });

@@ -15,7 +15,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { PressableScale } from './PressableScale';
-import { colors, radius, shadow, space, type as t } from '../lib/theme';
+import { radius, space } from '../lib/theme';
+import { Theme, useThemedStyles } from '../lib/theme-context';
 import { spring } from '../lib/motion';
 
 type Variant = 'primary' | 'ghost' | 'pill';
@@ -30,6 +31,7 @@ interface Props {
 }
 
 export function Button({ label, onPress, variant = 'primary', icon, disabled, style }: Props) {
+  const styles = useThemedStyles(makeStyles);
   const press = useSharedValue(0);
   const reduce = useReducedMotion();
 
@@ -71,7 +73,7 @@ export function Button({ label, onPress, variant = 'primary', icon, disabled, st
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (th: Theme) => StyleSheet.create({
   base: {
     height: 56,
     borderRadius: radius.pill,
@@ -81,17 +83,17 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   primary: {
-    backgroundColor: colors.accent,
-    ...shadow.card,
+    backgroundColor: th.colors.accent,
+    ...th.shadow.card,
   },
   ghost: {
-    backgroundColor: colors.surface,
+    backgroundColor: th.colors.surface,
     borderWidth: 1.5,
-    borderColor: colors.hairline,
+    borderColor: th.colors.hairline,
   },
   pill: {
     height: 44,
-    backgroundColor: colors.surfaceWarm,
+    backgroundColor: th.colors.surfaceWarm,
   },
   disabled: { opacity: 0.45 },
   highlight: {
@@ -103,7 +105,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  label: { ...t.h3, fontSize: 17 },
-  labelOnAccent: { color: colors.onAccent },
-  labelInk: { color: colors.ink },
+  label: { ...th.type.h3, fontSize: 17 },
+  labelOnAccent: { color: th.colors.onAccent },
+  labelInk: { color: th.colors.ink },
 });

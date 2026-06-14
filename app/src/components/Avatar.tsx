@@ -5,14 +5,15 @@
 
 import { StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
-import { colors, radius } from '../lib/theme';
+import { radius } from '../lib/theme';
+import { Palette } from '../lib/theme';
+import { useTheme } from '../lib/theme-context';
 
-const TINTS = [colors.accentSoft, colors.sand, colors.mint, colors.surfaceWarm, colors.grave];
-
-function tintFor(name: string): string {
+function tintFor(name: string, c: Palette): string {
+  const tints = [c.accentSoft, c.sand, c.mint, c.surfaceWarm, c.grave];
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return TINTS[h % TINTS.length];
+  return tints[h % tints.length];
 }
 
 interface Props {
@@ -24,7 +25,8 @@ interface Props {
 }
 
 export function Avatar({ name, emoji, size = 48, uri }: Props) {
-  const disc = { width: size, height: size, borderRadius: radius.pill, backgroundColor: tintFor(name) };
+  const { colors } = useTheme();
+  const disc = { width: size, height: size, borderRadius: radius.pill, backgroundColor: tintFor(name, colors) };
   if (uri) {
     return (
       <Image

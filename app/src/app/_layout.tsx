@@ -6,6 +6,7 @@ import * as Notifications from 'expo-notifications';
 import * as QuickActions from 'expo-quick-actions';
 import { useQuickActionCallback } from 'expo-quick-actions/hooks';
 import * as SplashScreen from 'expo-splash-screen';
+import * as SystemUI from 'expo-system-ui';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Toaster } from '../components/Toaster';
@@ -13,7 +14,8 @@ import { AnimatedSplash } from '../components/AnimatedSplash';
 import { ACTION_RETURNED } from '../lib/notifications';
 import { markReturned, unreturn } from '../lib/store';
 import { showToast } from '../lib/toast';
-import { colors, graveyard } from '../lib/theme';
+import { graveyard } from '../lib/theme';
+import { ThemeProvider, useTheme } from '../lib/theme-context';
 
 const IS_NATIVE = Platform.OS === 'ios' || Platform.OS === 'android';
 
@@ -68,39 +70,64 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <StatusBar style="dark" />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: colors.bg },
-          }}
-        >
-          {/* First launch detours here via the guard in (tabs)/_layout. */}
-          <Stack.Screen name="onboarding" options={{ animation: 'fade', gestureEnabled: false }} />
-          <Stack.Screen name="(tabs)" />
-          {/* Modal presentation already slides up from the bottom; stacking an
-              explicit `animation` on top made the modal present-then-dismiss on
-              the first open when launched over a pushed card (RN 0.85 / iOS 26),
-              needing a second tap. Let the modal own its transition. */}
-          <Stack.Screen name="add" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="loans" options={{ animation: 'slide_from_right' }} />
-          {/* Dark graveyard route: paint its native container dark too, so the
-              slide transition doesn't flash the cream base at the edges. */}
-          <Stack.Screen
-            name="shame"
-            options={{ animation: 'slide_from_right', contentStyle: { backgroundColor: graveyard.base } }}
-          />
-          <Stack.Screen name="loan/[id]" options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="borrower/[id]" options={{ animation: 'slide_from_right' }} />
-          {/* Settings › About sub-screens (content/forms, frontend only). */}
-          <Stack.Screen name="about" options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="privacy" options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="feedback" options={{ animation: 'slide_from_right' }} />
-          <Stack.Screen name="rate" options={{ animation: 'slide_from_right' }} />
-        </Stack>
-        <Toaster />
+        <ThemeProvider>
+          <ThemedNavigation />
+          <Toaster />
+        </ThemeProvider>
       </SafeAreaProvider>
       {!splashDone && <AnimatedSplash onDone={() => setSplashDone(true)} />}
     </GestureHandlerRootView>
+  );
+}
+
+/**
+ * The navigator + status bar, themed. Lives under ThemeProvider so it can paint
+ * the native container, status bar, and OS root background to match the active
+ * scheme. The root background is set via expo-system-ui (not just contentStyle)
+ * to kill the iOS-26 corner flash on push/pop transitions.
+ */
+function ThemedNavigation() {
+  const { colors, scheme } = useTheme();
+
+  useEffect(() => {
+    void SystemUI.setBackgroundColorAsync(colors.bg).catch(() => {});
+  }, [colors.bg]);
+
+  return (
+    <>
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: colors.bg },
+        }}
+      >
+        {/* First launch detours here via the guard in (tabs)/_layout. */}
+        <Stack.Screen name="onboarding" options={{ animation: 'fade', gestureEnabled: false }} />
+        <Stack.Screen name="(tabs)" />
+        {/* Modal presentation already slides up from the bottom; stacking an
+            explicit `animation` on top made the modal present-then-dismiss on
+            the first open when launched over a pushed card (RN 0.85 / iOS 26),
+            needing a second tap. Let the modal own its transition. */}
+        <Stack.Screen name="add" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="loans" options={{ animation: 'slide_from_right' }} />
+        {/* Hall of Shame: always its own graveyard-dark place regardless of
+            theme — paint its native container dark too so the slide doesn't
+            flash the base at the edges. */}
+        <Stack.Screen
+          name="shame"
+          options={{ animation: 'slide_from_right', contentStyle: { backgroundColor: graveyard.base } }}
+        />
+        <Stack.Screen name="loan/[id]" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="borrower/[id]" options={{ animation: 'slide_from_right' }} />
+        {/* Settings › About sub-screens (content/forms, frontend only). */}
+        <Stack.Screen name="about" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="privacy" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="feedback" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="rate" options={{ animation: 'slide_from_right' }} />
+        {/* Back up & restore (Settings › Your data; frontend / device-to-device). */}
+        <Stack.Screen name="backup" options={{ animation: 'slide_from_right' }} />
+      </Stack>
+    </>
   );
 }

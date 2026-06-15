@@ -5,6 +5,7 @@
  */
 
 import { StyleSheet, Text, View } from 'react-native';
+import { Icon, IconName } from './Icon';
 import { radius, space } from '../lib/theme';
 import { useTheme } from '../lib/theme-context';
 import { Loan } from '../lib/types';
@@ -12,7 +13,7 @@ import { daysSince, daysUntil, isDueSoon, isOverdue } from '../lib/format';
 
 type Tone = 'sand' | 'mint' | 'grave' | 'warn';
 
-export function Chip({ label, tone = 'sand' }: { label: string; tone?: Tone }) {
+export function Chip({ label, tone = 'sand', icon }: { label: string; tone?: Tone; icon?: IconName }) {
   const { colors } = useTheme();
   const TONES: Record<Tone, { bg: string; fg: string }> = {
     sand: { bg: colors.sand, fg: colors.sandInk },
@@ -23,6 +24,7 @@ export function Chip({ label, tone = 'sand' }: { label: string; tone?: Tone }) {
   const c = TONES[tone];
   return (
     <View style={[styles.chip, { backgroundColor: c.bg }]}>
+      {icon && <Icon name={icon} size={15} color={c.fg} strokeWidth={2.2} />}
       <Text style={[styles.text, { color: c.fg }]}>{label}</Text>
     </View>
   );
@@ -30,8 +32,8 @@ export function Chip({ label, tone = 'sand' }: { label: string; tone?: Tone }) {
 
 /** Status chip for the history archive. */
 export function StatusChip({ status }: { status: Loan['status'] }) {
-  if (status === 'returned') return <Chip label="Found its way home 🎉" tone="mint" />;
-  if (status === 'written_off') return <Chip label="Written off 🪦" tone="grave" />;
+  if (status === 'returned') return <Chip label="Found its way home" tone="mint" icon="party" />;
+  if (status === 'written_off') return <Chip label="Written off" tone="grave" icon="grave" />;
   return <Chip label="Out in the wild" tone="sand" />;
 }
 
@@ -48,6 +50,9 @@ export function AgeChip({ loan }: { loan: Loan }) {
 
 const styles = StyleSheet.create({
   chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     alignSelf: 'flex-start',
     paddingHorizontal: space.md,
     paddingVertical: 5,

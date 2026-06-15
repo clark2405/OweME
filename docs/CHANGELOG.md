@@ -51,6 +51,24 @@ clean; `expo export` bundles clean.
 - **Removed emoji from the loan action dock** — "Send a nudge" / "Mark as
   returned" / "Write it off" (the active-state buttons) are now plain. The
   resolved-state lines (came-home / say-thanks / lend-again) still carry emoji.
+- **Status/label emoji → line-icon SVGs.** Added `trophy` / `snail` / `party` /
+  `grave` / `star` to the `Icon` set (24×24, 2px rounded, matches the family),
+  and swapped the inline emoji for them: People → 🏆 Most wanted, 🐌 Slowest;
+  History payoff + the per-row status chips → 🎉 came-home, 🪦 written-off;
+  Settings → ⭐ Rate OweMe. `Chip` gained an optional `icon` prop so the status
+  chips render icon + text. The `star` follows the passed color (coral in
+  Settings); the four status glyphs are **solid + intentionally multi-tone** (a
+  small illustrative `GLYPH` palette, emoji-like, ignoring the passed color):
+  **gold** trophy, **coral cone + multicolor confetti** party, **tan-shell +
+  sage-body** snail, **slate headstone with an etched cross** grave. Mid-tones
+  chosen to read on both the dark "feature" cards and the lighter status chips —
+  so they keep the emoji's color/weight instead of reading as faint hairlines.
+  Follow-up: added a `bellOff` (Settings notifications-off hint — a refined domed
+  bell with a slash that cuts through via a background knockout, so it clearly
+  reads as *muted*) and a **3D isometric kraft
+  `parcel`** (the OweMe 📦 brand mark on the Home overline + the Settings footer,
+  three shaded faces matching the onboarding box); those inline-in-text spots
+  became icon + text rows.
 - **Haptics on the delight moments, each with its own signature** (offbrand: no
   two share the identical feel). Extended `lib/haptics` with `soft` / `rigid` /
   `selection` / `step` alongside `tap` / `success`, then wired: **Rate stars** →

@@ -138,7 +138,11 @@ export default function HomeScreen() {
     <View style={styles.root}>
       <Screen scroll bare contentStyle={{ paddingBottom: listClearance }}>
         <Reveal index={0} from={10}>
-          <Text style={t.overline}>OweMe 📦 · Out in the wild</Text>
+          <View style={styles.overlineRow}>
+            <Text style={t.overline}>OweMe</Text>
+            <Icon name="parcel" size={17} />
+            <Text style={t.overline}>· Out in the wild</Text>
+          </View>
         </Reveal>
         <Reveal index={1} clip from={44}>
           <View style={styles.headRow}>
@@ -342,6 +346,7 @@ function StatTile({
 
 const makeStyles = (th: Theme) => StyleSheet.create({
   root: { flex: 1 },
+  overlineRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   skelHead: { marginBottom: space.xl },
   skelTitle: { marginTop: space.md },
   skelGap: { marginTop: 8 },

@@ -14,6 +14,27 @@ const AnimatedPath = Animated.createAnimatedComponent(Path) as any;
 const AnimatedCircle = Animated.createAnimatedComponent(Circle) as any;
 const AnimatedLine = Animated.createAnimatedComponent(Line) as any;
 
+// Illustrative multi-tone palette for the celebratory/status glyphs (trophy,
+// party, snail, grave). These are emoji replacements, so they're intentionally
+// colorful and ignore the passed `color` — mid-tones chosen to read on both the
+// dark "feature" cards and the lighter status chips.
+const GLYPH = {
+  gold: '#F4C44E',
+  goldDeep: '#D89F36',
+  cone: '#FF6B4F',
+  confetti: ['#FFCE83', '#63C99A', '#FF8A5C', '#B79CE0'],
+  shell: '#D7A86E',
+  shellSpiral: '#9C6B3F',
+  body: '#9FB39C',
+  stone: '#A39CB0',
+  stoneEtch: '#6E6878',
+  // Isometric cardboard box faces (matches the onboarding box / logo).
+  kraftTop: '#F2E1C4',
+  kraftLeft: '#E6CBA4',
+  kraftRight: '#CDAE83',
+  kraftStroke: '#6E5436',
+};
+
 export type IconName =
   | 'home'
   | 'people'
@@ -36,7 +57,14 @@ export type IconName =
   | 'eye'
   | 'bug'
   | 'bulb'
-  | 'heart';
+  | 'heart'
+  | 'trophy'
+  | 'snail'
+  | 'party'
+  | 'grave'
+  | 'star'
+  | 'bellOff'
+  | 'parcel';
 
 interface Props {
   name: IconName;
@@ -284,6 +312,84 @@ export function Icon({ name, size = 24, color, strokeWidth = 2, focused = false,
           d="M12 19.6C12 19.6 4.4 15 4.4 9.7A3.5 3.5 0 0 1 12 7.6a3.5 3.5 0 0 1 7.6 2.1C19.6 15 12 19.6 12 19.6Z"
           {...common}
         />
+      )}
+
+      {/* The celebratory/status glyphs are drawn SOLID + multi-tone so they carry
+          the same colorful weight as the emoji they replaced (they ignore the
+          passed `color`; see GLYPH). */}
+      {name === 'trophy' && (
+        <>
+          {/* gold cup + stem + base, with thin wire handles */}
+          <Path d="M6.5 4h11v3.4a5.5 5.5 0 0 1-11 0Z" fill={GLYPH.gold} />
+          <Path d="M6.7 5.3H5a1.7 1.7 0 0 0 0 3.4h2" fill="none" stroke={GLYPH.gold} strokeWidth={strokeWidth} strokeLinecap="round" />
+          <Path d="M17.3 5.3H19a1.7 1.7 0 0 1 0 3.4h-2" fill="none" stroke={GLYPH.gold} strokeWidth={strokeWidth} strokeLinecap="round" />
+          <Path d="M10.7 12.2h2.6V16h-2.6Z" fill={GLYPH.goldDeep} />
+          <Path d="M7.6 20.4 9.1 16.3h5.8l1.5 4.1Z" fill={GLYPH.goldDeep} />
+        </>
+      )}
+
+      {name === 'snail' && (
+        <>
+          {/* sage body + tan shell with a brown spiral + antennae */}
+          <Path d="M3 18.7c-.7-2.5.6-4.6 2.9-5.3.9-.3 1.9-.2 2.7.1l.7 5.2H3.2Z" fill={GLYPH.body} />
+          <Path d="M5.6 13.2 4.3 10.9" fill="none" stroke={GLYPH.body} strokeWidth={strokeWidth} strokeLinecap="round" />
+          <Path d="M5.6 13.2 7.2 11.4" fill="none" stroke={GLYPH.body} strokeWidth={strokeWidth} strokeLinecap="round" />
+          <Circle cx="13.6" cy="12.3" r="5.3" fill={GLYPH.shell} />
+          <Path d="M13.6 12.3a2.6 2.6 0 1 1-2.5-2.6" fill="none" stroke={GLYPH.shellSpiral} strokeWidth={1.8} strokeLinecap="round" />
+        </>
+      )}
+
+      {name === 'party' && (
+        <>
+          {/* coral popper cone + multicolor confetti — "came home" */}
+          <Path d="M3.5 20.5 8 9.5l6.5 6.5Z" fill={GLYPH.cone} />
+          <Circle cx="13.2" cy="5" r="1.3" fill={GLYPH.confetti[0]} />
+          <Circle cx="19.4" cy="8.4" r="1.3" fill={GLYPH.confetti[1]} />
+          <Circle cx="20" cy="14" r="1.3" fill={GLYPH.confetti[2]} />
+          <Path d="M15 8.2 16.7 6.5" fill="none" stroke={GLYPH.confetti[3]} strokeWidth={strokeWidth} strokeLinecap="round" />
+          <Path d="M15.9 12.4 17.9 13.2" fill="none" stroke={GLYPH.confetti[0]} strokeWidth={strokeWidth} strokeLinecap="round" />
+        </>
+      )}
+
+      {name === 'grave' && (
+        <>
+          {/* slate headstone with an etched cross + ground — "written off" */}
+          <Path d="M6 21V10a6 6 0 0 1 12 0v11Z" fill={GLYPH.stone} />
+          <Path d="M12 12.2v6" fill="none" stroke={GLYPH.stoneEtch} strokeWidth={2.2} strokeLinecap="round" />
+          <Path d="M9.3 14.4h5.4" fill="none" stroke={GLYPH.stoneEtch} strokeWidth={2.2} strokeLinecap="round" />
+          <Path d="M4 21h16" fill="none" stroke={GLYPH.stone} strokeWidth={strokeWidth} strokeLinecap="round" />
+        </>
+      )}
+
+      {name === 'star' && (
+        <Path
+          d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"
+          fill={common.stroke}
+          stroke={common.stroke}
+          strokeWidth={strokeWidth}
+          strokeLinejoin="round"
+        />
+      )}
+
+      {name === 'bellOff' && (
+        <>
+          {/* refined domed bell + clapper, with a slash that cuts through (a
+              background knockout under it gives a clean gap) — "notifications off" */}
+          <Path d="M12 4.2a1.4 1.4 0 0 0-1.4 1.4v.5A5.3 5.3 0 0 0 6.8 11.6c0 3-.7 4.2-1.4 5a.7.7 0 0 0 .5 1.2h12.2a.7.7 0 0 0 .5-1.2c-.7-.8-1.4-2-1.4-5a5.3 5.3 0 0 0-3.8-5.5v-.5A1.4 1.4 0 0 0 12 4.2Z" {...common} />
+          <Path d="M9.8 19.2a2.3 2.3 0 0 0 4.4 0" {...common} />
+          <Path d="M4.5 4.5 19.5 19.5" fill="none" stroke={colors.bg} strokeWidth={strokeWidth + 2.5} strokeLinecap="round" />
+          <Path d="M4.5 4.5 19.5 19.5" {...common} />
+        </>
+      )}
+
+      {name === 'parcel' && (
+        <>
+          {/* 3D isometric kraft box — the OweMe 📦 brand mark (matches the
+              onboarding box). Top lightest, left mid, right darkest. */}
+          <Path d="M12 3 20 7.5 12 12 4 7.5Z" fill={GLYPH.kraftTop} stroke={GLYPH.kraftStroke} strokeWidth={1.3} strokeLinejoin="round" />
+          <Path d="M4 7.5 12 12 12 20.5 4 16Z" fill={GLYPH.kraftLeft} stroke={GLYPH.kraftStroke} strokeWidth={1.3} strokeLinejoin="round" />
+          <Path d="M20 7.5 12 12 12 20.5 20 16Z" fill={GLYPH.kraftRight} stroke={GLYPH.kraftStroke} strokeWidth={1.3} strokeLinejoin="round" />
+        </>
       )}
     </Svg>
   );

@@ -75,7 +75,10 @@ export default function BorrowersScreen() {
             scaleTo={0.98}
             style={styles.wantedCard}
           >
-            <Text style={styles.wantedOverline}>🏆 Most wanted</Text>
+            <View style={styles.wantedHead}>
+              <Icon name="trophy" size={17} color={colors.onFeature} strokeWidth={2.2} />
+              <Text style={styles.wantedOverline}>Most wanted</Text>
+            </View>
             <Text style={styles.wantedTitle} numberOfLines={1}>{loanLabel(wanted.loan)}</Text>
             <Text style={styles.wantedSub}>
               {wanted.borrower.name} · out {relativeDays(wanted.loan.lentAt)}
@@ -84,9 +87,12 @@ export default function BorrowersScreen() {
               <View style={styles.wantedDivider} />
             )}
             {slowest && (
-              <Text style={styles.wantedSlow}>
-                🐌 Slowest to return: {slowest.borrower.name} · ~{slowest.avgDays}d avg
-              </Text>
+              <View style={styles.wantedSlowRow}>
+                <Icon name="snail" size={19} color={colors.onFeature} strokeWidth={2.3} />
+                <Text style={styles.wantedSlow}>
+                  Slowest to return: {slowest.borrower.name} · ~{slowest.avgDays}d avg
+                </Text>
+              </View>
             )}
           </PressableScale>
         </Reveal>
@@ -190,10 +196,10 @@ const makeStyles = (th: Theme) => StyleSheet.create({
     gap: 4,
     ...th.shadow.card,
   },
+  wantedHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: space.xs },
   wantedOverline: {
     ...th.type.overline,
     color: th.colors.onFeatureDim,
-    marginBottom: space.xs,
   },
   wantedTitle: { ...th.type.h2, color: th.colors.onFeature },
   wantedSub: { ...th.type.small, color: th.colors.onFeatureDim },
@@ -202,7 +208,8 @@ const makeStyles = (th: Theme) => StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.1)',
     marginVertical: space.md,
   },
-  wantedSlow: { ...th.type.small, color: th.colors.onFeature },
+  wantedSlowRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  wantedSlow: { ...th.type.small, color: th.colors.onFeature, flex: 1 },
   shameCard: {
     flexDirection: 'row',
     alignItems: 'center',

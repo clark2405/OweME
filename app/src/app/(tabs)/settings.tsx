@@ -14,7 +14,7 @@ import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
 import { Reveal } from '../../components/Reveal';
 import { PressableScale } from '../../components/PressableScale';
-import { Icon } from '../../components/Icon';
+import { Icon, IconName } from '../../components/Icon';
 import {
   Appearance,
   CurrencyCode,
@@ -144,7 +144,7 @@ function NudgeRemindersCard({ index }: { index: number }) {
   // Re-check on focus so returning from iOS Settings clears/sets the hint.
   useFocusEffect(
     useCallback(() => {
-      getNotifPermission().then(setPerm).catch(() => {});
+      getNotifPermission().then(setPerm).catch(() => { });
     }, []),
   );
 
@@ -160,7 +160,7 @@ function NudgeRemindersCard({ index }: { index: number }) {
       <View style={styles.toggleRow}>
         <View style={styles.toggleText}>
           <Text style={t.h3}>Nudge reminders</Text>
-          <Text style={styles.sub}>Let OweMe poke you when stuff ages 👀</Text>
+          <Text style={styles.sub}>Let OweMe poke you when stuff ages</Text>
         </View>
         <Switch
           value={nudgesEnabled}
@@ -176,8 +176,9 @@ function NudgeRemindersCard({ index }: { index: number }) {
           accessibilityRole="button"
           accessibilityLabel="Turn on notifications in iOS Settings"
         >
+          <Icon name="bellOff" size={18} color={colors.accentPress} strokeWidth={2} />
           <Text style={styles.permHintText}>
-            🔕 Notifications are off in iOS Settings — turn them on so nudges can reach you.
+            Notifications are off in iOS Settings — turn them on so nudges can reach you.
           </Text>
           <Icon name="chevronRight" size={18} color={colors.accentPress} strokeWidth={2.2} />
         </PressableScale>
@@ -188,14 +189,14 @@ function NudgeRemindersCard({ index }: { index: number }) {
 
 // About / meta rows. Each opens its own sub-screen (content + forms are
 // frontend only for now — see the route files).
-const ABOUT_ROWS: { title: string; sub: string; href: '/about' | '/privacy' | '/feedback' | '/rate' }[] = [
+const ABOUT_ROWS: { title: string; sub: string; href: '/about' | '/privacy' | '/feedback' | '/rate'; icon?: IconName }[] = [
   { title: 'About OweMe', sub: 'What this little app is for', href: '/about' },
   { title: 'Privacy', sub: 'Your stuff stays on your phone', href: '/privacy' },
   { title: 'Send feedback', sub: 'Tell us what’s missing', href: '/feedback' },
-  { title: 'Rate OweMe ⭐', sub: 'Help others get their stuff back', href: '/rate' },
+  { title: 'Rate OweMe', sub: 'Help others get their stuff back', href: '/rate', icon: 'star' },
 ];
 
-function AboutRow({ title, sub, href, last }: (typeof ABOUT_ROWS)[number] & { last: boolean }) {
+function AboutRow({ title, sub, href, icon, last }: (typeof ABOUT_ROWS)[number] & { last: boolean }) {
   const { colors, type: t } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
@@ -208,7 +209,10 @@ function AboutRow({ title, sub, href, last }: (typeof ABOUT_ROWS)[number] & { la
       accessibilityLabel={title}
     >
       <View style={styles.toggleText}>
-        <Text style={t.h3}>{title}</Text>
+        <View style={styles.aboutTitleRow}>
+          <Text style={t.h3}>{title}</Text>
+          {icon && <Icon name={icon} size={18} color={colors.accent} strokeWidth={2} />}
+        </View>
         <Text style={styles.sub}>{sub}</Text>
       </View>
       <Icon name="chevronRight" size={20} color={colors.inkFaint} strokeWidth={2.2} />
@@ -363,7 +367,11 @@ export default function SettingsScreen() {
         </Reveal>
 
         <Reveal index={8} from={18}>
-          <Text style={styles.footer}>OweMe 📦 · v1.0 · made to get your stuff back</Text>
+          <View style={styles.footerRow}>
+            <Text style={styles.footer}>OweMe</Text>
+            <Icon name="parcel" size={17} />
+            <Text style={styles.footer}>· v1.0 · made to get your stuff back</Text>
+          </View>
         </Reveal>
       </View>
     </Screen>
@@ -403,6 +411,7 @@ const makeStyles = (th: Theme) => StyleSheet.create({
   },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
   toggleText: { flex: 1, gap: 4 },
+  aboutTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   permHint: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -429,5 +438,13 @@ const makeStyles = (th: Theme) => StyleSheet.create({
   },
   aboutRowDivider: { borderBottomWidth: 1, borderBottomColor: th.colors.hairline },
   sub: { ...th.type.small, color: th.colors.inkSoft },
-  footer: { ...th.type.small, color: th.colors.inkFaint, textAlign: 'center', marginTop: space.lg },
+  footerRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    marginTop: space.lg,
+  },
+  footer: { ...th.type.small, color: th.colors.inkFaint, textAlign: 'center' },
 });

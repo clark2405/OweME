@@ -91,7 +91,10 @@ export default function HistoryScreen() {
           {/* Payoff tally — the satisfying part: what actually came back. */}
           <Reveal index={0} from={24}>
             <View style={styles.payoff}>
-              <Text style={styles.payoffOverline}>🎉 Came home</Text>
+              <View style={styles.payoffHead}>
+                <Icon name="party" size={17} color={colors.onFeature} strokeWidth={2.2} />
+                <Text style={styles.payoffOverline}>Came home</Text>
+              </View>
               <View style={styles.payoffRow}>
                 <View style={styles.payoffCell}>
                   <Text style={styles.payoffNum}>{stats.itemsReturned}</Text>
@@ -111,9 +114,12 @@ export default function HistoryScreen() {
                 </View>
               </View>
               {stats.writtenOff > 0 && (
-                <Text style={styles.payoffLoss}>
-                  🪦 {stats.writtenOff} written off — we don&apos;t talk about those
-                </Text>
+                <View style={styles.payoffLossRow}>
+                  <Icon name="grave" size={16} color={colors.onFeature} strokeWidth={2.3} />
+                  <Text style={styles.payoffLoss}>
+                    {stats.writtenOff} written off — we don&apos;t talk about those
+                  </Text>
+                </View>
               )}
             </View>
           </Reveal>
@@ -232,20 +238,23 @@ const makeStyles = (th: Theme) => StyleSheet.create({
     gap: space.md,
     ...th.shadow.card,
   },
+  payoffHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   payoffOverline: { ...th.type.overline, color: th.colors.onFeatureDim },
   payoffRow: { flexDirection: 'row', alignItems: 'center' },
   payoffCell: { flex: 1, alignItems: 'center', gap: 4 },
   payoffNum: { ...th.type.numeral, color: th.colors.onFeature, fontSize: 34, lineHeight: 38 },
   payoffLabel: { ...th.type.small, color: th.colors.onFeatureDim },
   payoffDivider: { width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.12)' },
-  payoffLoss: {
-    ...th.type.small,
-    color: th.colors.onFeature,
-    textAlign: 'center',
+  payoffLossRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.1)',
     paddingTop: space.md,
   },
+  payoffLoss: { ...th.type.small, color: th.colors.onFeature },
   search: {
     flexDirection: 'row',
     alignItems: 'center',

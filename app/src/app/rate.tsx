@@ -39,6 +39,7 @@ import { PressableScale } from '../components/PressableScale';
 import { Icon } from '../components/Icon';
 import { Button } from '../components/Button';
 import { showToast } from '../lib/toast';
+import { haptics } from '../lib/haptics';
 import { expoOut, reduceMotion, spring } from '../lib/motion';
 import { space } from '../lib/theme';
 import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
@@ -174,6 +175,9 @@ export default function RateScreen() {
     if (r > 5) r = 5;
     if (r === lastR.value) return;
     lastR.value = r;
+    // Escalating buzz: heavier toward 5★, lighter toward 1★, so the intensity
+    // itself signals where you are as you tap/slide across.
+    runOnJS(haptics.step)(r);
     setLevel(r);
     runOnJS(setRating)(r);
   };

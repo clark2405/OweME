@@ -5,10 +5,18 @@
  * lent-date can't be in the future, a due-date can't be in the past.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { PressableScale } from './PressableScale';
 import { Icon } from './Icon';
+import { duration, expoOut, reduceMotion } from '../lib/motion';
 import { radius, space } from '../lib/theme';
 import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
 
@@ -43,6 +51,30 @@ export function DateSheet({ visible, value, title = 'Pick a date', minDate, maxD
   const styles = useThemedStyles(makeStyles);
   const [view, setView] = useState(() => startMonth(value));
 
+  // Fade the scrim and slide the sheet as separate layers (same as
+  // BorrowerEditSheet) — the default Modal "slide" drags the whole dark backdrop
+  // up as a hard rectangle, which reads as a glitch. Stay mounted through close
+  // so the exit animation can play before unmount.
+  const [mounted, setMounted] = useState(visible);
+  const progress = useSharedValue(visible ? 1 : 0);
+  const [sheetH, setSheetH] = useState(520);
+
+  useEffect(() => {
+    if (visible) {
+      setMounted(true);
+      progress.value = withTiming(1, { duration: duration.base, easing: expoOut, reduceMotion });
+    } else {
+      progress.value = withTiming(0, { duration: duration.fast, easing: expoOut, reduceMotion }, (done) => {
+        if (done) runOnJS(setMounted)(false);
+      });
+    }
+  }, [visible, progress]);
+
+  const backdropStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: interpolate(progress.value, [0, 1], [sheetH, 0]) }],
+  }));
+
   const firstWeekday = new Date(view.y, view.m, 1).getDay();
   const daysInMonth = new Date(view.y, view.m + 1, 0).getDate();
   const cells: (number | null)[] = [
@@ -59,10 +91,15 @@ export function DateSheet({ visible, value, title = 'Pick a date', minDate, maxD
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={mounted} transparent animationType="none" onRequestClose={onClose}>
       <View style={styles.root}>
-        <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close date picker" />
-        <View style={styles.sheet}>
+        <Animated.View style={[styles.backdrop, backdropStyle]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Close date picker" />
+        </Animated.View>
+        <Animated.View
+          style={[styles.sheet, sheetStyle]}
+          onLayout={(e) => setSheetH(e.nativeEvent.layout.height)}
+        >
           <View style={styles.grabber} />
         <Text style={[t.overline, styles.title]}>{title}</Text>
 
@@ -109,7 +146,7 @@ export function DateSheet({ visible, value, title = 'Pick a date', minDate, maxD
             );
           })}
         </View>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );

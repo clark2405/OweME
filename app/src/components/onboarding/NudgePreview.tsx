@@ -17,6 +17,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Icon } from '../Icon';
+import { haptics } from '../../lib/haptics';
 import { radius, space } from '../../lib/theme';
 import { Theme, useTheme, useThemedStyles } from '../../lib/theme-context';
 
@@ -41,6 +42,9 @@ export function NudgePreview({ active }: { active?: boolean }) {
     if ((active === undefined || active) && !played.current) {
       played.current = true;
       v.value = withDelay(550, withTiming(1, { duration: 560, easing: backOut }));
+      // A crisp snap the instant the bubble fires off — "sent."
+      const id = setTimeout(haptics.rigid, 550);
+      return () => clearTimeout(id);
     }
   }, [active, v, reduce]);
 

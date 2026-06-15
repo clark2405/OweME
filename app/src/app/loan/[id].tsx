@@ -66,7 +66,14 @@ export default function LoanDetailScreen() {
   if (!loan) {
     return (
       <Screen>
-        <Text style={t.body}>This loan wandered off. 🤷</Text>
+        <View style={styles.notFound}>
+          <Text style={styles.notFoundEmoji}>🤷</Text>
+          <Text style={[t.h2, styles.notFoundTitle]}>This loan wandered off</Text>
+          <Text style={[t.bodySoft, styles.notFoundText]}>
+            It may have been deleted or never made it home.
+          </Text>
+          <Button label="Back to OweMe" onPress={() => router.replace('/(tabs)')} />
+        </View>
       </Screen>
     );
   }
@@ -176,6 +183,7 @@ export default function LoanDetailScreen() {
                 <PressableScale
                   onPress={() => router.push({ pathname: '/add', params: { id: loan.id } })}
                   scaleTo={0.9}
+                  hitSlop={8}
                   style={styles.iconBtn}
                   accessibilityLabel="Edit loan"
                 >
@@ -185,6 +193,7 @@ export default function LoanDetailScreen() {
               <PressableScale
                 onPress={onDelete}
                 scaleTo={0.9}
+                hitSlop={8}
                 style={styles.iconBtn}
                 accessibilityLabel="Delete loan"
               >
@@ -337,13 +346,13 @@ export default function LoanDetailScreen() {
         {loan.status === 'active' ? (
           <>
             <Button
-              label={nudgeOpen ? 'Maybe later' : nudgedRecently ? 'Nudge again?' : 'Send a nudge 📨'}
+              label={nudgeOpen ? 'Maybe later' : nudgedRecently ? 'Nudge again?' : 'Send a nudge'}
               variant="ghost"
               onPress={() => setNudgeOpen((v) => !v)}
             />
-            <Button label="Mark as returned 🎉" onPress={onReturned} />
+            <Button label="Mark as returned" onPress={onReturned} />
             <PressableScale onPress={onWriteOff} style={styles.writeOff}>
-              <Text style={styles.writeOffText}>Write it off 🪦</Text>
+              <Text style={styles.writeOffText}>Write it off</Text>
             </PressableScale>
           </>
         ) : (
@@ -405,6 +414,10 @@ export default function LoanDetailScreen() {
 
 const makeStyles = (th: Theme) => StyleSheet.create({
   root: { flex: 1 },
+  notFound: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.md, paddingHorizontal: space.xl },
+  notFoundEmoji: { fontSize: 48 },
+  notFoundTitle: { textAlign: 'center' },
+  notFoundText: { textAlign: 'center', marginBottom: space.md },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',

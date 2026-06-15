@@ -135,6 +135,7 @@ export default function HistoryScreen() {
                 <PressableScale
                   onPress={() => setQuery('')}
                   scaleTo={0.85}
+                  hitSlop={12}
                   style={styles.clear}
                   accessibilityRole="button"
                   accessibilityLabel="Clear search"

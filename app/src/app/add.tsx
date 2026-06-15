@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -32,6 +34,7 @@ import {
   useSettings,
 } from '../lib/store';
 import { pickContact } from '../lib/contacts';
+import { showToast } from '../lib/toast';
 import { ReminderCadence } from '../lib/types';
 import { currencySymbol, shortDate } from '../lib/format';
 import { radius, space } from '../lib/theme';
@@ -97,6 +100,9 @@ export default function AddLoanScreen() {
   const [dueAt, setDueAt] = useState<string | undefined>(editing?.dueAt);
   const [reminder, setReminder] = useState<ReminderCadence>(editing?.reminder ?? (id ? 'off' : 'weekly'));
 
+  // Which picker is currently spinning up, so the tapped button can show instant
+  // feedback (the native camera/library takes a beat to present, esp. on sim).
+  const [launching, setLaunching] = useState<'camera' | 'gallery' | null>(null);
   const [addingPerson, setAddingPerson] = useState(false);
   const [newName, setNewName] = useState('');
   // Which date the calendar sheet is editing, if open.
@@ -119,27 +125,57 @@ export default function AddLoanScreen() {
       .slice(0, 4);
   }, [type, itemName, loans]);
 
-  const editOpts: ImagePicker.ImagePickerOptions = {
+  // Camera uses UIImagePickerController either way, so the crop step is free.
+  const cameraOpts: ImagePicker.ImagePickerOptions = {
     mediaTypes: ['images'],
     allowsEditing: true,
     aspect: [4, 3],
+    quality: 0.7,
+  };
+  // Gallery: NO allowsEditing — that flag forces the slow legacy picker (loads
+  // the whole library + needs permission). Without it we get the fast,
+  // out-of-process PHPicker, which also needs no library permission at all.
+  const libraryOpts: ImagePicker.ImagePickerOptions = {
+    mediaTypes: ['images'],
     quality: 0.7,
   };
 
   // Snap a fresh photo of the thing being lent — the fastest path for the
   // 15-second flow (no digging through the gallery).
   const takePhoto = async () => {
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) return;
-    const res = await ImagePicker.launchCameraAsync(editOpts);
-    if (!res.canceled) setPhotoUri(res.assets[0].uri);
+    if (launching) return;
+    setLaunching('camera');
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        // Already requested before & blocked: the OS won't re-prompt, so point
+        // the user to Settings instead of failing silently.
+        if (!perm.canAskAgain) {
+          showToast({
+            message: 'Camera access is off. Turn it on in Settings to snap a photo.',
+            actionLabel: 'Settings',
+            onAction: () => Linking.openSettings(),
+          });
+        }
+        return;
+      }
+      const res = await ImagePicker.launchCameraAsync(cameraOpts);
+      if (!res.canceled) setPhotoUri(res.assets[0].uri);
+    } finally {
+      setLaunching(null);
+    }
   };
 
   const pickPhoto = async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return;
-    const res = await ImagePicker.launchImageLibraryAsync(editOpts);
-    if (!res.canceled) setPhotoUri(res.assets[0].uri);
+    if (launching) return;
+    setLaunching('gallery');
+    try {
+      // PHPicker needs no permission — launch straight into it (no round-trip).
+      const res = await ImagePicker.launchImageLibraryAsync(libraryOpts);
+      if (!res.canceled) setPhotoUri(res.assets[0].uri);
+    } finally {
+      setLaunching(null);
+    }
   };
 
   const confirmNewPerson = () => {
@@ -309,6 +345,7 @@ export default function AddLoanScreen() {
                     <PressableScale
                       onPress={() => setPhotoUri(undefined)}
                       scaleTo={0.85}
+                      hitSlop={12}
                       style={styles.photoRemove}
                       accessibilityLabel="Remove photo"
                     >
@@ -320,22 +357,36 @@ export default function AddLoanScreen() {
                     <PressableScale
                       onPress={takePhoto}
                       scaleTo={0.97}
-                      style={styles.photoAdd}
+                      disabled={launching !== null}
+                      style={[styles.photoAdd, launching === 'gallery' && styles.photoAddDim]}
                       accessibilityRole="button"
                       accessibilityLabel="Take a photo with the camera"
                     >
-                      <Icon name="camera" size={20} color={colors.inkSoft} />
-                      <Text style={styles.photoAddText}>Take photo</Text>
+                      {launching === 'camera' ? (
+                        <ActivityIndicator size="small" color={colors.inkSoft} />
+                      ) : (
+                        <Icon name="camera" size={20} color={colors.inkSoft} />
+                      )}
+                      <Text style={styles.photoAddText}>
+                        {launching === 'camera' ? 'Opening…' : 'Take photo'}
+                      </Text>
                     </PressableScale>
                     <PressableScale
                       onPress={pickPhoto}
                       scaleTo={0.97}
-                      style={styles.photoAdd}
+                      disabled={launching !== null}
+                      style={[styles.photoAdd, launching === 'camera' && styles.photoAddDim]}
                       accessibilityRole="button"
                       accessibilityLabel="Choose a photo from your gallery"
                     >
-                      <Icon name="image" size={20} color={colors.inkSoft} />
-                      <Text style={styles.photoAddText}>Gallery</Text>
+                      {launching === 'gallery' ? (
+                        <ActivityIndicator size="small" color={colors.inkSoft} />
+                      ) : (
+                        <Icon name="image" size={20} color={colors.inkSoft} />
+                      )}
+                      <Text style={styles.photoAddText}>
+                        {launching === 'gallery' ? 'Opening…' : 'Gallery'}
+                      </Text>
                     </PressableScale>
                   </View>
                 )}
@@ -362,22 +413,26 @@ export default function AddLoanScreen() {
                     </PressableScale>
                   );
                 })}
+              </View>
+              {/* Add-a-person actions sit apart from the people list so "pick"
+                  and "add" don't blur into one wall of chips. */}
+              <View style={styles.borrowerActions}>
                 <PressableScale
                   onPress={() => setAddingPerson((v) => !v)}
                   scaleTo={0.94}
-                  style={[styles.borrowerChip, styles.newPersonChip]}
+                  style={styles.actionChip}
                 >
-                  <Icon name="plus" size={16} color={colors.inkSoft} strokeWidth={2.2} />
-                  <Text style={styles.borrowerName}>New person</Text>
+                  <Icon name="plus" size={15} color={colors.inkFaint} strokeWidth={2.2} />
+                  <Text style={styles.actionChipText}>New person</Text>
                 </PressableScale>
                 <PressableScale
                   onPress={addFromContacts}
                   scaleTo={0.94}
-                  style={[styles.borrowerChip, styles.newPersonChip]}
+                  style={styles.actionChip}
                   accessibilityLabel="Add a borrower from your contacts"
                 >
-                  <Icon name="people" size={16} color={colors.inkSoft} strokeWidth={2} />
-                  <Text style={styles.borrowerName}>From contacts</Text>
+                  <Icon name="people" size={15} color={colors.inkFaint} strokeWidth={2} />
+                  <Text style={styles.actionChipText}>From contacts</Text>
                 </PressableScale>
               </View>
 
@@ -534,7 +589,7 @@ const makeStyles = (th: Theme) => StyleSheet.create({
   root: { flex: 1, backgroundColor: th.colors.bg },
   safe: { flex: 1 },
   flex: { flex: 1 },
-  handleRow: { alignItems: 'flex-end', paddingHorizontal: space.lg, paddingTop: space.sm },
+  handleRow: { alignItems: 'flex-end', paddingHorizontal: space.xl, paddingTop: space.md },
   close: {
     width: 38,
     height: 38,
@@ -543,7 +598,7 @@ const makeStyles = (th: Theme) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  content: { paddingHorizontal: space.xl, paddingBottom: space.xxl, gap: space.lg },
+  content: { paddingHorizontal: space.xl, paddingBottom: space.xxl, gap: space.xl },
   title: { marginBottom: space.sm },
   field: { marginTop: space.xs },
   input: {
@@ -577,7 +632,7 @@ const makeStyles = (th: Theme) => StyleSheet.create({
     paddingHorizontal: space.lg,
     borderRadius: radius.pill,
     backgroundColor: th.colors.surface,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: th.colors.hairline,
   },
   curChipText: { ...th.type.small, color: th.colors.inkSoft },
@@ -616,9 +671,10 @@ const makeStyles = (th: Theme) => StyleSheet.create({
     borderColor: th.colors.hairline,
     backgroundColor: th.colors.surface,
   },
+  photoAddDim: { opacity: 0.5 },
   photoAddText: { ...th.type.small, color: th.colors.inkSoft },
-  label: { marginTop: space.md, marginBottom: space.md },
-  borrowerWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  label: { marginTop: space.xs, marginBottom: space.md },
+  borrowerWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm + 2 },
   borrowerChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -627,22 +683,37 @@ const makeStyles = (th: Theme) => StyleSheet.create({
     paddingHorizontal: space.md,
     borderRadius: radius.pill,
     backgroundColor: th.colors.surface,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: th.colors.hairline,
   },
   borrowerChipOn: { backgroundColor: th.colors.ink, borderColor: th.colors.ink },
-  newPersonChip: { borderStyle: 'dashed' },
+  // Add-person actions: quiet dashed ghosts, set apart from the people chips so
+  // "pick someone" and "add someone" read as two different things.
+  borrowerActions: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, marginTop: space.md },
+  actionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: space.sm,
+    paddingHorizontal: space.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: th.colors.hairline,
+    backgroundColor: 'transparent',
+  },
+  actionChipText: { ...th.type.small, color: th.colors.inkFaint, fontWeight: '600' },
   borrowerName: { ...th.type.h3, fontSize: 15, color: th.colors.ink },
   borrowerNameOn: { color: th.colors.surface },
   newPersonRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: space.sm },
   newPersonInput: { flex: 1, paddingVertical: space.md },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm + 2 },
   chip: {
     paddingVertical: space.sm,
     paddingHorizontal: space.lg,
     borderRadius: radius.pill,
     backgroundColor: th.colors.surface,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: th.colors.hairline,
   },
   chipOn: { backgroundColor: th.colors.ink, borderColor: th.colors.ink },

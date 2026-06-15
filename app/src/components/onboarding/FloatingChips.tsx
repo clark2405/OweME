@@ -16,7 +16,7 @@
  * Reduced motion: resolved logo, stilled.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
@@ -34,6 +34,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { G, Line, Path, Polygon, Text as SvgText } from 'react-native-svg';
 import { PressableScale } from '../PressableScale';
+import { haptics } from '../../lib/haptics';
 import { radius, space } from '../../lib/theme';
 import { Theme, useThemedStyles } from '../../lib/theme-context';
 
@@ -329,6 +330,9 @@ export function FloatingChips() {
   const float = useSharedValue(0);
   const [armed, setArmed] = useState(false);
   const [organizing, setOrganizing] = useState(false);
+  // Haptic beats scheduled across the pack animation; cleared on unmount.
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
   useEffect(() => {
     if (reduce) return;
@@ -344,6 +348,7 @@ export function FloatingChips() {
 
   const organize = () => {
     setOrganizing(true);
+    haptics.soft();
     // Pop the box in with a bouncy entrance
     boxEntry.value = withTiming(1, { duration: 400, easing: Easing.bezier(0.34, 1.56, 0.64, 1) });
     // After 500ms settle, start the pack animation
@@ -351,6 +356,13 @@ export function FloatingChips() {
       withTiming(1, { duration: 2500, easing: Easing.linear }),
       withDelay(150, withTiming(2, { duration: 1100, easing: Easing.linear })),
     ));
+    // A soft thud as each thing drops into the box (the pack runs o:0→1 over the
+    // 2.5s starting at +500ms, so a chip lands at +500 + LAND_AT·2500), then a
+    // celebratory success once the lid seals.
+    LAND_AT.forEach((p) => {
+      timers.current.push(setTimeout(haptics.soft, 500 + p * 2500));
+    });
+    timers.current.push(setTimeout(haptics.success, 3450));
   };
 
   const wrapStyle = useAnimatedStyle(() => ({

@@ -6,6 +6,74 @@ working session. Frontend-only unless noted (no backend wired yet — see
 
 ---
 
+## 2026-06-15 — UX polish pass (pre-backend)
+
+A senior-eng rough-edges sweep before backend wiring. Frontend only; type-check
+clean; `expo export` bundles clean.
+
+- **Silent permission denials → guided recovery.** Camera/photo pickers in the
+  add-loan flow (`app/add.tsx`) and `BorrowerEditSheet` used to no-op when access
+  was blocked. They now show a toast with a **Settings** deep link
+  (`Linking.openSettings()`) when the OS won't re-prompt (`!canAskAgain`),
+  mirroring the existing notifications-blocked hint in Settings. (A plain Deny on
+  the first prompt stays quiet — the OS already showed its dialog.)
+- **Loan-not-found dead-end fixed.** `loan/[id]` for a missing/deleted loan
+  showed a bare "wandered off 🤷" line with no way out but the iOS back-swipe. It
+  now has a centered empty state + a **Back to OweMe** button.
+- **Tap-target sizing.** Added `hitSlop` to the smallest icon-only controls —
+  the 22pt history search-clear, the 26pt add-photo remove, and the 38pt loan
+  edit/delete buttons — so they clear the ~44pt comfortable-tap mark.
+- **Photo-picker was genuinely slow to open (real device too).** Root cause:
+  `allowsEditing: true` is incompatible with iOS PHPicker, so `expo-image-picker`
+  fell back to the legacy `UIImagePickerController` for the **gallery** — which
+  loads the whole photo library and requires full-library permission before it
+  shows anything. Fixed by dropping `allowsEditing` on the gallery path so it
+  uses the fast, out-of-process **PHPicker** (also needs *no* library permission,
+  so that round-trip + the blocked→Settings toast are gone for gallery). Camera
+  keeps `allowsEditing` (its picker is `UIImagePickerController` regardless, so
+  the crop is free). Trade-off: gallery picks are no longer pre-cropped, but the
+  add-photo thumbnail and the avatar both render cover-cropped anyway. Applied in
+  `add.tsx` + `BorrowerEditSheet`.
+- **Add-loan screen decluttered.** It was the one screen with no chapters and no
+  depth — every section (suggestions, people, dates, due, cadence) was the same
+  hard-outlined pill at the same weight, packed tight, so the eye couldn't find
+  hierarchy (read as "overstimulating / unorganized"). Per offbrand §2/§3b
+  (breathing room + chapters, not more boxes): widened the inter-section rhythm
+  (`content` gap `lg`→`xl`, trimmed the double top-margin on labels), softened
+  every option chip's border (`1.5`→`1`) so unselected chips recede and only the
+  selected (ink) one pops, nudged chip gaps up for air, and **split the borrower
+  picker** — the people are solid chips; "New person / From contacts" moved to
+  their own row as quiet dashed ghosts, so "pick someone" and "add someone" stop
+  blurring into one wall. `app/add.tsx` only.
+- **Add-modal close button aligned.** The "✕" was inset 16pt while the form
+  content is inset 24pt, so it sat closer to the edge than everything else;
+  matched it to the content gutter (+ a touch more top padding).
+- **Removed emoji from the loan action dock** — "Send a nudge" / "Mark as
+  returned" / "Write it off" (the active-state buttons) are now plain. The
+  resolved-state lines (came-home / say-thanks / lend-again) still carry emoji.
+- **Haptics on the delight moments, each with its own signature** (offbrand: no
+  two share the identical feel). Extended `lib/haptics` with `soft` / `rigid` /
+  `selection` / `step` alongside `tap` / `success`, then wired: **Rate stars** →
+  an **escalating** impact (`step`) keyed to the value — Soft·Light·Medium·Rigid·
+  Heavy for 1→5★ — so the buzz strengthens toward 5 and softens toward 1 as you
+  tap/slide; **onboarding p1
+  "Round them up"** → a `soft` thud as each thing drops into the box (scheduled
+  off `LAND_AT`) + a `success` when the lid seals; **onboarding p3** → a `rigid`
+  snap the instant the nudge bubble fires off; **onboarding p4 tour rows** → a
+  light `tap` per row. All best-effort (no-op on the simulator / haptic-less
+  devices), timers cleared on unmount.
+- **Date-picker scrim no longer "slides in weird."** `DateSheet` used
+  `Modal animationType="slide"`, which drags the whole dark backdrop up as a hard
+  rectangle. Switched to the two-layer pattern already used by `BorrowerEditSheet`
+  — the scrim **fades** and the sheet **slides** independently (expo-out, stays
+  mounted through close so the exit plays).
+- **Plus instant tap feedback.** Independently, the tapped Take photo / Gallery
+  button now flips immediately to a spinner + "Opening…", the sibling dims, and
+  re-taps are blocked until the picker returns (`launching` state) — so even the
+  camera's unavoidable hardware warm-up no longer reads as a dead tap.
+
+---
+
 ## 2026-06-14 — Branded loading screen + theme-aware splash
 
 Redesigned `components/AnimatedSplash.tsx` from a centered-logo-plus-bottom-bar

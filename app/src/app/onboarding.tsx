@@ -36,6 +36,7 @@ import { AmbientBackground } from '../components/AmbientBackground';
 import { Reveal } from '../components/Reveal';
 import { Button } from '../components/Button';
 import { PressableScale } from '../components/PressableScale';
+import { haptics } from '../lib/haptics';
 import { Icon, IconName } from '../components/Icon';
 import { tabBarBottomInset } from '../components/TabBar';
 import { AppPreview } from '../components/onboarding/AppPreview';
@@ -300,6 +301,7 @@ function TourRow({ stop, isExpanded, onPress, active, index }: TourRowProps) {
   const clickProgress = useSharedValue(0);
 
   const handlePress = () => {
+    haptics.tap();
     clickProgress.value = 0;
     clickProgress.value = withTiming(1, { duration: 200, easing: expoOut }, (finished) => {
       if (finished) {

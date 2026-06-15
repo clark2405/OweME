@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import Animated, {
   interpolate,
   runOnJS,
@@ -22,6 +22,7 @@ import { Avatar } from './Avatar';
 import { Icon } from './Icon';
 import { Button } from './Button';
 import { addBorrower, deleteBorrower, loanCountFor, updateBorrower, useSettings } from '../lib/store';
+import { showToast } from '../lib/toast';
 import { haptics } from '../lib/haptics';
 import { Borrower } from '../lib/types';
 import { duration, expoOut, reduceMotion } from '../lib/motion';
@@ -55,6 +56,8 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
   const [phone, setPhone] = useState(borrower?.phone ?? '');
   const [exempt, setExempt] = useState(borrower?.exempt ?? false);
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(borrower?.avatarUrl);
+  // Which picker is spinning up, for instant feedback on the tapped button.
+  const [launching, setLaunching] = useState<'camera' | 'gallery' | null>(null);
 
   // Re-seed the fields each time the sheet opens (a create sheet starts blank,
   // an edit sheet reflects the current borrower). Adjusting state during render
@@ -71,23 +74,51 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
     }
   }
 
-  const photoOpts: ImagePicker.ImagePickerOptions = {
+  // Camera: square crop is free (UIImagePickerController either way).
+  const cameraOpts: ImagePicker.ImagePickerOptions = {
     mediaTypes: ['images'],
     allowsEditing: true,
     aspect: [1, 1],
     quality: 0.7,
   };
+  // Gallery: drop allowsEditing so it uses the fast PHPicker (no slow legacy
+  // picker, no library permission round-trip). The Avatar renders cover-cropped.
+  const libraryOpts: ImagePicker.ImagePickerOptions = {
+    mediaTypes: ['images'],
+    quality: 0.7,
+  };
   const takePhoto = async () => {
-    const perm = await ImagePicker.requestCameraPermissionsAsync();
-    if (!perm.granted) return;
-    const res = await ImagePicker.launchCameraAsync(photoOpts);
-    if (!res.canceled) setAvatarUrl(res.assets[0].uri);
+    if (launching) return;
+    setLaunching('camera');
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        // Blocked & the OS won't re-prompt: send them to Settings, don't no-op.
+        if (!perm.canAskAgain) {
+          showToast({
+            message: 'Camera access is off. Turn it on in Settings to snap a photo.',
+            actionLabel: 'Settings',
+            onAction: () => Linking.openSettings(),
+          });
+        }
+        return;
+      }
+      const res = await ImagePicker.launchCameraAsync(cameraOpts);
+      if (!res.canceled) setAvatarUrl(res.assets[0].uri);
+    } finally {
+      setLaunching(null);
+    }
   };
   const pickPhoto = async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return;
-    const res = await ImagePicker.launchImageLibraryAsync(photoOpts);
-    if (!res.canceled) setAvatarUrl(res.assets[0].uri);
+    if (launching) return;
+    setLaunching('gallery');
+    try {
+      // PHPicker needs no permission — launch straight into it (no round-trip).
+      const res = await ImagePicker.launchImageLibraryAsync(libraryOpts);
+      if (!res.canceled) setAvatarUrl(res.assets[0].uri);
+    } finally {
+      setLaunching(null);
+    }
   };
 
   // Animate the backdrop (fade) and the sheet (slide up) as separate layers so
@@ -172,13 +203,21 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
           <Reveal index={2}>
             <Text style={[t.overline, styles.label]}>Avatar</Text>
             <View style={styles.photoRow}>
-              <PressableScale onPress={takePhoto} scaleTo={0.96} style={styles.photoBtn} accessibilityLabel="Take a photo">
-                <Icon name="camera" size={18} color={colors.inkSoft} />
-                <Text style={styles.photoBtnText}>Photo</Text>
+              <PressableScale onPress={takePhoto} scaleTo={0.96} disabled={launching !== null} style={[styles.photoBtn, launching === 'gallery' && styles.photoBtnDim]} accessibilityLabel="Take a photo">
+                {launching === 'camera' ? (
+                  <ActivityIndicator size="small" color={colors.inkSoft} />
+                ) : (
+                  <Icon name="camera" size={18} color={colors.inkSoft} />
+                )}
+                <Text style={styles.photoBtnText}>{launching === 'camera' ? 'Opening…' : 'Photo'}</Text>
               </PressableScale>
-              <PressableScale onPress={pickPhoto} scaleTo={0.96} style={styles.photoBtn} accessibilityLabel="Choose from gallery">
-                <Icon name="image" size={18} color={colors.inkSoft} />
-                <Text style={styles.photoBtnText}>Gallery</Text>
+              <PressableScale onPress={pickPhoto} scaleTo={0.96} disabled={launching !== null} style={[styles.photoBtn, launching === 'camera' && styles.photoBtnDim]} accessibilityLabel="Choose from gallery">
+                {launching === 'gallery' ? (
+                  <ActivityIndicator size="small" color={colors.inkSoft} />
+                ) : (
+                  <Icon name="image" size={18} color={colors.inkSoft} />
+                )}
+                <Text style={styles.photoBtnText}>{launching === 'gallery' ? 'Opening…' : 'Gallery'}</Text>
               </PressableScale>
               {avatarUrl && (
                 <PressableScale onPress={() => setAvatarUrl(undefined)} scaleTo={0.96} style={styles.photoBtn} accessibilityLabel="Remove photo">
@@ -305,6 +344,7 @@ const makeStyles = (th: Theme) => StyleSheet.create({
     borderColor: th.colors.hairline,
     backgroundColor: th.colors.surface,
   },
+  photoBtnDim: { opacity: 0.5 },
   photoBtnText: { ...th.type.small, color: th.colors.inkSoft },
   orLabel: { ...th.type.small, color: th.colors.inkFaint, marginBottom: space.md },
   emojiWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },

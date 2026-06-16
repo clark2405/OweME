@@ -6,6 +6,97 @@ working session. Frontend-only unless noted (no backend wired yet — see
 
 ---
 
+## 2026-06-18 — Backend E1: photo Storage (item photos + avatars persist)
+
+Item photos and borrower avatars now live in Supabase Storage instead of as
+local file URIs, so they survive a device hop (and ride along in backups).
+Type-check clean. No new deps — uploads use `expo-file-system`'s `File.arrayBuffer()`
+(already installed). Screens are untouched: the same optimistic pattern carries it.
+
+### Manual setup you must do before uploads work
+- Apply the **new migration** `supabase/migrations/20260618000000_photo_storage.sql`
+  (`supabase db push`, or paste it in the dashboard SQL editor). It creates the
+  public `photos` bucket + owner-scoped write policies on `storage.objects`.
+  Nothing else — no env or template change. (Already-applied projects: this is
+  the only new SQL since E0.)
+
+### What changed
+- **New migration** `20260618000000_photo_storage.sql`: creates a **public**
+  `photos` bucket and RLS policies so a signed-in user can insert/update/delete
+  only under their own `{auth.uid()}/…` folder; read is public (paths are
+  unguessable uuids, so a public URL is safe and never needs re-signing).
+- **New `lib/storage.ts`** — `uploadImage(uri, kind)`: if the URI is local
+  (picker output), reads bytes via `new File(uri).arrayBuffer()`, uploads to
+  `{uid}/{item|avatar}/{uuid}.{ext}`, returns the public URL. Already-remote or
+  empty URIs pass through unchanged, so callers apply it unconditionally.
+- **`store.ts`** — loan/borrower upserts now route through
+  `persistLoanWithPhoto` / `persistBorrowerWithPhoto`: the optimistic commit
+  still shows the local image instantly, then the background persist uploads it
+  and swaps the resolvable Storage URL into both the cache and the DB row.
+  Already-remote photos short-circuit (no upload cost on status-only writes).
+- **`lib/export.ts`** — backups **no longer strip photos**; they carry the
+  remote Storage URLs (local URIs are dropped on export and ignored on import,
+  since they wouldn't resolve elsewhere). `BACKUP_VERSION` unchanged — the added
+  fields are backward-compatible.
+
+### Notes / deferred
+- Deleting a loan does **not** delete its Storage object — undo (`restoreLoan`)
+  re-inserts the same row pointing at the same URL, so the object must outlive
+  the delete. Orphan cleanup is parked as **E5** in TASKS.md (low priority).
+- Cross-account restore keeps the original owner's public URLs (they still
+  render; the restorer just can't delete those objects). Acceptable for v1.
+
+---
+
+## 2026-06-17 — Backend: Supabase data layer + email-OTP auth
+
+The app is on a real backend. Type-check clean; `expo export` bundles clean
+(5.2MB — supabase-js included). New deps: `@supabase/supabase-js`,
+`react-native-url-polyfill` (both pure-JS — no native rebuild). **Scope:** data
+layer + auth only; photo Storage + the web `/n/[token]` nudge page are the next
+upcoming tasks (see TASKS.md).
+
+### Manual setup you must do before it runs
+1. Create a Supabase project → copy the **Project URL** + **anon key**.
+2. Apply **both** migrations (init first, then `20260617000000_add_app_columns`):
+   `supabase db push`, or paste the SQL in the dashboard SQL editor.
+3. Auth → Email templates → **Magic Link**: include `{{ .Token }}` so the email
+   sends the **6-digit OTP code** (the default template only sends a link). Keep
+   email signups enabled (first OTP creates the account).
+4. `cp app/.env.example app/.env` and fill `EXPO_PUBLIC_SUPABASE_URL` +
+   `EXPO_PUBLIC_SUPABASE_ANON_KEY`. Restart Metro so the env is picked up.
+
+### What changed
+- **New migration** `supabase/migrations/20260617000000_add_app_columns.sql`:
+  adds `loans.reminder`, `loans.nudges` (jsonb), `borrowers.emoji`,
+  `borrowers.exempt` (frontend fields that postdated the init schema), and sets
+  `owner_id default auth.uid()` on both tables so inserts can omit it (RLS still
+  enforces). Init migration is untouched (history rule).
+- **`lib/supabase.ts`** — anon client (AsyncStorage session storage, auto-refresh,
+  `url-polyfill`). **`lib/auth.ts`** — `useSession()` + `sendOtp/verifyOtp/signOut`.
+  **`lib/db.ts`** — row↔domain mappers (snake↔camel) + `fetchAll`/upsert/delete/
+  `replaceAll`. **`lib/id.ts`** — client-side uuid (so create helpers stay sync).
+- **`store.ts` rewrite** — same public API + pure selectors, now backed by an
+  in-memory cache that mirrors Supabase: fills on sign-in (`onAuthStateChange`),
+  clears on sign-out; **optimistic writes** (cache + emit immediately, background
+  mutation, refetch-to-reconcile + toast on failure). `useHydrated()` now gates on
+  the real first fetch (skeletons + splash dismiss when data arrives). Settings
+  stay device-local (AsyncStorage) for now. `importData` → owner-scoped
+  wipe-and-insert (`db.replaceAll`).
+- **Auth screen** `app/auth.tsx` (on-brand two-step OTP) + route registered.
+  **Gating** in `(tabs)/_layout.tsx`: loading → blank; no session → `/auth`; then
+  the onboarding gate. **Settings** gained a **Sign out** row (shows the
+  signed-in email).
+- **Screens unchanged** — the synchronous selector/hook API was preserved, so no
+  list/detail/form code was touched.
+
+### Known follow-ups (in TASKS.md)
+Photo Storage; the web nudge page + token round-trip; an atomic `restore_ledger`
+RPC (current restore is sequential delete-then-insert); moving non-appearance
+settings to a user-prefs table.
+
+---
+
 ## 2026-06-15 — UX polish pass (pre-backend)
 
 A senior-eng rough-edges sweep before backend wiring. Frontend only; type-check

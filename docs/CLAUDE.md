@@ -70,9 +70,10 @@ oweme/
 - [x] Initial schema migration written (`supabase/migrations/20260610000000_init_schema.sql`, tables + RLS)
 - [x] iOS native build set up (prebuild + Pods, bundle id `com.clark24smoothoperator.oweme`, runs on simulator)
 - [x] **Mobile UI built on mock data** — full design system + all v1 screens, applying `offbrand-design`. Runs and verified on iOS sim. *Not wired to Supabase yet* (reads an in-memory store).
-- [ ] Supabase project created, schema migrated (manual: create project, apply migration, fill `.env`)
-- [ ] Supabase client wiring (`app/src/lib`, `web/lib`) + replace `src/lib/store.ts` reads/writes with real queries
-- [ ] Auth flow (email magic link)
+- [ ] Supabase project created, schema migrated (manual: create project, apply ALL THREE migrations, fill `app/.env`) — **the only thing left before the backend runs**
+- [x] Photo Storage (E1) — public `photos` bucket + `lib/storage.ts`; uploads on persist, photos persist + ride in backups (`20260618000000_photo_storage.sql`)
+- [x] Supabase client wiring (`app/src/lib/supabase.ts` + `db.ts`) + `store.ts` swapped to Supabase-backed cache (synchronous selector API preserved → screens unchanged). Web `lib/` still pending (nudge page).
+- [x] Auth flow — **email OTP code** (`app/src/lib/auth.ts` + `app/src/app/auth.tsx`), session-gated in `(tabs)/_layout.tsx`, Sign out in Settings
 - [x] Home screen (active loans list + stats) — UI on mock data
 - [x] Add loan flow (item + money, <15s target) — UI on mock data
 - [x] Loan detail + mark returned (confetti) — UI on mock data

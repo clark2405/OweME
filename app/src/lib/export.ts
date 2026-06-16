@@ -6,11 +6,11 @@
  *   - `buildLedgerBackup` — structured JSON that `parseLedgerBackup` can read
  *     back into the store (a faithful round-trip restore).
  *
- * Frontend only: both are produced as strings and handed to the OS share sheet;
- * restore reads pasted JSON. Photos are intentionally excluded from the backup —
- * item/avatar images are *local file URIs* that don't exist on another device,
- * so they'd break on import. When a backend lands, host the photos and put real
- * URLs in the backup instead (see docs/PROJECT.md §6 / docs/CHANGELOG.md).
+ * Both are produced as strings and handed to the OS share sheet; restore reads
+ * pasted JSON. Photos now ride along as **resolvable Supabase Storage URLs** (E1)
+ * so they survive a device hop — but only *remote* http(s) URLs are kept; a
+ * lingering local file URI (e.g. an upload that hadn't finished) is dropped, since
+ * it wouldn't resolve anywhere else.
  */
 
 import { Borrower, Loan, LoanWithBorrower, LoanStatus, ReminderCadence } from './types';
@@ -87,20 +87,27 @@ export type ParseResult =
   | { ok: true; borrowers: Borrower[]; loans: Loan[]; settings?: Partial<Settings> }
   | { ok: false; error: string };
 
+/** Keep a photo/avatar URL only if it's a portable remote URL; drop local URIs. */
+function remoteUrl(uri: string | undefined): string | undefined {
+  return uri && /^https?:\/\//i.test(uri) ? uri : undefined;
+}
+
 /**
- * Structured JSON backup for a faithful restore. Photos are stripped (local file
- * URIs don't survive a device hop — see the header note). Pretty-printed so a
- * curious user can eyeball it.
+ * Structured JSON backup for a faithful restore. Photos ride along as resolvable
+ * Storage URLs (local URIs are dropped — see the header note). Pretty-printed so
+ * a curious user can eyeball it.
  */
 export function buildLedgerBackup(loans: Loan[], borrowers: Borrower[], settings: Settings): string {
-  const cleanLoans = loans.map((l) => (l.type === 'item' ? { ...l, photoUrl: undefined } : l));
-  const cleanBorrowers = borrowers.map((b) => ({ ...b, avatarUrl: undefined }));
+  const portableLoans = loans.map((l) =>
+    l.type === 'item' ? { ...l, photoUrl: remoteUrl(l.photoUrl) } : l,
+  );
+  const portableBorrowers = borrowers.map((b) => ({ ...b, avatarUrl: remoteUrl(b.avatarUrl) }));
   const payload: LedgerBackup = {
     app: 'oweme',
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
-    borrowers: cleanBorrowers,
-    loans: cleanLoans,
+    borrowers: portableBorrowers,
+    loans: portableLoans,
     settings,
   };
   // undefined photo/avatar keys drop out of JSON automatically.
@@ -123,7 +130,14 @@ function toBorrower(v: unknown): Borrower | null {
   const id = str(o.id);
   const name = str(o.name);
   if (!id || !name) return null;
-  return { id, name, emoji: str(o.emoji) ?? '🙂', phone: str(o.phone), exempt: o.exempt === true };
+  return {
+    id,
+    name,
+    emoji: str(o.emoji) ?? '🙂',
+    phone: str(o.phone),
+    avatarUrl: remoteUrl(str(o.avatarUrl)),
+    exempt: o.exempt === true,
+  };
 }
 
 function toLoan(v: unknown): Loan | null {
@@ -152,7 +166,9 @@ function toLoan(v: unknown): Loan | null {
 
   if (o.type === 'item') {
     const itemName = str(o.itemName);
-    return itemName ? { ...base, type: 'item', itemName } : null;
+    return itemName
+      ? { ...base, type: 'item', itemName, photoUrl: remoteUrl(str(o.photoUrl)) }
+      : null;
   }
   if (o.type === 'money') {
     const amount = typeof o.amount === 'number' ? o.amount : Number(o.amount);

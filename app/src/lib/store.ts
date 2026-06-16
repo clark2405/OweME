@@ -1,10 +1,16 @@
 /**
- * In-memory mock store. Stands in for the Supabase-backed data layer until the
- * client is wired (see HANDOFF.md). Same shapes as `types.ts`, so swapping this
- * for real queries later is a localized change.
+ * The data layer. Backed by Supabase, exposed as a synchronous observable so the
+ * screens never changed: `useLoans/useBorrowers/useSettings/useHydrated` plus the
+ * pure selectors below all operate on an in-memory cache that mirrors the DB.
  *
- * Tiny observable + `useStore()` via useSyncExternalStore — no Redux/Zustand,
- * per the v1 state rule in CLAUDE.md.
+ * - On sign-in the cache is filled from Supabase (db.fetchAll) and `hydrated`
+ *   flips true (skeletons → content; the splash dismisses). On sign-out it clears.
+ * - Writes are OPTIMISTIC: mutate the cache + emit immediately (instant UX,
+ *   reminders re-sync), then fire the Supabase mutation in the background; on
+ *   failure we refetch to reconcile and toast.
+ * - Create helpers mint a client-side uuid so they can still return synchronously.
+ * - Settings stay device-local (AsyncStorage) for now — appearance must be local;
+ *   the rest (currency/nudges/channel/shame) sync later via a user-prefs table.
  */
 
 import { useSyncExternalStore } from 'react';
@@ -13,109 +19,15 @@ import { Borrower, Loan, LoanBase, LoanWithBorrower, ReminderCadence } from './t
 import { daysSince } from './format';
 import { NudgeChannel } from './nudge';
 import { cancelAllReminders, cancelLoanReminder, syncLoanReminder } from './notifications';
+import { supabase } from './supabase';
+import { uuid } from './id';
+import { showToast } from './toast';
+import { isLocalUri, uploadImage } from './storage';
+import * as db from './db';
 
-function isoDaysAgo(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
 }
-
-let borrowers: Borrower[] = [
-  { id: 'b1', name: 'Miguel', emoji: '🧑🏽‍🔧' },
-  { id: 'b2', name: 'Anna', emoji: '📚' },
-  { id: 'b3', name: 'Jollibee Squad', emoji: '🍗' },
-  { id: 'b4', name: 'Tita Cora', emoji: '👒' },
-  { id: 'b5', name: 'Paolo', emoji: '🎧' },
-  { id: 'b6', name: 'Dexter', emoji: '🎮' },
-];
-
-let loans: Loan[] = [
-  {
-    id: 'l1',
-    borrowerId: 'b1',
-    type: 'item',
-    itemName: 'Cordless drill',
-    notes: 'The good Makita one. Came with two batteries.',
-    lentAt: isoDaysAgo(34),
-    status: 'active',
-  },
-  {
-    id: 'l2',
-    borrowerId: 'b2',
-    type: 'item',
-    itemName: 'Atomic Habits',
-    notes: 'Dog-eared on page 40. Want it back eventually 📖',
-    lentAt: isoDaysAgo(58),
-    status: 'active',
-  },
-  {
-    id: 'l3',
-    borrowerId: 'b3',
-    type: 'money',
-    amount: 750,
-    currency: 'PHP',
-    notes: 'Spotted them at lunch. Chickenjoy economics.',
-    lentAt: isoDaysAgo(12),
-    status: 'active',
-  },
-  {
-    id: 'l4',
-    borrowerId: 'b5',
-    type: 'item',
-    itemName: 'AirPods case',
-    lentAt: isoDaysAgo(5),
-    dueAt: isoDaysAgo(-2),
-    status: 'active',
-  },
-  {
-    id: 'l5',
-    borrowerId: 'b4',
-    type: 'money',
-    amount: 500,
-    currency: 'PHP',
-    lentAt: isoDaysAgo(9),
-    status: 'active',
-  },
-  {
-    id: 'l9',
-    borrowerId: 'b6',
-    type: 'item',
-    itemName: 'Nintendo Switch',
-    notes: 'Lent with Mario Kart. No pressure… mostly.',
-    lentAt: isoDaysAgo(20),
-    status: 'active',
-  },
-  // Already-home history.
-  {
-    id: 'l6',
-    borrowerId: 'b2',
-    type: 'item',
-    itemName: 'Umbrella',
-    lentAt: isoDaysAgo(40),
-    status: 'returned',
-    returnedAt: isoDaysAgo(31),
-  },
-  {
-    id: 'l7',
-    borrowerId: 'b1',
-    type: 'money',
-    amount: 200,
-    currency: 'PHP',
-    lentAt: isoDaysAgo(70),
-    status: 'returned',
-    returnedAt: isoDaysAgo(66),
-  },
-  {
-    id: 'l8',
-    borrowerId: 'b5',
-    type: 'item',
-    itemName: 'HDMI cable',
-    notes: 'Honestly given up. RIP.',
-    lentAt: isoDaysAgo(220),
-    status: 'written_off',
-    returnedAt: isoDaysAgo(120),
-  },
-];
 
 // --- observable plumbing ---------------------------------------------------
 
@@ -128,20 +40,33 @@ function subscribe(cb: () => void) {
   return () => listeners.delete(cb);
 }
 
-// --- reads -----------------------------------------------------------------
+// --- in-memory cache (mirrors Supabase) ------------------------------------
+
+let loans: Loan[] = [];
+let borrowers: Borrower[] = [];
 
 let snapshot = loans;
 function getSnapshot() {
   return snapshot;
 }
-
-export function useLoans(): Loan[] {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+function commit(next: Loan[]) {
+  loans = next;
+  snapshot = next;
+  emit();
 }
 
 let borrowerSnapshot = borrowers;
 function getBorrowerSnapshot() {
   return borrowerSnapshot;
+}
+function commitBorrowers(next: Borrower[]) {
+  borrowers = next;
+  borrowerSnapshot = next;
+  emit();
+}
+
+export function useLoans(): Loan[] {
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
 /** Reactive borrower list — re-renders when a new person is added mid-flow. */
@@ -149,7 +74,7 @@ export function useBorrowers(): Borrower[] {
   return useSyncExternalStore(subscribe, getBorrowerSnapshot, getBorrowerSnapshot);
 }
 
-// --- app settings (in-memory; will move to Supabase user prefs) ------------
+// --- app settings (device-local; will move to Supabase user prefs) ---------
 
 export type CurrencyCode = 'PHP' | 'USD' | 'EUR';
 
@@ -194,18 +119,29 @@ function commitSettings(next: Settings, persist = true) {
   if (persist) AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(next)).catch(() => {});
 }
 
+// Load device-local settings once at startup (independent of auth).
+void AsyncStorage.getItem(SETTINGS_KEY)
+  .then((raw) => {
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as Partial<Settings>;
+    commitSettings({ ...settings, ...parsed }, false);
+  })
+  .catch(() => {});
+
 // --- hydration gate --------------------------------------------------------
-// One-shot "is the initial data ready" flag, backing `useHydrated()`. Today it
-// resolves from memory + the AsyncStorage settings read; when the data layer
-// moves to Supabase this same gate becomes the first network fetch, and the
-// skeletons already wired to it light up for real. A small minimum window keeps
-// the loading state from flashing for a single frame — tune/zero as needed.
-const MIN_SKELETON_MS = 550;
+// `hydrated` is the "initial ledger is ready" flag the skeletons + splash wait
+// on. It flips true once the first Supabase fetch resolves (or immediately when
+// signed out, so the splash dismisses and the gate routes to /auth).
 
 let hydrated = false;
 let hydratedSnapshot = hydrated;
 function getHydratedSnapshot() {
   return hydratedSnapshot;
+}
+function setHydrated(v: boolean) {
+  hydrated = v;
+  hydratedSnapshot = v;
+  emit();
 }
 
 /** False until the store's initial data is ready — screens show skeletons. */
@@ -213,26 +149,90 @@ export function useHydrated(): boolean {
   return useSyncExternalStore(subscribe, getHydratedSnapshot, getHydratedSnapshot);
 }
 
-function markHydrated() {
-  if (hydrated) return;
-  hydrated = true;
-  hydratedSnapshot = true;
-  emit();
+// --- auth-driven loading ---------------------------------------------------
+
+async function loadFromServer() {
+  setHydrated(false);
+  try {
+    const { loans: ls, borrowers: bs } = await db.fetchAll();
+    commitBorrowers(bs);
+    commit(ls);
+    resyncAllReminders();
+  } catch (e) {
+    console.warn('[OweMe] failed to load ledger', e);
+    showToast({ message: 'Couldn’t load your ledger. Check your connection.' });
+  } finally {
+    setHydrated(true);
+  }
 }
 
-// Hydrate persisted settings once at startup (re-rendering subscribers if they
-// differ from the defaults; persisting back is skipped — it's what we just
-// read), then open the hydration gate after the minimum window.
-void Promise.all([
-  AsyncStorage.getItem(SETTINGS_KEY)
-    .then((raw) => {
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as Partial<Settings>;
-      commitSettings({ ...settings, ...parsed }, false);
-    })
-    .catch(() => {}),
-  new Promise<void>((resolve) => setTimeout(resolve, MIN_SKELETON_MS)),
-]).finally(markHydrated);
+function clearData() {
+  commitBorrowers([]);
+  commit([]);
+  cancelAllReminders();
+}
+
+// INITIAL_SESSION fires once on launch; SIGNED_IN after a verified OTP; SIGNED_OUT
+// on sign-out. TOKEN_REFRESHED / USER_UPDATED keep the session but don't need a
+// reload, so they're ignored.
+supabase.auth.onAuthStateChange((event, session) => {
+  if (!session) {
+    clearData();
+    setHydrated(true); // let the splash go; the gate sends to /auth
+    return;
+  }
+  if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+    void loadFromServer();
+  }
+});
+
+// --- write persistence helper ----------------------------------------------
+
+/** Fire a background mutation; on failure, refetch to reconcile + warn once. */
+function persist(run: () => Promise<void>) {
+  run().catch((e) => {
+    console.warn('[OweMe] write failed, reconciling', e);
+    showToast({ message: 'That change didn’t save — refreshing.' });
+    void loadFromServer();
+  });
+}
+
+/**
+ * Upsert a loan, first uploading its photo if it's still a local picker URI.
+ * The optimistic commit already showed the local image; once Storage returns a
+ * resolvable URL we swap it into the cache + the row so it survives a device hop.
+ * Already-remote photos short-circuit, so status-only writes pay no upload cost.
+ */
+function persistLoanWithPhoto(loan: Loan) {
+  persist(async () => {
+    if (loan.type === 'item' && isLocalUri(loan.photoUrl)) {
+      const url = await uploadImage(loan.photoUrl, 'item');
+      if (url && url !== loan.photoUrl) {
+        const swapped: Loan = { ...loan, photoUrl: url };
+        commit(loans.map((l) => (l.id === loan.id ? swapped : l)));
+        await db.upsertLoan(swapped);
+        return;
+      }
+    }
+    await db.upsertLoan(loan);
+  });
+}
+
+/** Upsert a borrower, uploading a local avatar to Storage first (see above). */
+function persistBorrowerWithPhoto(b: Borrower) {
+  persist(async () => {
+    if (isLocalUri(b.avatarUrl)) {
+      const url = await uploadImage(b.avatarUrl, 'avatar');
+      if (url && url !== b.avatarUrl) {
+        const swapped: Borrower = { ...b, avatarUrl: url };
+        commitBorrowers(borrowers.map((x) => (x.id === b.id ? swapped : x)));
+        await db.upsertBorrower(swapped);
+        return;
+      }
+    }
+    await db.upsertBorrower(b);
+  });
+}
 
 export function setDefaultCurrency(c: CurrencyCode) {
   commitSettings({ ...settings, defaultCurrency: c });
@@ -512,13 +512,7 @@ export function pastItemNames(list: Loan[]): string[] {
   return names;
 }
 
-// --- writes ----------------------------------------------------------------
-
-function commit(next: Loan[]) {
-  loans = next;
-  snapshot = next;
-  emit();
-}
+// --- writes (optimistic cache update + background Supabase mutation) --------
 
 /** Mirror one loan's reminder schedule after a write. */
 function syncReminderFor(loan: Loan) {
@@ -530,36 +524,36 @@ function syncReminderFor(loan: Loan) {
 }
 
 export function markReturned(id: string) {
-  commit(
-    loans.map((l) =>
-      l.id === id
-        ? { ...l, status: 'returned', returnedAt: new Date().toISOString().slice(0, 10) }
-        : l,
-    ),
+  const next = loans.map((l) =>
+    l.id === id ? { ...l, status: 'returned' as const, returnedAt: today() } : l,
   );
+  commit(next);
   cancelLoanReminder(id);
+  const loan = next.find((l) => l.id === id);
+  if (loan) persistLoanWithPhoto(loan);
 }
 
 export function writeOff(id: string) {
-  commit(
-    loans.map((l) =>
-      l.id === id
-        ? { ...l, status: 'written_off', returnedAt: new Date().toISOString().slice(0, 10) }
-        : l,
-    ),
+  const next = loans.map((l) =>
+    l.id === id ? { ...l, status: 'written_off' as const, returnedAt: today() } : l,
   );
+  commit(next);
   cancelLoanReminder(id);
+  const loan = next.find((l) => l.id === id);
+  if (loan) persistLoanWithPhoto(loan);
 }
 
 /** Undo a return / write-off — sends the loan back out into the wild. */
 export function unreturn(id: string) {
-  commit(
-    loans.map((l) =>
-      l.id === id ? { ...l, status: 'active', returnedAt: undefined } : l,
-    ),
+  const next = loans.map((l) =>
+    l.id === id ? { ...l, status: 'active' as const, returnedAt: undefined } : l,
   );
-  const loan = loans.find((l) => l.id === id);
-  if (loan) syncReminderFor(loan);
+  commit(next);
+  const loan = next.find((l) => l.id === id);
+  if (loan) {
+    syncReminderFor(loan);
+    persistLoanWithPhoto(loan);
+  }
 }
 
 export interface NewLoanInput {
@@ -584,25 +578,28 @@ function loanFromInput(base: LoanBase, input: NewLoanInput): Loan {
 }
 
 export function addLoan(input: NewLoanInput): string {
-  const id = `l${Date.now()}`;
+  const id = uuid();
   const base: LoanBase = {
     id,
     borrowerId: input.borrowerId,
     notes: input.notes,
     dueAt: input.dueAt,
     reminder: input.reminder,
-    lentAt: input.lentAt ?? new Date().toISOString().slice(0, 10),
+    lentAt: input.lentAt ?? today(),
     status: 'active',
+    nudges: [],
   };
   const loan = loanFromInput(base, input);
   commit([loan, ...loans]);
   syncReminderFor(loan);
+  persistLoanWithPhoto(loan);
   return id;
 }
 
 /** Edit an existing loan in place — preserves id, lentAt, and status; rebuilds
  *  the type-specific shape so switching item↔money leaves no stale fields. */
 export function updateLoan(id: string, input: NewLoanInput) {
+  let updated: Loan | undefined;
   commit(
     loans.map((l) => {
       if (l.id !== id) return l;
@@ -615,35 +612,42 @@ export function updateLoan(id: string, input: NewLoanInput) {
         lentAt: input.lentAt ?? l.lentAt,
         status: l.status,
         returnedAt: l.returnedAt,
+        nudges: l.nudges ?? [],
       };
-      return loanFromInput(base, input);
+      updated = loanFromInput(base, input);
+      return updated;
     }),
   );
-  const loan = loans.find((l) => l.id === id);
-  if (loan) syncReminderFor(loan);
+  if (updated) {
+    syncReminderFor(updated);
+    persistLoanWithPhoto(updated!);
+  }
 }
 
 export function deleteLoan(id: string) {
   commit(loans.filter((l) => l.id !== id));
   cancelLoanReminder(id);
+  persist(() => db.deleteLoan(id));
 }
 
 /** Reschedule (or pause, with `off`) a loan's nudge cadence in place — the quick
  *  path from loan detail, without opening the full edit flow. Re-syncs the
  *  pending notification to match. */
 export function setLoanReminder(id: string, reminder: ReminderCadence) {
-  commit(loans.map((l) => (l.id === id ? { ...l, reminder } : l)));
-  const loan = loans.find((l) => l.id === id);
-  if (loan) syncReminderFor(loan);
+  const next = loans.map((l) => (l.id === id ? { ...l, reminder } : l));
+  commit(next);
+  const loan = next.find((l) => l.id === id);
+  if (loan) {
+    syncReminderFor(loan);
+    persistLoanWithPhoto(loan);
+  }
 }
 
 /**
  * Restore the whole ledger from a parsed backup (replace-all). Borrowers load
  * first so reminder re-sync can resolve names; any backed-up settings merge over
- * the current ones; then notifications are re-mirrored to the imported state.
- *
- * (In-memory mock today — when Supabase lands, this maps to a transactional
- * wipe-and-insert scoped to the owner. See docs/CHANGELOG.md "Future work".)
+ * the current ones; then notifications + the DB are re-mirrored to the imported
+ * state via an owner-scoped wipe-and-insert (see db.replaceAll).
  */
 export function importData(data: {
   borrowers: Borrower[];
@@ -655,6 +659,7 @@ export function importData(data: {
   if (data.settings) commitSettings({ ...settings, ...data.settings });
   cancelAllReminders();
   resyncAllReminders();
+  persist(() => db.replaceAll(data.borrowers, data.loans));
 }
 
 /** Re-insert a just-deleted loan (undo). Reminders re-sync from its state. */
@@ -662,25 +667,25 @@ export function restoreLoan(loan: Loan) {
   if (loans.some((l) => l.id === loan.id)) return;
   commit([loan, ...loans]);
   syncReminderFor(loan);
+  persistLoanWithPhoto(loan);
 }
 
 /** Append a nudge timestamp to a loan — powers "Nudged 3× · last week". */
 export function recordNudge(id: string) {
   const now = new Date().toISOString();
-  commit(
-    loans.map((l) => (l.id === id ? { ...l, nudges: [...(l.nudges ?? []), now] } : l)),
+  const next = loans.map((l) =>
+    l.id === id ? { ...l, nudges: [...(l.nudges ?? []), now] } : l,
   );
-}
-
-function commitBorrowers(next: Borrower[]) {
-  borrowers = next;
-  borrowerSnapshot = next;
-  emit();
+  commit(next);
+  const loan = next.find((l) => l.id === id);
+  if (loan) persistLoanWithPhoto(loan);
 }
 
 export function addBorrower(name: string, emoji = '🙂', phone?: string, avatarUrl?: string): string {
-  const id = `b${Date.now()}`;
-  commitBorrowers([...borrowers, { id, name, emoji, phone, avatarUrl }]);
+  const id = uuid();
+  const borrower: Borrower = { id, name, emoji, phone, avatarUrl, exempt: false };
+  commitBorrowers([...borrowers, borrower]);
+  persistBorrowerWithPhoto(borrower);
   return id;
 }
 
@@ -691,7 +696,15 @@ export function updateBorrower(
   const clean: typeof patch = { ...patch };
   if ('phone' in clean) clean.phone = clean.phone?.trim() || undefined;
   if ('name' in clean && clean.name != null) clean.name = clean.name.trim();
-  commitBorrowers(borrowers.map((b) => (b.id === id ? { ...b, ...clean } : b)));
+  let updated: Borrower | undefined;
+  commitBorrowers(
+    borrowers.map((b) => {
+      if (b.id !== id) return b;
+      updated = { ...b, ...clean };
+      return updated;
+    }),
+  );
+  if (updated) persistBorrowerWithPhoto(updated!);
 }
 
 /** How many loans (any status) reference a borrower — gates delete. */
@@ -704,5 +717,6 @@ export function loanCountFor(id: string): number {
 export function deleteBorrower(id: string): boolean {
   if (loanCountFor(id) > 0) return false;
   commitBorrowers(borrowers.filter((b) => b.id !== id));
+  persist(() => db.deleteBorrower(id));
   return true;
 }

@@ -11,8 +11,15 @@ on Mac — `git clone` fresh (see "How to resume" below)._
 
 ## Where things stand
 
-**Scaffolding is complete and typechecks clean.** Both apps build their TS with
-`npx tsc --noEmit` passing (exit 0). Nothing is wired to Supabase yet.
+**The mobile app is wired to Supabase (data layer + email-OTP auth) and
+typechecks clean** (`npx tsc --noEmit` exit 0; `expo export` bundles clean). It
+just needs the **manual project setup** to actually run (create the Supabase
+project, apply **all three** migrations, fill `app/.env`, add `{{ .Token }}` to
+the OTP email template — full steps in `CHANGELOG.md` 2026-06-17 + 06-18).
+**Photo Storage (E1) is now wired too** — item photos + avatars upload to a
+public `photos` bucket and persist (apply migration `20260618000000` for it).
+The **web** app is still scaffold-only (the `/n/[token]` nudge page is the next
+backend task, E2).
 
 - `app/` — Expo SDK 56, TypeScript strict, Expo Router, `src/` layout, StyleSheet.
   - `src/app/_layout.tsx` (Stack), `src/app/index.tsx` (placeholder home).
@@ -49,17 +56,25 @@ Real screens start once the backend is wired.
 
 ## What's next (in order)
 
-1. **Create the Supabase project** (manual, in the Supabase dashboard — only
-   Clark can do this). Grab the project URL, anon key, and service-role key.
-2. **Apply the migration** — via `supabase db push` (after `supabase link`) or
-   paste the SQL into the dashboard SQL editor.
-3. **Fill env files:** copy `app/.env.example` → `app/.env`, and
-   `web/.env.example` → `web/.env.local`, with real keys.
-4. **Wire Supabase clients:** `app/src/lib/supabase.ts` (anon client, RLS) and
-   `web/lib/supabase.ts` (service-role, server-only). Add `app/src/lib/types.ts`
-   with DB row types as discriminated unions (`type: 'item' | 'money'`).
-5. Then auth (email magic link) → home screen → add-loan flow. See the checklist
-   in `CLAUDE.md` "Current status".
+**Manual setup (only Clark can do — unblocks everything below):**
+1. Create the Supabase project (dashboard) → grab project URL + anon key (+
+   service-role key, for the future web nudge page only).
+2. Apply **all three** migrations in order (`20260610` init →
+   `20260617` add_app_columns → `20260618` photo_storage) via `supabase db push`
+   after `supabase link`, or paste the SQL in the dashboard.
+3. Auth → Email templates → **Magic Link**: include `{{ .Token }}` so the OTP
+   email carries the 6-digit code (default template only sends a link).
+4. `cp app/.env.example app/.env`, fill the URL + anon key, restart Metro.
+5. Run on device, sign in with OTP, smoke-test CRUD + persistence + 2nd device.
+
+**Then (code, tracked as E2–E5 in TASKS.md):** web `/n/[token]` nudge page (+
+`web/lib/supabase.ts` service-role client) → atomic restore RPC → settings sync
+→ Storage GC. (E1 photo Storage is done — see CHANGELOG 2026-06-18.)
+
+**Already wired (this session):** `app/src/lib/{supabase,auth,db,id}.ts`,
+`store.ts` (Supabase-backed cache, optimistic writes — synchronous selector API
+preserved so screens were untouched), `app/src/app/auth.tsx`, session gating in
+`(tabs)/_layout.tsx`, Sign out in Settings, and the new migration.
 
 ### Frontend backup/restore already exists — wire it through, don't reinvent
 

@@ -13,6 +13,7 @@ import { Toaster } from '../components/Toaster';
 import { AnimatedSplash } from '../components/AnimatedSplash';
 import { ACTION_RETURNED } from '../lib/notifications';
 import { markReturned, unreturn } from '../lib/store';
+import { markShellReady } from '../lib/shell';
 import { showToast } from '../lib/toast';
 import { graveyard } from '../lib/theme';
 import { ThemeProvider, useTheme } from '../lib/theme-context';
@@ -75,7 +76,16 @@ export default function RootLayout() {
           <Toaster />
           {/* Inside ThemeProvider so the preloader resolves the active palette
               (warm-charcoal in dark) instead of always painting cream. */}
-          {!splashDone && <AnimatedSplash onDone={() => setSplashDone(true)} />}
+          {!splashDone && (
+            <AnimatedSplash
+              onDone={() => {
+                setSplashDone(true);
+                // Let the first screen's entrance animations start now that the
+                // splash has fully lifted (not hidden underneath it).
+                markShellReady();
+              }}
+            />
+          )}
         </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
@@ -104,6 +114,8 @@ function ThemedNavigation() {
           contentStyle: { backgroundColor: colors.bg },
         }}
       >
+        {/* Signed-out users are sent here by the guard in (tabs)/_layout. */}
+        <Stack.Screen name="auth" options={{ animation: 'fade', gestureEnabled: false }} />
         {/* First launch detours here via the guard in (tabs)/_layout. */}
         <Stack.Screen name="onboarding" options={{ animation: 'fade', gestureEnabled: false }} />
         <Stack.Screen name="(tabs)" />

@@ -339,6 +339,36 @@ on the mock store, today.
   but awkward to build without the auth client, so do them at the start of the
   backend phase (avoid throwaway scaffolding).
 
+### E — Backend (in progress)
+
+- [x] **E0. Data layer + email-OTP auth** (2026-06-17) — Supabase client,
+  `auth.ts`/`auth.tsx`, `store.ts` swapped to a Supabase-backed cache, new
+  migration for the post-init columns, session gating + Sign out. *Needs the
+  manual project setup (create project, apply both migrations, fill `app/.env`,
+  add `{{ .Token }}` to the OTP email template) before it runs — see CHANGELOG.*
+- [x] **E1. Photo Storage** (2026-06-18) — public `photos` bucket (owner-scoped
+  write RLS) via migration `20260618000000_photo_storage.sql`; new `lib/storage.ts`
+  uploads local picker URIs through the store's persist path and swaps the
+  resolvable public URL into the cache + `photo_url`/`avatar_url` (screens
+  unchanged — same optimistic pattern). Backups now carry remote photo URLs
+  (`lib/export.ts`; local URIs are dropped on export, read back on import).
+  *Needs the new Storage migration applied before uploads work — see CHANGELOG.*
+  Orphaned objects are intentionally NOT deleted on loan-delete (undo re-inserts
+  the same row pointing at the same URL, so the object must outlive the delete);
+  a GC pass is parked as **E5** below.
+- [ ] **E2. Web nudge page `/n/[token]`** — the borrower-facing "mark as returned"
+  flow (the other half of the killer feature): generate a `nudge_links` row +
+  token from the mobile nudge flow, build the Next.js page (service-role,
+  single-token lookup), round-trip `nudge_links.responded` into the loan status.
+- [ ] **E3. Atomic restore** — replace the sequential delete-then-insert in
+  `db.replaceAll` with a transactional `restore_ledger` RPC.
+- [ ] **E4. Settings sync** — move non-appearance settings (currency / nudges /
+  channel / shame) to a user-prefs table; appearance stays device-local.
+- [ ] **E5. Storage GC** — orphaned photo objects accumulate (delete keeps the
+  object so undo can restore it). A periodic sweep (or a grace-period cleanup of
+  objects no row references) would reclaim them. Low priority — uuid paths,
+  small files.
+
 ### D — Acknowledged QA / deferrals (tracked elsewhere too)
 
 - [ ] **D1. Android parity check** — custom tab bar, `elevation` shadows,

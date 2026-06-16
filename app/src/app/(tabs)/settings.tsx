@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Linking, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Linking, StyleSheet, Switch, Text, View } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -26,6 +26,7 @@ import {
   useSettings,
 } from '../../lib/store';
 import { NUDGE_CHANNELS } from '../../lib/nudge';
+import { signOut, useSession } from '../../lib/auth';
 import { getNotifPermission, NotifPermission, requestNotifPermission } from '../../lib/notifications';
 import { resetOnboarding } from '../../lib/onboarding';
 import { radius, space } from '../../lib/theme';
@@ -245,6 +246,43 @@ function DataRow({ index }: { index: number }) {
   );
 }
 
+/** Shows the signed-in email + signs out (the auth gate then routes to /auth). */
+function AccountRow({ index }: { index: number }) {
+  const { colors, type: t } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  const { session } = useSession();
+  const email = session?.user.email;
+
+  const confirm = () => {
+    Alert.alert(
+      'Sign out?',
+      'Your ledger stays safe in the cloud — sign back in anytime to pick up where you left off.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
+      ],
+    );
+  };
+
+  return (
+    <Reveal index={index} from={20}>
+      <PressableScale
+        onPress={confirm}
+        scaleTo={0.98}
+        style={styles.row}
+        accessibilityRole="button"
+        accessibilityLabel="Sign out"
+      >
+        <View style={styles.toggleText}>
+          <Text style={t.h3}>Sign out</Text>
+          {email && <Text style={styles.sub} numberOfLines={1}>Signed in as {email}</Text>}
+        </View>
+        <Icon name="chevronRight" size={20} color={colors.inkFaint} strokeWidth={2.2} />
+      </PressableScale>
+    </Reveal>
+  );
+}
+
 export default function SettingsScreen() {
   const { colors, type: t } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -366,7 +404,9 @@ export default function SettingsScreen() {
           </View>
         </Reveal>
 
-        <Reveal index={8} from={18}>
+        <AccountRow index={8} />
+
+        <Reveal index={9} from={18}>
           <View style={styles.footerRow}>
             <Text style={styles.footer}>OweMe</Text>
             <Icon name="parcel" size={17} />

@@ -120,7 +120,7 @@ export default function BorrowersScreen() {
       {borrowers.length === 0 && (
         <Reveal index={1}>
           <View style={styles.empty}>
-            <Text style={styles.emptyEmoji}>🧑‍🤝‍🧑</Text>
+            <Icon name="duo" size={56} color={colors.inkSoft} />
             <Text style={styles.emptyText}>
               No one here yet. Add the friends you lend to and OweMe keeps score.
             </Text>
@@ -243,7 +243,6 @@ const makeStyles = (th: Theme) => StyleSheet.create({
     gap: space.md,
     ...th.shadow.card,
   },
-  emptyEmoji: { fontSize: 44 },
   emptyText: { ...th.type.bodySoft, textAlign: 'center' },
   emptyBtn: {
     flexDirection: 'row',

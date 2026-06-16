@@ -17,10 +17,10 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as ImagePicker from 'expo-image-picker';
 import { PressableScale } from './PressableScale';
-import { Reveal } from './Reveal';
 import { Avatar } from './Avatar';
 import { Icon } from './Icon';
 import { Button } from './Button';
+import { Reveal } from './Reveal';
 import { addBorrower, deleteBorrower, loanCountFor, updateBorrower, useSettings } from '../lib/store';
 import { showToast } from '../lib/toast';
 import { haptics } from '../lib/haptics';
@@ -33,6 +33,10 @@ const EMOJI_CHOICES = [
   '🙂', '😎', '🤓', '🥸', '🧑', '👩', '👨', '🧔',
   '👵', '👴', '🧑‍🔧', '🧑‍🍳', '🧑‍🎓', '🦸', '🍗', '🎧', '📚', '👒',
 ];
+
+// Hold the staggered element reveals until the sheet has nearly finished sliding
+// up, so the content arrives *after* the panel instead of moving with it.
+const REVEAL_DELAY = 140;
 
 interface Props {
   visible: boolean;
@@ -182,14 +186,16 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
           >
           <View style={styles.grabber} />
 
-          <Reveal index={0}>
+          {/* Elements stagger in just after the sheet settles (REVEAL_DELAY),
+              the same choreography as the "Lend something" modal. */}
+          <Reveal index={0} delay={REVEAL_DELAY}>
             <View style={styles.head}>
               <Avatar name={name || '?'} emoji={emoji} uri={avatarUrl} size={56} />
               <Text style={[t.overline, styles.headLabel]}>{creating ? 'Add person' : 'Edit person'}</Text>
             </View>
           </Reveal>
 
-          <Reveal index={1}>
+          <Reveal index={1} delay={REVEAL_DELAY}>
             <TextInput
               value={name}
               onChangeText={setName}
@@ -200,7 +206,7 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
             />
           </Reveal>
 
-          <Reveal index={2}>
+          <Reveal index={2} delay={REVEAL_DELAY}>
             <Text style={[t.overline, styles.label]}>Avatar</Text>
             <View style={styles.photoRow}>
               <PressableScale onPress={takePhoto} scaleTo={0.96} disabled={launching !== null} style={[styles.photoBtn, launching === 'gallery' && styles.photoBtnDim]} accessibilityLabel="Take a photo">
@@ -244,7 +250,7 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
             </View>
           </Reveal>
 
-          <Reveal index={3}>
+          <Reveal index={3} delay={REVEAL_DELAY}>
             <Text style={[t.overline, styles.label]}>Phone (optional)</Text>
             <TextInput
               value={phone}
@@ -257,7 +263,7 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
           </Reveal>
 
           {!creating && shameMode && (
-            <Reveal index={4}>
+            <Reveal index={4} delay={REVEAL_DELAY}>
               <View style={styles.exemptRow}>
                 <View style={styles.exemptText}>
                   <Text style={t.h3}>Exempt from shame 😇</Text>
@@ -272,7 +278,7 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
             </Reveal>
           )}
 
-          <Reveal index={creating ? 4 : 5}>
+          <Reveal index={creating ? 4 : 5} delay={REVEAL_DELAY}>
             <View style={styles.actions}>
               <Button label={creating ? 'Add 🤝' : 'Save'} onPress={save} disabled={!name.trim()} />
               {!creating && (

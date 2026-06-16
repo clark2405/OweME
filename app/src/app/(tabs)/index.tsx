@@ -207,10 +207,10 @@ export default function HomeScreen() {
             </Reveal>
             <Reveal index={4}>
               <View style={styles.empty}>
-                <Text style={styles.emptyEmoji}>{filter === 'all' ? '🌵' : '🔍'}</Text>
+                <Icon name={filter === 'all' ? 'cactus' : 'search'} size={54} color={colors.inkSoft} />
                 <Text style={styles.emptyText}>
                   {filter === 'all'
-                    ? 'Nobody owes you anything. Either you’re very organized or very stingy 😌'
+                    ? 'Nobody owes you anything. Either you’re very organized or very stingy.'
                     : `No ${filter === 'item' ? 'things' : 'money'} out right now.`}
                 </Text>
               </View>
@@ -425,7 +425,6 @@ const makeStyles = (th: Theme) => StyleSheet.create({
     gap: space.md,
     ...th.shadow.card,
   },
-  emptyEmoji: { fontSize: 44 },
   emptyText: { ...th.type.bodySoft, textAlign: 'center' },
   fabSlot: {
     position: 'absolute',

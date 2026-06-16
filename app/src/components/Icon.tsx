@@ -33,6 +33,20 @@ const GLYPH = {
   kraftLeft: '#E6CBA4',
   kraftRight: '#CDAE83',
   kraftStroke: '#6E5436',
+  // Empty-state illustrations (cactus / duo / mailbox / hourglass).
+  cactus: '#6FBF73',
+  terracotta: '#D98E5A',
+  terracottaDeep: '#C2784A',
+  bloom: '#FF8FA3',
+  skin: '#F0B98D',
+  duoBlue: '#6BA6D8',
+  duoCoral: '#FF8A5C',
+  mailBlue: '#5AA9E0',
+  mailDeep: '#3D7FB5',
+  flagRed: '#FF5A4D',
+  post: '#9C6B3F',
+  sand: '#F4C44E',
+  glassFrame: '#C99A5B',
 };
 
 export type IconName =
@@ -64,7 +78,11 @@ export type IconName =
   | 'grave'
   | 'star'
   | 'bellOff'
-  | 'parcel';
+  | 'parcel'
+  | 'cactus'
+  | 'duo'
+  | 'mailbox'
+  | 'hourglass';
 
 interface Props {
   name: IconName;
@@ -389,6 +407,54 @@ export function Icon({ name, size = 24, color, strokeWidth = 2, focused = false,
           <Path d="M12 3 20 7.5 12 12 4 7.5Z" fill={GLYPH.kraftTop} stroke={GLYPH.kraftStroke} strokeWidth={1.3} strokeLinejoin="round" />
           <Path d="M4 7.5 12 12 12 20.5 4 16Z" fill={GLYPH.kraftLeft} stroke={GLYPH.kraftStroke} strokeWidth={1.3} strokeLinejoin="round" />
           <Path d="M20 7.5 12 12 12 20.5 20 16Z" fill={GLYPH.kraftRight} stroke={GLYPH.kraftStroke} strokeWidth={1.3} strokeLinejoin="round" />
+        </>
+      )}
+
+      {name === 'cactus' && (
+        <>
+          {/* potted cactus — "nobody owes you anything" (replaces 🌵) */}
+          <Path d="M8 18.2h8l-.8 3a.8.8 0 0 1-.8.6H9.6a.8.8 0 0 1-.8-.6Z" fill={GLYPH.terracotta} />
+          <Path d="M7.5 18.2h9" fill="none" stroke={GLYPH.terracottaDeep} strokeWidth={strokeWidth} strokeLinecap="round" />
+          <Path d="M10.6 18.2V9.4a1.4 1.4 0 0 1 2.8 0v8.8Z" fill={GLYPH.cactus} />
+          <Path d="M10.6 13.2H9.2a1.3 1.3 0 0 0-1.3 1.3v1.4" fill="none" stroke={GLYPH.cactus} strokeWidth={2.4} strokeLinecap="round" />
+          <Path d="M13.4 11.6h1.3a1.3 1.3 0 0 1 1.3 1.3v1.6" fill="none" stroke={GLYPH.cactus} strokeWidth={2.4} strokeLinecap="round" />
+          <Circle cx="12" cy="8" r="1.2" fill={GLYPH.bloom} />
+        </>
+      )}
+
+      {name === 'duo' && (
+        <>
+          {/* two friends — "the usual suspects" (replaces 🧑‍🤝‍🧑) */}
+          <Path d="M3 20.5a5 5 0 0 1 10 0Z" fill={GLYPH.duoBlue} />
+          <Path d="M11 20.5a5 5 0 0 1 10 0Z" fill={GLYPH.duoCoral} />
+          <Circle cx="8" cy="12.5" r="3" fill={GLYPH.skin} />
+          <Circle cx="16" cy="12.5" r="3" fill={GLYPH.skin} />
+        </>
+      )}
+
+      {name === 'mailbox' && (
+        <>
+          {/* blue mailbox, flag up — "the archive" (replaces 📬). The body (the
+              dominant mass) is centred on x=12 so it reads centred; the flag sits
+              in the right half, where a mailbox flag belongs. */}
+          <Path d="M12 21V16.8" fill="none" stroke={GLYPH.post} strokeWidth={2.6} strokeLinecap="round" />
+          <Path d="M10 21h4" fill="none" stroke={GLYPH.post} strokeWidth={strokeWidth} strokeLinecap="round" />
+          <Path d="M8.4 17V13a3.6 3.6 0 0 1 7.2 0v4Z" fill={GLYPH.mailBlue} />
+          <Path d="M9.8 13.6H14.2" fill="none" stroke={GLYPH.mailDeep} strokeWidth={1.6} strokeLinecap="round" />
+          <Path d="M15.6 16V9.2" fill="none" stroke={GLYPH.flagRed} strokeWidth={1.8} strokeLinecap="round" />
+          <Path d="M15.6 9.2H17.9l-0.8 1 0.8 1H15.6Z" fill={GLYPH.flagRed} />
+        </>
+      )}
+
+      {name === 'hourglass' && (
+        <>
+          {/* hourglass — "give it time" (replaces ⏳) */}
+          <Path d="M7 4h10" fill="none" stroke={GLYPH.glassFrame} strokeWidth={2.6} strokeLinecap="round" />
+          <Path d="M7 20h10" fill="none" stroke={GLYPH.glassFrame} strokeWidth={2.6} strokeLinecap="round" />
+          <Path d="M8.5 4.6 15.5 4.6 12 12 15.5 19.4 8.5 19.4 12 12Z" fill="none" stroke={GLYPH.glassFrame} strokeWidth={1.8} strokeLinejoin="round" />
+          <Path d="M9.8 6 14.2 6 12 10.6Z" fill={GLYPH.sand} />
+          <Path d="M9.6 18.4 14.4 18.4 12 14.2Z" fill={GLYPH.sand} />
+          <Path d="M12 11.6v3" fill="none" stroke={GLYPH.sand} strokeWidth={1.4} strokeLinecap="round" />
         </>
       )}
     </Svg>

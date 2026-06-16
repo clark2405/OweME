@@ -82,8 +82,9 @@ export default function HistoryScreen() {
       {!hasArchive ? (
         <Reveal>
           <View style={styles.empty}>
-            <Text style={styles.emptyEmoji}>📭</Text>
-            <Text style={styles.emptyText}>Nothing&apos;s come home yet. Give it time. ⏳</Text>
+            <Icon name="mailbox" size={54} color={colors.inkSoft} />
+            <Text style={styles.emptyText}>Nothing&apos;s come home yet. Give it time.</Text>
+            <Icon name="hourglass" size={22} color={colors.inkFaint} />
           </View>
         </Reveal>
       ) : (
@@ -176,7 +177,7 @@ export default function HistoryScreen() {
           {results.length === 0 ? (
             <Reveal index={3}>
               <View style={styles.empty}>
-                <Text style={styles.emptyEmoji}>🔍</Text>
+                <Icon name="search" size={48} color={colors.inkSoft} />
                 <Text style={styles.emptyText}>
                   {query ? `Nothing matches “${query}”.` : 'Nothing in this view.'}
                 </Text>
@@ -318,6 +319,5 @@ const makeStyles = (th: Theme) => StyleSheet.create({
     gap: space.md,
     ...th.shadow.card,
   },
-  emptyEmoji: { fontSize: 44 },
   emptyText: { ...th.type.bodySoft, textAlign: 'center' },
 });

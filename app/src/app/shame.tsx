@@ -21,6 +21,7 @@ import { GraveyardBackdrop, RankBadge, Tombstone, WiltedTree } from '../componen
 import { ShameEntry, shameBoard, useBorrowers, useLoans } from '../lib/store';
 import { money } from '../lib/format';
 import { haptics } from '../lib/haptics';
+import { useTheme } from '../lib/theme-context';
 import { colors, graveyard as GRAVE, radius, shadow, space, type as t } from '../lib/theme';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
@@ -45,6 +46,13 @@ function shameShareText(board: ShameEntry[]): string {
 
 export default function ShameScreen() {
   const router = useRouter();
+  // The active theme's base — used to RESTORE the native root/window background on
+  // blur. (The rest of this screen styles itself from the static `graveyard`
+  // palette since it's always its own dark place, but the restore must match the
+  // *current* scheme — using the static light `colors.bg` repainted the window
+  // cream, which the iOS-26 zoom transition then flashed at the edges on close.)
+  const { colors: themeColors } = useTheme();
+  const restoreBg = themeColors.bg;
   const loans = useLoans();
   const borrowers = useBorrowers();
   const board = shameBoard(loans, borrowers);
@@ -65,9 +73,9 @@ export default function ShameScreen() {
       const SystemUI = require('expo-system-ui') as typeof import('expo-system-ui');
       SystemUI.setBackgroundColorAsync(GRAVE.base).catch(() => {});
       return () => {
-        SystemUI.setBackgroundColorAsync(colors.bg).catch(() => {});
+        SystemUI.setBackgroundColorAsync(restoreBg).catch(() => {});
       };
-    }, []),
+    }, [restoreBg]),
   );
 
   // Share the branded card as a PNG; fall back to the plain-text leaderboard.

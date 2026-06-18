@@ -63,7 +63,7 @@ const CHIPS: ChipSpec[] = [
 ];
 const N = CHIPS.length;
 
-const WRAP_H = 400;
+const WRAP_H = 350;
 const CHIP_H = 36;
 
 // ——— Isometric cube (taller), drawn in an SVG viewBox (0 0 240 200) ———
@@ -477,7 +477,7 @@ const makeStyles = (th: Theme) => StyleSheet.create({
 
   cta: {
     position: 'absolute',
-    top: SVG_TOP + 206,
+    top: SVG_TOP + 152,
     left: 0,
     right: 0,
     alignItems: 'center',

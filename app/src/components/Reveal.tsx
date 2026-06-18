@@ -12,6 +12,7 @@ import Animated, {
   useReducedMotion,
   useSharedValue,
   withDelay,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { duration, expoOut, reduceMotion, stagger } from '../lib/motion';
@@ -25,6 +26,13 @@ interface Props {
   /** Initial vertical offset in px (how far it rises from). */
   from?: number;
   clip?: boolean;
+  /**
+   * Livelier entrance: a spring (with a touch of overshoot) + a scale-up from
+   * 0.92, instead of the default timed rise/fade. For moments that want a more
+   * dynamic arrival (e.g. the onboarding first page revealing behind the intro
+   * blob). Ignored under reduced motion.
+   */
+  pop?: boolean;
   style?: StyleProp<ViewStyle>;
   /**
    * When set, the entrance is driven by this flag instead of playing once on
@@ -36,7 +44,7 @@ interface Props {
   active?: boolean;
 }
 
-export function Reveal({ children, index = 0, delay = 0, from = 18, clip = false, style, active }: Props) {
+export function Reveal({ children, index = 0, delay = 0, from = 18, clip = false, pop = false, style, active }: Props) {
   const p = useSharedValue(0);
   const reduce = useReducedMotion();
 
@@ -48,16 +56,21 @@ export function Reveal({ children, index = 0, delay = 0, from = 18, clip = false
       const total = delay + index * stagger;
       p.value = withDelay(
         reduce ? 0 : total,
-        withTiming(1, { duration: reduce ? 0 : duration.base, easing: expoOut, reduceMotion }),
+        pop && !reduce
+          ? withSpring(1, { damping: 13, stiffness: 150, mass: 0.9 })
+          : withTiming(1, { duration: reduce ? 0 : duration.base, easing: expoOut, reduceMotion }),
       );
     } else {
       p.value = 0;
     }
-  }, [active, delay, index, p, reduce]);
+  }, [active, delay, index, p, reduce, pop]);
 
   const inner = useAnimatedStyle(() => ({
-    opacity: p.value,
-    transform: [{ translateY: (1 - p.value) * from }],
+    // Clamp so a spring overshoot (p > 1) doesn't push opacity past 1.
+    opacity: Math.min(1, p.value),
+    transform: pop
+      ? [{ translateY: (1 - p.value) * from }, { scale: 0.92 + p.value * 0.08 }]
+      : [{ translateY: (1 - p.value) * from }],
   }));
 
   if (clip) {

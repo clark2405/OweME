@@ -13,7 +13,7 @@
  * All motion collapses under OS reduced-motion (Reveal + each visual).
  */
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -26,13 +26,17 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
+  Easing,
+  useAnimatedScrollHandler,
   useAnimatedStyle,
+  useDerivedValue,
+  useReducedMotion,
   useSharedValue,
   withSpring,
   withTiming,
   FadeIn,
 } from 'react-native-reanimated';
-import { AmbientBackground } from '../components/AmbientBackground';
+import { OnboardingAmbient } from '../components/onboarding/OnboardingAmbient';
 import { Reveal } from '../components/Reveal';
 import { Button } from '../components/Button';
 import { PressableScale } from '../components/PressableScale';
@@ -125,12 +129,43 @@ export default function OnboardingScreen() {
   const { type: t } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   const [page, setPage] = useState(0);
   const [expanded, setExpanded] = useState<number | null>(null);
   const last = page === PAGES.length - 1;
+
+  // Raw pager position in pages (0 → PAGES-1), updated every scroll frame.
+  const rawProgress = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (e) => {
+      rawProgress.value = width > 0 ? e.contentOffset.x / width : 0;
+    },
+  });
+  // Soft-follow the raw scroll so the ambient blobs *ease* to each page instead
+  // of whipping across at swipe speed: withTiming restarting each frame acts as a
+  // low-pass lag, giving a gentle, consistent transition regardless of fling speed.
+  const progress = useDerivedValue(() =>
+    withTiming(rawProgress.value, { duration: 600, easing: Easing.out(Easing.cubic) }),
+  );
+
+  // One-shot entrance: a huge blob rises from the bottom, swells to fill the
+  // screen, then settles into page 1 — and the page-1 content reveals once it's
+  // cleared (`started`). Collapses to instant under reduced motion.
+  const reduceMotion = useReducedMotion();
+  const intro = useSharedValue(reduceMotion ? 1 : 0);
+  const [started, setStarted] = useState(reduceMotion);
+  useEffect(() => {
+    if (reduceMotion) return;
+    // Linear clock so the centre HOLD (intro 0.30 → 0.70) lasts its true share
+    // of the duration; the rise/return are eased inside the ambient component.
+    intro.value = withTiming(1, { duration: 2600, easing: Easing.linear });
+    // Reveal the content partway through the centre hold — the blob parks, sits
+    // for a beat, *then* the elements appear, before it glides back behind them.
+    const id = setTimeout(() => setStarted(true), 1400);
+    return () => clearTimeout(id);
+  }, [reduceMotion, intro]);
 
   const finish = () => {
     markOnboardingSeen();
@@ -149,7 +184,7 @@ export default function OnboardingScreen() {
 
   return (
     <View style={styles.root}>
-      <AmbientBackground variant="home" />
+      <OnboardingAmbient progress={progress} intro={intro} width={width} height={height} />
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.topBar}>
           <Text style={t.overline}>
@@ -162,11 +197,13 @@ export default function OnboardingScreen() {
           )}
         </View>
 
-        <ScrollView
+        <Animated.ScrollView
           ref={scrollRef}
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
+          onScroll={scrollHandler}
+          scrollEventThrottle={16}
           onMomentumScrollEnd={onScroll}
           style={styles.pager}
           contentContainerStyle={{ width: width * PAGES.length }}
@@ -174,8 +211,9 @@ export default function OnboardingScreen() {
           {PAGES.map((p, i) => {
             // Each page's content is hidden until the page is the active one,
             // then reveals on arrival — driven by `active` (no remount, so no
-            // flash, and no pre-show while it's scrolling in).
-            const active = page === i;
+            // flash, and no pre-show while it's scrolling in). Page 1 also waits
+            // for the intro blob to clear (`started`) so it reveals on cue.
+            const active = page === i && (i !== 0 || started);
             return (
               <ScrollView
                 key={p.kicker}
@@ -184,7 +222,7 @@ export default function OnboardingScreen() {
                 showsVerticalScrollIndicator={false}
               >
                 <View style={styles.header}>
-                  <Reveal active={active} index={1} from={12}>
+                  <Reveal active={active} index={1} from={12} pop={i === 0}>
                     <Text style={[t.overline, styles.kicker]}>{p.kicker}</Text>
                   </Reveal>
                   <Reveal active={active} index={2} clip from={44}>
@@ -194,7 +232,7 @@ export default function OnboardingScreen() {
                     </Text>
                   </Reveal>
                   {p.body && (
-                    <Reveal active={active} index={3} from={18}>
+                    <Reveal active={active} index={3} from={18} pop={i === 0}>
                       <Text style={[t.bodySoft, styles.body]}>{p.body}</Text>
                     </Reveal>
                   )}
@@ -207,7 +245,7 @@ export default function OnboardingScreen() {
                 <View style={p.visual === 'tour' ? styles.staticSpacerTop : styles.flexSpacerTop} />
                 <View style={styles.visualArea}>
                   {p.visual === 'chips' && (
-                    <Reveal active={active} index={3} from={20}>
+                    <Reveal active={active} index={3} from={20} pop={i === 0}>
                       <FloatingChips />
                     </Reveal>
                   )}
@@ -259,7 +297,7 @@ export default function OnboardingScreen() {
               </ScrollView>
             );
           })}
-        </ScrollView>
+        </Animated.ScrollView>
 
         {/* Anchored at the same height as the app's floating tab bar — just
             above the home indicator — so the CTA lives where the navbar will. */}
@@ -374,7 +412,7 @@ const makeStyles = (th: Theme) => StyleSheet.create({
   page: { flex: 1 },
   pageContent: {
     paddingHorizontal: space.xl,
-    paddingTop: space.lg,
+    paddingTop: space.md,
     paddingBottom: space.md,
     flexGrow: 1,
   },
@@ -384,9 +422,9 @@ const makeStyles = (th: Theme) => StyleSheet.create({
   // bottom) so it sits near the headline, not marooned dead-centre. They grow
   // on tall screens and collapse (page scrolls) on short ones.
   visualArea: { paddingVertical: space.sm },
-  flexSpacerTop: { flex: 2, minHeight: space.lg },
+  flexSpacerTop: { flex: 2, minHeight: space.sm },
   staticSpacerTop: { height: space.xl },
-  flexSpacerBottom: { flex: 3, minHeight: space.lg },
+  flexSpacerBottom: { flex: 3, minHeight: space.sm },
   kicker: { color: th.colors.accent },
   headline: { marginTop: space.xs, fontSize: 38, lineHeight: 42 },
   accent: { color: th.colors.accent },

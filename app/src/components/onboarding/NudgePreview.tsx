@@ -65,7 +65,7 @@ export function NudgePreview({ active }: { active?: boolean }) {
       {/* The reminder OweMe fires to you */}
       <View style={styles.notif}>
         <View style={styles.notifIcon}>
-          <Text style={styles.notifEmoji}>📦</Text>
+          <Icon name="parcel" size={22} />
         </View>
         <View style={styles.notifBody}>
           <Text style={styles.notifTitle}>OweMe</Text>
@@ -108,7 +108,6 @@ const makeStyles = (th: Theme) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  notifEmoji: { fontSize: 20 },
   notifBody: { flex: 1, gap: 1 },
   notifTitle: { ...th.type.small, color: th.colors.ink, fontWeight: '800' },
   notifText: { fontSize: 12.5, lineHeight: 16, fontWeight: '500', color: th.colors.inkSoft },

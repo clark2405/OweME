@@ -86,15 +86,18 @@ const PAGES: Page[] = [
     kicker: 'The lay of the land',
     headline: 'Find your way ',
     accentWord: 'around.',
+    body: 'Everything OweMe does, in four places. Tap any to peek inside.',
     visual: 'tour',
   },
 ];
 
-/** The numbered legend that decodes the hotspots in the home-screen preview. */
-const LEGEND: { blurb: string }[] = [
-  { blurb: 'What you’re owed — tap to filter.' },
-  { blurb: 'Swipe → returned 🎉 or nudge 📨.' },
-  { blurb: 'Lend an item or money in 15s.' },
+/** The numbered legend that decodes the hotspots in the home-screen preview.
+ *  Parts let a row mix copy with inline SVG glyphs (returned / nudge). */
+type LegendPart = { t: string } | { icon: IconName };
+const LEGEND: { parts: LegendPart[] }[] = [
+  { parts: [{ t: 'What you’re owed — tap to filter.' }] },
+  { parts: [{ t: 'Swipe → returned ' }, { icon: 'party' }, { t: ' or nudge ' }, { icon: 'envelope' }, { t: '.' }] },
+  { parts: [{ t: 'Lend an item or money in 15s.' }] },
 ];
 
 /** Tab tour on the last page — where everything else lives. */
@@ -241,8 +244,9 @@ export default function OnboardingScreen() {
                 {/* Flex spacers centre the visual in the space left below the
                     header (so it clears the text and fills the bottom on tall
                     screens), but collapse to 0 and let the page scroll on short
-                    ones. */}
-                <View style={p.visual === 'tour' ? styles.staticSpacerTop : styles.flexSpacerTop} />
+                    ones. The tour page instead hugs its header with a fixed gap
+                    and lets the list fill the rest (see visualAreaFill / tour). */}
+                <View style={p.visual === 'tour' ? styles.tourHeaderGap : styles.flexSpacerTop} />
                 <View style={styles.visualArea}>
                   {p.visual === 'chips' && (
                     <Reveal active={active} index={3} from={20} pop={i === 0}>
@@ -262,7 +266,15 @@ export default function OnboardingScreen() {
                               <View style={styles.legendBadge}>
                                 <Text style={styles.legendNum}>{j + 1}</Text>
                               </View>
-                              <Text style={styles.legendText}>{row.blurb}</Text>
+                              <View style={styles.legendTextWrap}>
+                                {row.parts.map((part, k) =>
+                                  'icon' in part ? (
+                                    <Icon key={k} name={part.icon} size={15} />
+                                  ) : (
+                                    <Text key={k} style={styles.legendText}>{part.t}</Text>
+                                  ),
+                                )}
+                              </View>
                             </View>
                           </Reveal>
                         ))}
@@ -307,7 +319,7 @@ export default function OnboardingScreen() {
               <Dot key={i} active={i === page} />
             ))}
           </View>
-          <Button label={last ? 'Start lending smarter 🤝' : 'Next'} onPress={next} />
+          <Button label={last ? 'Start lending smarter' : 'Next'} onPress={next} />
         </View>
       </SafeAreaView>
     </View>
@@ -422,8 +434,11 @@ const makeStyles = (th: Theme) => StyleSheet.create({
   // bottom) so it sits near the headline, not marooned dead-centre. They grow
   // on tall screens and collapse (page scrolls) on short ones.
   visualArea: { paddingVertical: space.sm },
+  // Tour page hugs its header with a fixed gap; the list stays compact at the top
+  // and the bottom flex spacer holds the slack (which shrinks to absorb an
+  // expanded row before any scrolling kicks in).
+  tourHeaderGap: { height: space.xl },
   flexSpacerTop: { flex: 2, minHeight: space.sm },
-  staticSpacerTop: { height: space.xl },
   flexSpacerBottom: { flex: 3, minHeight: space.sm },
   kicker: { color: th.colors.accent },
   headline: { marginTop: space.xs, fontSize: 38, lineHeight: 42 },
@@ -443,7 +458,9 @@ const makeStyles = (th: Theme) => StyleSheet.create({
     justifyContent: 'center',
   },
   legendNum: { fontSize: 11, fontWeight: '900', color: th.colors.onAccent },
-  legendText: { ...th.type.small, flex: 1, color: th.colors.inkSoft, lineHeight: 17 },
+  // Row that lets copy and inline glyphs sit together (returned / nudge).
+  legendTextWrap: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' },
+  legendText: { ...th.type.small, flexShrink: 1, color: th.colors.inkSoft, lineHeight: 17 },
 
   tour: { gap: space.md },
   tourRow: {

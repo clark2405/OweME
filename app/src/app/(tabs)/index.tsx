@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { Screen } from '../../components/Screen';
@@ -63,7 +63,12 @@ export default function HomeScreen() {
   const [filter, setFilter] = useState<LoanTypeFilter>('all');
   const toggle = (f: LoanTypeFilter) => setFilter((cur) => (cur === f ? 'all' : f));
 
-  const tabBarTop = tabBarBottomInset(insets.bottom) + TAB_BAR_HEIGHT;
+  // The FAB floats just above the tab bar. iOS = the native bar (reported in the
+  // bottom safe-area inset); Android = our custom floating pill (offset + height).
+  const tabBarTop =
+    Platform.OS === 'ios'
+      ? insets.bottom
+      : tabBarBottomInset(insets.bottom) + TAB_BAR_HEIGHT;
   const fabBottom = tabBarTop + space.md;
   const listClearance = fabBottom + FAB_HEIGHT + space.xl;
 
@@ -104,7 +109,7 @@ export default function HomeScreen() {
   if (!hydrated) {
     return (
       <View style={styles.root}>
-        <Screen scroll bare contentStyle={{ paddingBottom: listClearance }}>
+        <Screen scroll bare={Platform.OS !== 'ios'} ambient="home" crossfade contentStyle={{ paddingBottom: listClearance }}>
           <View style={styles.skelHead}>
             <Skeleton width={190} height={12} round={6} />
             <Skeleton width={210} height={34} round={10} style={styles.skelTitle} />
@@ -136,7 +141,7 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.root}>
-      <Screen scroll bare contentStyle={{ paddingBottom: listClearance }}>
+      <Screen scroll bare={Platform.OS !== 'ios'} ambient="home" crossfade contentStyle={{ paddingBottom: listClearance }}>
         <Reveal index={0} from={10}>
           <View style={styles.overlineRow}>
             <Text style={t.overline}>OweMe</Text>

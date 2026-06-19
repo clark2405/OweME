@@ -17,7 +17,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, {
   Easing,
   FadeIn,
@@ -34,6 +34,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { G, Line, Path, Polygon, Text as SvgText } from 'react-native-svg';
 import { PressableScale } from '../PressableScale';
+import { Icon } from '../Icon';
 import { haptics } from '../../lib/haptics';
 import { radius, space } from '../../lib/theme';
 import { Theme, useThemedStyles } from '../../lib/theme-context';
@@ -91,7 +92,6 @@ const STENCIL = '#6E5436';
 const TILE = 100;
 const LOGO_BLOCK_H = TILE + 10 + 32 + 20;
 const LOGO_TOP = (WRAP_H - LOGO_BLOCK_H) / 2 - 6;
-const MORPH_RISE = BOX_CENTER_Y - (LOGO_TOP + TILE / 2);
 
 const PACK_START = 0.16;
 const FLIGHT = 0.2;
@@ -115,7 +115,7 @@ const clamp01 = (x: number): number => {
   return Math.min(1, Math.max(0, x));
 };
 
-const boxPose = (ov: number, entry: number) => {
+const boxPose = (ov: number, entry: number, morphRise: number) => {
   'worklet';
   let pulse = 0;
   for (let i = 0; i < N; i++) {
@@ -138,7 +138,7 @@ const boxPose = (ov: number, entry: number) => {
   return {
     opacity: (1 - morphFade) * entry,
     transform: [
-      { translateY: pulse * 3 + thunk * 4 - MORPH_RISE * rise },
+      { translateY: pulse * 3 + thunk * 4 - morphRise * rise },
       { rotate: `${spin}deg` },
       { scaleX: (1 + pulse * 0.05 + thunk * 0.05) * sc * entryScale },
       { scaleY: (1 - pulse * 0.06 - thunk * 0.06) * sc * entryScale },
@@ -315,7 +315,7 @@ function OrganizeButton({ onPress }: { onPress: () => void }) {
         accessibilityLabel="Round them up"
         accessibilityHint="Packs your scattered items into OweMe"
       >
-        <Text style={styles.ctaIcon}>📦</Text>
+        <Icon name="parcel" size={18} />
         <Text style={styles.ctaLabel}>Round them up</Text>
       </PressableScale>
     </Animated.View>
@@ -325,6 +325,14 @@ function OrganizeButton({ onPress }: { onPress: () => void }) {
 export function FloatingChips() {
   const styles = useThemedStyles(makeStyles);
   const reduce = useReducedMotion();
+  // Roomier layout on tall phones (the original spacing); compact on short ones
+  // (e.g. iPhone 16e) so the "Round them up" CTA stays clear of the page dots.
+  const { height } = useWindowDimensions();
+  const tall = height >= 900;
+  const wrapH = tall ? 400 : 350;
+  const ctaTop = SVG_TOP + (tall ? 206 : 152);
+  const logoTop = (wrapH - LOGO_BLOCK_H) / 2 - 6;
+  const morphRise = BOX_CENTER_Y - (logoTop + TILE / 2);
   const o = useSharedValue(reduce ? 2 : 0);
   const boxEntry = useSharedValue(reduce ? 1 : 0);
   const float = useSharedValue(0);
@@ -368,7 +376,7 @@ export function FloatingChips() {
   const wrapStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: (float.value - 0.5) * 8 }],
   }));
-  const boxStyle = useAnimatedStyle(() => boxPose(o.value, boxEntry.value));
+  const boxStyle = useAnimatedStyle(() => boxPose(o.value, boxEntry.value, morphRise));
   const swirlStyle = useAnimatedStyle(() => {
     const p = clamp01((o.value - 1.5) / 0.4);
     return {
@@ -394,7 +402,7 @@ export function FloatingChips() {
   });
 
   return (
-    <View style={styles.root} pointerEvents="box-none">
+    <View style={[styles.root, { height: wrapH }]} pointerEvents="box-none">
       <Animated.View style={[styles.wrap, wrapStyle]} pointerEvents="none">
         <Animated.View style={[styles.boxWrap, boxStyle]}>
           <IsoBox o={o} />
@@ -404,7 +412,7 @@ export function FloatingChips() {
           <Chip key={c.label} spec={c} index={i} o={o} />
         ))}
 
-        <View style={styles.logoBlock} pointerEvents="none">
+        <View style={[styles.logoBlock, { top: logoTop }]} pointerEvents="none">
           <View style={styles.tileSpot}>
             <Animated.View style={[styles.swirl, swirlStyle]} />
             <Animated.View style={[styles.tileShadow, tileStyle]}>
@@ -428,7 +436,7 @@ export function FloatingChips() {
 
       {armed && !organizing && (
         <Animated.View
-          style={styles.cta}
+          style={[styles.cta, { top: ctaTop }]}
           entering={FadeIn.duration(300)}
           exiting={FadeOut.duration(180)}
           pointerEvents="box-none"
@@ -494,7 +502,6 @@ const makeStyles = (th: Theme) => StyleSheet.create({
     borderColor: th.colors.hairline,
     ...th.shadow.lifted,
   },
-  ctaIcon: { fontSize: 16 },
   ctaLabel: { ...th.type.h3, fontSize: 15, color: th.colors.accent, letterSpacing: -0.2 },
 
   logoBlock: {

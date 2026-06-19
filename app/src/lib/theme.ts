@@ -35,6 +35,11 @@ export const lightColors = {
   accentSoft: '#FFE7E0',
   onAccent: '#FFFFFF',
 
+  // Destructive — a deeper, redder tone (distinct from the orange-coral accent)
+  // for sign-out / delete cues. `danger` for text/icons, `dangerSoft` for tints.
+  danger: '#C4402F',
+  dangerSoft: '#FBE7E3',
+
   // Supporting tonal tints (NOT accents) for status + type chips.
   sand: '#F0E6D6',
   sandInk: '#8A7A60',
@@ -82,6 +87,10 @@ export const darkColors: Palette = {
   accentPress: '#FF5235',
   accentSoft: 'rgba(255,107,79,0.16)',
   onAccent: '#FFFFFF',
+
+  // Destructive — redder than the coral accent, brightened for dark legibility.
+  danger: '#F2705E',
+  dangerSoft: 'rgba(242,112,94,0.16)',
 
   // Supporting tonal tints (NOT accents) — dark backings, lighter ink.
   sand: '#2E2519',

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
 import { Reveal } from '../../components/Reveal';
@@ -38,7 +38,7 @@ export default function BorrowersScreen() {
 
   if (!hydrated) {
     return (
-      <Screen scroll tabBarInset bare>
+      <Screen scroll tabBarInset bare={Platform.OS !== 'ios'} ambient="people" crossfade>
         <Header overline="The usual suspects" title="People" />
         <View style={styles.list}>
           {Array.from({ length: 5 }).map((_, i) => (
@@ -50,7 +50,7 @@ export default function BorrowersScreen() {
   }
 
   return (
-    <Screen scroll tabBarInset bare>
+    <Screen scroll tabBarInset bare={Platform.OS !== 'ios'} ambient="people" crossfade>
       <Header
         overline="The usual suspects"
         title="People"

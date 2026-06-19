@@ -6,6 +6,7 @@
  */
 
 import { StyleSheet, View } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   useAnimatedStyle,
@@ -125,13 +126,25 @@ interface TabBarProps {
 export function TabBar({ state, navigation }: TabBarProps) {
   const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
+  const { scheme } = useTheme();
+  // Glass rim + milky tint, tuned per scheme (the BlurView supplies the frost;
+  // these give it the liquid-glass edge + depth on top of it).
+  const glass = scheme === 'dark'
+    ? { edge: 'rgba(255,255,255,0.12)', tint: 'rgba(42,33,23,0.30)' }
+    : { edge: 'rgba(255,255,255,0.65)', tint: 'rgba(255,255,255,0.40)' };
 
   return (
     <View
       style={[styles.wrap, { paddingBottom: tabBarBottomInset(insets.bottom) }]}
       pointerEvents="box-none"
     >
-      <View style={styles.bar}>
+      <View style={[styles.bar, { backgroundColor: 'transparent', borderColor: glass.edge }]}>
+        <BlurView
+          intensity={scheme === 'dark' ? 40 : 60}
+          tint={scheme === 'dark' ? 'dark' : 'light'}
+          style={styles.glassLayer}
+        />
+        <View style={[styles.glassLayer, { backgroundColor: glass.tint }]} pointerEvents="none" />
         {state.routes.map((route, i) => {
           const focused = state.index === i;
           const onPress = () => {
@@ -170,6 +183,18 @@ const makeStyles = (th: Theme) => StyleSheet.create({
     borderWidth: 1,
     borderColor: th.colors.hairline,
     ...th.shadow.lifted,
+  },
+  // Liquid-glass layers — the frosted blur + a milky tint, both clipped to the
+  // pill. Sit behind the tab items (rendered first); the bar's own rim border
+  // draws on top.
+  glassLayer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: radius.pill,
+    overflow: 'hidden',
   },
   item: {
     // Evenly distribute across whatever width the bar takes.

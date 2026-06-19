@@ -47,6 +47,10 @@ const GLYPH = {
   post: '#9C6B3F',
   sand: '#F4C44E',
   glassFrame: '#C99A5B',
+  // Nudge envelope (warm coral message) — replaces 📨.
+  envBody: '#FFC7B0',
+  envFlap: '#FF6B4F',
+  envStroke: '#E07C58',
 };
 
 export type IconName =
@@ -82,6 +86,8 @@ export type IconName =
   | 'cactus'
   | 'duo'
   | 'mailbox'
+  | 'envelope'
+  | 'logout'
   | 'hourglass';
 
 interface Props {
@@ -443,6 +449,23 @@ export function Icon({ name, size = 24, color, strokeWidth = 2, focused = false,
           <Path d="M9.8 13.6H14.2" fill="none" stroke={GLYPH.mailDeep} strokeWidth={1.6} strokeLinecap="round" />
           <Path d="M15.6 16V9.2" fill="none" stroke={GLYPH.flagRed} strokeWidth={1.8} strokeLinecap="round" />
           <Path d="M15.6 9.2H17.9l-0.8 1 0.8 1H15.6Z" fill={GLYPH.flagRed} />
+        </>
+      )}
+
+      {name === 'envelope' && (
+        <>
+          {/* coral envelope — a friendly nudge (replaces 📨) */}
+          <Path d="M4 8a1.6 1.6 0 0 1 1.6-1.6h12.8A1.6 1.6 0 0 1 20 8v8a1.6 1.6 0 0 1-1.6 1.6H5.6A1.6 1.6 0 0 1 4 16Z" fill={GLYPH.envBody} stroke={GLYPH.envStroke} strokeWidth={1.3} strokeLinejoin="round" />
+          <Path d="M4.6 7.6 12 12.6 19.4 7.6" fill="none" stroke={GLYPH.envFlap} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+        </>
+      )}
+
+      {name === 'logout' && (
+        <>
+          {/* door frame + arrow leaving — "sign out" */}
+          <Path d="M14 4H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7" {...common} />
+          <Path d="M10.5 12H21" {...common} />
+          <Path d="M17.5 8 21.5 12 17.5 16" {...common} />
         </>
       )}
 

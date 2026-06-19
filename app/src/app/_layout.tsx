@@ -118,7 +118,10 @@ function ThemedNavigation() {
         <Stack.Screen name="auth" options={{ animation: 'fade', gestureEnabled: false }} />
         {/* First launch detours here via the guard in (tabs)/_layout. */}
         <Stack.Screen name="onboarding" options={{ animation: 'fade', gestureEnabled: false }} />
-        <Stack.Screen name="(tabs)" />
+        {/* The tabs root must not be edge-swipe-popped back to auth/onboarding —
+            you only leave it by signing out. Pushed screens below keep their
+            swipe-back. */}
+        <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
         {/* Modal presentation already slides up from the bottom; stacking an
             explicit `animation` on top made the modal present-then-dismiss on
             the first open when launched over a pushed card (RN 0.85 / iOS 26),

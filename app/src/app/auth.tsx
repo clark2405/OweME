@@ -44,7 +44,10 @@ export default function AuthScreen() {
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const ready = useShellReady();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  // Bias the centered block upward: perfectly-centered, top-weighted content
+  // reads as sitting low (big void below). Lifting it ~10% balances it.
+  const lift = Math.round(height * 0.1);
 
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');
@@ -145,7 +148,7 @@ export default function AuthScreen() {
           {ready && (
             <View style={styles.flex}>
               <Animated.View
-                style={[styles.layer, emailLayerStyle]}
+                style={[styles.layer, { paddingBottom: lift }, emailLayerStyle]}
                 pointerEvents={step === 'email' ? 'auto' : 'none'}
               >
                 <Reveal index={0} from={10}>
@@ -189,7 +192,7 @@ export default function AuthScreen() {
               </Animated.View>
 
               <Animated.View
-                style={[styles.layer, codeLayerStyle]}
+                style={[styles.layer, { paddingBottom: lift }, codeLayerStyle]}
                 pointerEvents={step === 'code' ? 'auto' : 'none'}
               >
                 <Reveal index={0} from={10}>

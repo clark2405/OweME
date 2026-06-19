@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
 import { Reveal } from '../../components/Reveal';
@@ -64,7 +64,7 @@ export default function HistoryScreen() {
 
   if (!hydrated) {
     return (
-      <Screen scroll tabBarInset bare>
+      <Screen scroll tabBarInset bare={Platform.OS !== 'ios'} ambient="history" crossfade>
         <Header overline="The archive" title="History" />
         <View style={styles.list}>
           {Array.from({ length: 5 }).map((_, i) => (
@@ -76,7 +76,7 @@ export default function HistoryScreen() {
   }
 
   return (
-    <Screen scroll tabBarInset bare>
+    <Screen scroll tabBarInset bare={Platform.OS !== 'ios'} ambient="history" crossfade>
       <Header overline="The archive" title="History" />
 
       {!hasArchive ? (

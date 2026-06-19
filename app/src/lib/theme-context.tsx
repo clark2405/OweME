@@ -17,7 +17,7 @@
  */
 
 import { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, useColorScheme } from 'react-native';
+import { Appearance, StyleSheet, useColorScheme } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import {
   darkColors,
@@ -60,6 +60,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const scheme: 'light' | 'dark' =
     appearance === 'system' ? (os === 'dark' ? 'dark' : 'light') : appearance;
   const theme = scheme === 'dark' ? darkTheme : lightTheme;
+
+  // Push the in-app appearance choice down to the NATIVE layer so native
+  // components (the iOS tab bar, alerts, pickers) match the app theme right away.
+  // Without this, forcing Dark in-app while the window/OS is Light leaves the
+  // native tab bar rendering in the wrong appearance until a relayout.
+  useEffect(() => {
+    Appearance.setColorScheme(appearance === 'system' ? 'unspecified' : appearance);
+  }, [appearance]);
 
   // Soft cross-dissolve on theme change: the palette swaps instantly underneath,
   // but we flash a full-screen veil of the *previous* background that fades out,

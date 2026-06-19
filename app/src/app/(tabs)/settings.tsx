@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Alert, Linking, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Linking, Platform, StyleSheet, Switch, Text, View } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -273,8 +273,11 @@ function AccountRow({ index }: { index: number }) {
         accessibilityRole="button"
         accessibilityLabel="Sign out"
       >
+        <View style={styles.signOutIcon}>
+          <Icon name="logout" size={18} color={colors.danger} strokeWidth={2} />
+        </View>
         <View style={styles.toggleText}>
-          <Text style={t.h3}>Sign out</Text>
+          <Text style={[t.h3, { color: colors.danger }]}>Sign out</Text>
           {email && <Text style={styles.sub} numberOfLines={1}>Signed in as {email}</Text>}
         </View>
         <Icon name="chevronRight" size={20} color={colors.inkFaint} strokeWidth={2.2} />
@@ -295,7 +298,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <Screen scroll tabBarInset bare>
+    <Screen scroll tabBarInset bare={Platform.OS !== 'ios'} ambient="settings" crossfade>
       <Header overline="The fine print" title="Settings" />
 
       <View style={styles.stack}>
@@ -451,6 +454,15 @@ const makeStyles = (th: Theme) => StyleSheet.create({
   },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
   toggleText: { flex: 1, gap: 4 },
+  // Red-tinted circle that flags Sign out as the one destructive row.
+  signOutIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: th.colors.dangerSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   aboutTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   permHint: {
     flexDirection: 'row',

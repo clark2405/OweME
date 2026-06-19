@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { Redirect, Tabs } from 'expo-router';
+import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { TabBar } from '../../components/TabBar';
 import { TabAmbient } from '../../components/TabAmbient';
 import { AmbientVariant } from '../../components/AmbientBackground';
@@ -15,6 +16,15 @@ const ROUTE_VARIANT: Record<string, AmbientVariant> = {
   settings: 'settings',
 };
 
+/**
+ * Tabs layout, split by platform:
+ *  - iOS  → `NativeTabs` (the real iOS-26 system bar: Liquid Glass + minimize-on-
+ *           scroll). Scenes are native, so the shared ambient overlay can't show
+ *           through — we paint the scene with the base color; the tab screens stay
+ *           `bare` and read on it.
+ *  - Android (future build) → our custom branded glass `TabBar` + the shared
+ *           `TabAmbient` cross-fade, exactly as before.
+ */
 export default function TabsLayout() {
   const { colors } = useTheme();
   const [variant, setVariant] = useState<AmbientVariant>('home');
@@ -28,6 +38,32 @@ export default function TabsLayout() {
   if (!session) return <Redirect href="/auth" />;
   if (!seenOnboarding) return <Redirect href="/onboarding" />;
 
+  // iOS: the native iOS-26 Liquid Glass tab bar.
+  if (Platform.OS === 'ios') {
+    const sceneStyle = { backgroundColor: colors.bg };
+    return (
+      <NativeTabs tintColor={colors.accent} minimizeBehavior="onScrollDown">
+        <NativeTabs.Trigger name="index" contentStyle={sceneStyle}>
+          <NativeTabs.Trigger.Icon sf="house" selectedColor={colors.accent} />
+          <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
+        </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="borrowers" contentStyle={sceneStyle}>
+          <NativeTabs.Trigger.Icon sf="person.2" selectedColor={colors.accent} />
+          <NativeTabs.Trigger.Label>People</NativeTabs.Trigger.Label>
+        </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="history" contentStyle={sceneStyle}>
+          <NativeTabs.Trigger.Icon sf="archivebox" selectedColor={colors.accent} />
+          <NativeTabs.Trigger.Label>History</NativeTabs.Trigger.Label>
+        </NativeTabs.Trigger>
+        <NativeTabs.Trigger name="settings" contentStyle={sceneStyle}>
+          <NativeTabs.Trigger.Icon sf="slider.horizontal.3" selectedColor={colors.accent} />
+          <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
+        </NativeTabs.Trigger>
+      </NativeTabs>
+    );
+  }
+
+  // Android (future build): the custom branded glass bar + shared ambient.
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
       {/* One ambient layer for all tabs; cross-fades on tab change. */}

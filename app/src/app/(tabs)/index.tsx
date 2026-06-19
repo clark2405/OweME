@@ -21,12 +21,12 @@ import { Theme, useTheme, useThemedStyles } from '../../lib/theme-context';
 const FAB_HEIGHT = 58;
 /** How many loans the home lineup shows before deferring to "See all". Home is
  *  a dashboard of what needs attention, not the full ledger. Bigger screens get
- *  one extra card (see `homeLimitFor`) since they'd otherwise leave dead space
- *  above the FAB. */
+ *  one extra card (5) since they have the room; regular phones keep 4 so the
+ *  lineup + "See all" still clear the floating FAB. */
 const HOME_LIMIT = 4;
 /** Window height (pt) at/above which a taller phone earns an extra lineup card.
- *  Clears regular iPhones (~844–852pt) and lights up Plus/Pro Max-class (~926pt+,
- *  incl. the iPhone 17 Pro at ~956pt). */
+ *  Clears 6.3"-class phones (~874pt → 4) and lights up 6.9" Pro Max-class
+ *  (~956pt → 5). */
 const TALL_SCREEN_MIN = 900;
 
 function homeLimitFor(height: number): number {
@@ -70,7 +70,7 @@ export default function HomeScreen() {
       ? insets.bottom
       : tabBarBottomInset(insets.bottom) + TAB_BAR_HEIGHT;
   const fabBottom = tabBarTop + space.md;
-  const listClearance = fabBottom + FAB_HEIGHT + space.xl;
+  const listClearance = fabBottom + FAB_HEIGHT + space.xxl;
 
   const { defaultCurrency } = useSettings();
 
@@ -361,7 +361,7 @@ const makeStyles = (th: Theme) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: space.sm,
-    marginBottom: space.xl,
+    marginBottom: space.lg,
   },
   headline: { flex: 1 },
   searchBtn: {
@@ -375,7 +375,7 @@ const makeStyles = (th: Theme) => StyleSheet.create({
     justifyContent: 'center',
     ...th.shadow.card,
   },
-  statRow: { flexDirection: 'row', gap: space.md, marginBottom: space.xxl },
+  statRow: { flexDirection: 'row', gap: space.md, marginBottom: space.lg },
   statWrap: { flex: 1 },
   stat: {
     borderRadius: radius.lg,

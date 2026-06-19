@@ -33,11 +33,12 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import Svg, { G, Line, Path, Polygon, Text as SvgText } from 'react-native-svg';
+import { BlurView } from 'expo-blur';
 import { PressableScale } from '../PressableScale';
 import { Icon } from '../Icon';
 import { haptics } from '../../lib/haptics';
 import { radius, space } from '../../lib/theme';
-import { Theme, useThemedStyles } from '../../lib/theme-context';
+import { Theme, useTheme, useThemedStyles } from '../../lib/theme-context';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
@@ -148,6 +149,12 @@ const boxPose = (ov: number, entry: number, morphRise: number) => {
 
 function Chip({ spec, index, o }: { spec: ChipSpec; index: number; o: SharedValue<number> }) {
   const styles = useThemedStyles(makeStyles);
+  const { scheme } = useTheme();
+  // Liquid-glass chip: a frosted blur + milky tint + bright rim. The whole chip
+  // (glass included) warps via the genie transform as it's sucked into the box.
+  const glass = scheme === 'dark'
+    ? { edge: 'rgba(255,255,255,0.15)', tint: 'rgba(255,255,255,0.06)' }
+    : { edge: 'rgba(255,255,255,0.7)', tint: 'rgba(255,255,255,0.45)' };
   const v = useSharedValue(0);
   const reduce = useReducedMotion();
 
@@ -201,7 +208,13 @@ function Chip({ spec, index, o }: { spec: ChipSpec; index: number; o: SharedValu
 
   return (
     <View style={[styles.chipContainer, { left: '50%', marginLeft: tx - 120, top: TARGET_Y }]} pointerEvents="none">
-      <Animated.View style={[styles.chip, style]}>
+      <Animated.View style={[styles.chip, { borderColor: glass.edge }, style]}>
+        <BlurView
+          intensity={scheme === 'dark' ? 28 : 50}
+          tint={scheme === 'dark' ? 'dark' : 'light'}
+          style={styles.chipGlass}
+        />
+        <View style={[styles.chipGlass, { backgroundColor: glass.tint }]} pointerEvents="none" />
         <Text style={styles.emoji}>{spec.emoji}</Text>
         <Text style={styles.label} numberOfLines={1}>{spec.label}</Text>
       </Animated.View>
@@ -469,16 +482,27 @@ const makeStyles = (th: Theme) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    backgroundColor: th.colors.surface,
+    // Transparent — the frosted BlurView + tint behind the content supply the
+    // liquid-glass fill; the rim border colour is set inline per scheme.
+    backgroundColor: 'transparent',
     borderRadius: radius.pill,
     paddingHorizontal: space.md,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: th.colors.hairline,
     shadowColor: th.colors.shadow,
     shadowOpacity: 0.06,
     shadowRadius: 5,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
+  },
+  // Frosted blur + milky tint clipped to the chip pill (sit behind the content).
+  chipGlass: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: radius.pill,
+    overflow: 'hidden',
   },
   emoji: { fontSize: 16 },
   label: { ...th.type.small, color: th.colors.ink, fontWeight: '700', letterSpacing: -0.1 },

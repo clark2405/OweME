@@ -29,6 +29,19 @@ export function BackLink({ label = 'Settings' }: { label?: string }) {
 }
 
 const makeStyles = (th: Theme) => StyleSheet.create({
-  back: { flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: space.lg },
+  // Vertical breathing room from the top edge + a comfortable tap target, and a
+  // small negative left margin so the chevron's *visual* edge lines up with the
+  // screen title below it (the glyph is inset within its icon box). Without these
+  // it sat flush against the status bar and looked indented.
+  back: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 2,
+    marginLeft: -4,
+    paddingVertical: space.sm,
+    paddingRight: space.md,
+    marginBottom: space.sm,
+  },
   backText: { ...th.type.h3, color: th.colors.inkSoft },
 });

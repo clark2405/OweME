@@ -1,7 +1,7 @@
 /**
- * Privacy — plain-language, honest about the current (on-device, no-account)
- * state of the app. Reached from Settings › Privacy. Static content
- * (frontend only); the copy will be revisited when accounts + sync land.
+ * Privacy — plain-language, honest about the app's local-first model: on-device
+ * by default, with optional account sync only if the user signs in. Reached from
+ * Settings › Privacy. Static content (frontend only).
  */
 
 import { StyleSheet, Text, View } from 'react-native';
@@ -14,19 +14,27 @@ import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
 const SECTIONS: { h: string; b: string }[] = [
   {
     h: 'The short version',
-    b: 'OweMe is your private ledger. Everything you track — people, loans, photos — lives on this phone. We didn’t build a server sitting over your shoulder.',
+    b: 'OweMe is your private ledger. By default everything you track — people, loans, photos — lives on this phone, with no account. A cloud copy only exists if you choose to sign in to sync.',
   },
   {
-    h: 'What stays on your device',
-    b: 'Your loans, the names and notes for the people you lend to, and any photos you attach never leave the app. There’s no account and no cloud sync in this version.',
+    h: 'Local by default',
+    b: 'Without an account, your loans, the names and notes for the people you lend to, and any photos you attach stay on this device — nothing is uploaded. Your manual backup is the only copy that leaves the phone, and only when you export it.',
+  },
+  {
+    h: 'If you sign in to sync',
+    b: 'Signing in is optional. When you do, your ledger — loans, people, and the photos you attach — is stored in our database (Supabase) so it can appear on your other devices. Sign out anytime; the copy on your phone stays put.',
+  },
+  {
+    h: 'Your email',
+    b: 'If you sign in, we use your email only to send the one-time login code and to tie your synced ledger to you. No passwords, and we don’t email you anything else.',
   },
   {
     h: 'Contacts',
-    b: 'If you import someone from your address book, OweMe reads only the name and number you pick — once, on your tap — and keeps it here with your other people.',
+    b: 'If you import someone from your address book, OweMe reads only the name and number you pick — once, on your tap — and keeps it with your other people.',
   },
   {
     h: 'Photos & camera',
-    b: 'Used only when you attach a picture to a loan. The image is saved with that loan on your device; nothing is uploaded anywhere.',
+    b: 'Used only when you attach a picture to a loan. The image is saved with that loan on your device; it’s uploaded only if you’re signed in to sync.',
   },
   {
     h: 'Notifications',
@@ -35,10 +43,6 @@ const SECTIONS: { h: string; b: string }[] = [
   {
     h: 'Nudges you send',
     b: 'When you nudge someone, OweMe opens your own messaging app with the text already written. You send it — OweMe never messages anyone on its own.',
-  },
-  {
-    h: 'When this changes',
-    b: 'The day OweMe gains accounts and sync, this page will spell out exactly what moves off your phone, and ask before it does.',
   },
 ];
 

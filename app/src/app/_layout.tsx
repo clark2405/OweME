@@ -114,8 +114,9 @@ function ThemedNavigation() {
           contentStyle: { backgroundColor: colors.bg },
         }}
       >
-        {/* Signed-out users are sent here by the guard in (tabs)/_layout. */}
-        <Stack.Screen name="auth" options={{ animation: 'fade', gestureEnabled: false }} />
+        {/* Optional sign-in (to sync) — opened from Settings or onboarding.
+            Presented as a dismissable modal; the app is usable without it. */}
+        <Stack.Screen name="auth" options={{ presentation: 'modal', gestureEnabled: true }} />
         {/* First launch detours here via the guard in (tabs)/_layout. */}
         <Stack.Screen name="onboarding" options={{ animation: 'fade', gestureEnabled: false }} />
         {/* The tabs root must not be edge-swipe-popped back to auth/onboarding —

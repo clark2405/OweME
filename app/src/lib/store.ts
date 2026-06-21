@@ -15,6 +15,7 @@
 
 import { useSyncExternalStore } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { Session } from '@supabase/supabase-js';
 import { Borrower, Loan, LoanBase, LoanWithBorrower, ReminderCadence } from './types';
 import { daysSince } from './format';
 import { NudgeChannel } from './nudge';
@@ -29,6 +30,12 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** Full ISO timestamp — stamped on every local write to drive the last-write-wins
+ *  merge when the user signs in. */
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
 // --- observable plumbing ---------------------------------------------------
 
 const listeners = new Set<() => void>();
@@ -40,10 +47,24 @@ function subscribe(cb: () => void) {
   return () => listeners.delete(cb);
 }
 
-// --- in-memory cache (mirrors Supabase) ------------------------------------
+// --- in-memory cache (the runtime source of truth) -------------------------
+// Local-first: the cache is mirrored to AsyncStorage on every change, so the
+// ledger persists on the device with no account and works offline. When the user
+// signs in, it ALSO syncs to Supabase (see the auth section below).
 
 let loans: Loan[] = [];
 let borrowers: Borrower[] = [];
+
+// Device-local mirror of the whole ledger — debounced so a burst of writes
+// coalesces into one disk write.
+const LEDGER_KEY = 'oweme.ledger.v1';
+let ledgerWriteTimer: ReturnType<typeof setTimeout> | undefined;
+function persistLedgerLocal() {
+  if (ledgerWriteTimer) clearTimeout(ledgerWriteTimer);
+  ledgerWriteTimer = setTimeout(() => {
+    AsyncStorage.setItem(LEDGER_KEY, JSON.stringify({ loans, borrowers })).catch(() => {});
+  }, 150);
+}
 
 let snapshot = loans;
 function getSnapshot() {
@@ -53,6 +74,7 @@ function commit(next: Loan[]) {
   loans = next;
   snapshot = next;
   emit();
+  persistLedgerLocal();
 }
 
 let borrowerSnapshot = borrowers;
@@ -63,6 +85,7 @@ function commitBorrowers(next: Borrower[]) {
   borrowers = next;
   borrowerSnapshot = next;
   emit();
+  persistLedgerLocal();
 }
 
 export function useLoans(): Loan[] {
@@ -130,8 +153,8 @@ void AsyncStorage.getItem(SETTINGS_KEY)
 
 // --- hydration gate --------------------------------------------------------
 // `hydrated` is the "initial ledger is ready" flag the skeletons + splash wait
-// on. It flips true once the first Supabase fetch resolves (or immediately when
-// signed out, so the splash dismisses and the gate routes to /auth).
+// on. Local-first: it flips true as soon as the device-local ledger loads, so the
+// app is usable instantly with no account and offline.
 
 let hydrated = false;
 let hydratedSnapshot = hydrated;
@@ -149,51 +172,133 @@ export function useHydrated(): boolean {
   return useSyncExternalStore(subscribe, getHydratedSnapshot, getHydratedSnapshot);
 }
 
-// --- auth-driven loading ---------------------------------------------------
+// --- local hydration -------------------------------------------------------
+// Load the device-local ledger immediately on launch. `localReady` lets the
+// sign-in merge wait for it before reading the cache (so a cloud fetch never
+// races an empty local cache).
+let resolveLocalReady: () => void;
+const localReady = new Promise<void>((r) => {
+  resolveLocalReady = r;
+});
 
-async function loadFromServer() {
-  setHydrated(false);
-  try {
-    const { loans: ls, borrowers: bs } = await db.fetchAll();
-    commitBorrowers(bs);
-    commit(ls);
+void AsyncStorage.getItem(LEDGER_KEY)
+  .then((raw) => {
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as { loans?: Loan[]; borrowers?: Borrower[] };
+    if (parsed.borrowers) commitBorrowers(parsed.borrowers);
+    if (parsed.loans) commit(parsed.loans);
     resyncAllReminders();
-  } catch (e) {
-    console.warn('[OweMe] failed to load ledger', e);
-    showToast({ message: 'Couldn’t load your ledger. Check your connection.' });
-  } finally {
+  })
+  .catch(() => {})
+  .finally(() => {
     setHydrated(true);
+    resolveLocalReady();
+  });
+
+// --- optional cloud sync ---------------------------------------------------
+// The ledger is local-first; signing in turns on Supabase sync. `synced()` gates
+// every cloud call, so anonymous users never touch the network.
+let currentSession: Session | null = null;
+function synced(): boolean {
+  return currentSession != null;
+}
+
+export function isSignedIn(): boolean {
+  return synced();
+}
+
+/** Union two lists by id; per id keep whichever was edited most recently
+ *  (last-write-wins). Returns the merged set + the records sourced from LOCAL —
+ *  the ones the cloud is missing or that local edited later, i.e. to push up. */
+function mergeById<T extends { id: string; updatedAt?: string }>(
+  local: T[],
+  cloud: T[],
+): { merged: T[]; fromLocal: T[] } {
+  const cloudMap = new Map(cloud.map((c) => [c.id, c]));
+  const chosen = new Map<string, T>(cloudMap);
+  const fromLocal: T[] = [];
+  for (const l of local) {
+    const c = cloudMap.get(l.id);
+    if (!c || (l.updatedAt ?? '') >= (c.updatedAt ?? '')) {
+      chosen.set(l.id, l);
+      fromLocal.push(l);
+    }
+  }
+  return { merged: [...chosen.values()], fromLocal };
+}
+
+/** Upload any local-URI photos on the to-push records, then upsert them to the
+ *  cloud — borrowers first, since loans FK-reference them. */
+async function pushUp(bs: Borrower[], ls: Loan[]) {
+  const bResolved: Borrower[] = [];
+  for (const b of bs) {
+    let rb = b;
+    if (isLocalUri(b.avatarUrl)) {
+      const url = await uploadImage(b.avatarUrl, 'avatar');
+      if (url && url !== b.avatarUrl) rb = { ...b, avatarUrl: url };
+    }
+    bResolved.push(rb);
+  }
+  if (bResolved.length) {
+    commitBorrowers(borrowers.map((x) => bResolved.find((r) => r.id === x.id) ?? x));
+    await db.upsertBorrowers(bResolved);
+  }
+  const lResolved: Loan[] = [];
+  for (const l of ls) {
+    let rl = l;
+    if (l.type === 'item' && isLocalUri(l.photoUrl)) {
+      const url = await uploadImage(l.photoUrl, 'item');
+      if (url && url !== l.photoUrl) rl = { ...l, photoUrl: url };
+    }
+    lResolved.push(rl);
+  }
+  if (lResolved.length) {
+    commit(loans.map((x) => lResolved.find((r) => r.id === x.id) ?? x));
+    await db.upsertLoans(lResolved);
   }
 }
 
-function clearData() {
-  commitBorrowers([]);
-  commit([]);
-  cancelAllReminders();
+/** Pull the cloud ledger, merge it with the local one (last-write-wins), then
+ *  push the merged result back up so the account is complete. Runs on sign-in
+ *  and as the reconcile path after a failed write. Keeps showing local data the
+ *  whole time (no skeleton flash) — the merge just updates reactively. */
+async function syncWithCloud() {
+  if (!synced()) return;
+  try {
+    await localReady;
+    const cloud = await db.fetchAll();
+    const b = mergeById(borrowers, cloud.borrowers);
+    const l = mergeById(loans, cloud.loans);
+    commitBorrowers(b.merged);
+    commit(l.merged);
+    resyncAllReminders();
+    await pushUp(b.fromLocal, l.fromLocal);
+  } catch (e) {
+    console.warn('[OweMe] cloud sync failed', e);
+    showToast({ message: 'Couldn’t sync your ledger. Check your connection.' });
+  }
 }
 
-// INITIAL_SESSION fires once on launch; SIGNED_IN after a verified OTP; SIGNED_OUT
-// on sign-out. TOKEN_REFRESHED / USER_UPDATED keep the session but don't need a
-// reload, so they're ignored.
+// INITIAL_SESSION fires once on launch (with the persisted session, if any);
+// SIGNED_IN after a verified OTP; SIGNED_OUT on sign-out. We KEEP the local
+// ledger in every case (local-first) — signing out just stops syncing.
 supabase.auth.onAuthStateChange((event, session) => {
-  if (!session) {
-    clearData();
-    setHydrated(true); // let the splash go; the gate sends to /auth
-    return;
-  }
-  if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
-    void loadFromServer();
+  currentSession = session;
+  if (session && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')) {
+    void syncWithCloud();
   }
 });
 
 // --- write persistence helper ----------------------------------------------
 
-/** Fire a background mutation; on failure, refetch to reconcile + warn once. */
+/** Fire a background cloud mutation — only when signed in (local is already
+ *  saved). On failure, reconcile by re-syncing + warn once. */
 function persist(run: () => Promise<void>) {
+  if (!synced()) return;
   run().catch((e) => {
     console.warn('[OweMe] write failed, reconciling', e);
     showToast({ message: 'That change didn’t save — refreshing.' });
-    void loadFromServer();
+    void syncWithCloud();
   });
 }
 
@@ -525,7 +630,7 @@ function syncReminderFor(loan: Loan) {
 
 export function markReturned(id: string) {
   const next = loans.map((l) =>
-    l.id === id ? { ...l, status: 'returned' as const, returnedAt: today() } : l,
+    l.id === id ? { ...l, status: 'returned' as const, returnedAt: today(), updatedAt: nowIso() } : l,
   );
   commit(next);
   cancelLoanReminder(id);
@@ -535,7 +640,7 @@ export function markReturned(id: string) {
 
 export function writeOff(id: string) {
   const next = loans.map((l) =>
-    l.id === id ? { ...l, status: 'written_off' as const, returnedAt: today() } : l,
+    l.id === id ? { ...l, status: 'written_off' as const, returnedAt: today(), updatedAt: nowIso() } : l,
   );
   commit(next);
   cancelLoanReminder(id);
@@ -546,7 +651,7 @@ export function writeOff(id: string) {
 /** Undo a return / write-off — sends the loan back out into the wild. */
 export function unreturn(id: string) {
   const next = loans.map((l) =>
-    l.id === id ? { ...l, status: 'active' as const, returnedAt: undefined } : l,
+    l.id === id ? { ...l, status: 'active' as const, returnedAt: undefined, updatedAt: nowIso() } : l,
   );
   commit(next);
   const loan = next.find((l) => l.id === id);
@@ -588,6 +693,7 @@ export function addLoan(input: NewLoanInput): string {
     lentAt: input.lentAt ?? today(),
     status: 'active',
     nudges: [],
+    updatedAt: nowIso(),
   };
   const loan = loanFromInput(base, input);
   commit([loan, ...loans]);
@@ -613,6 +719,7 @@ export function updateLoan(id: string, input: NewLoanInput) {
         status: l.status,
         returnedAt: l.returnedAt,
         nudges: l.nudges ?? [],
+        updatedAt: nowIso(),
       };
       updated = loanFromInput(base, input);
       return updated;
@@ -634,7 +741,7 @@ export function deleteLoan(id: string) {
  *  path from loan detail, without opening the full edit flow. Re-syncs the
  *  pending notification to match. */
 export function setLoanReminder(id: string, reminder: ReminderCadence) {
-  const next = loans.map((l) => (l.id === id ? { ...l, reminder } : l));
+  const next = loans.map((l) => (l.id === id ? { ...l, reminder, updatedAt: nowIso() } : l));
   commit(next);
   const loan = next.find((l) => l.id === id);
   if (loan) {
@@ -665,16 +772,17 @@ export function importData(data: {
 /** Re-insert a just-deleted loan (undo). Reminders re-sync from its state. */
 export function restoreLoan(loan: Loan) {
   if (loans.some((l) => l.id === loan.id)) return;
-  commit([loan, ...loans]);
-  syncReminderFor(loan);
-  persistLoanWithPhoto(loan);
+  const restored = { ...loan, updatedAt: nowIso() };
+  commit([restored, ...loans]);
+  syncReminderFor(restored);
+  persistLoanWithPhoto(restored);
 }
 
 /** Append a nudge timestamp to a loan — powers "Nudged 3× · last week". */
 export function recordNudge(id: string) {
   const now = new Date().toISOString();
   const next = loans.map((l) =>
-    l.id === id ? { ...l, nudges: [...(l.nudges ?? []), now] } : l,
+    l.id === id ? { ...l, nudges: [...(l.nudges ?? []), now], updatedAt: nowIso() } : l,
   );
   commit(next);
   const loan = next.find((l) => l.id === id);
@@ -683,7 +791,7 @@ export function recordNudge(id: string) {
 
 export function addBorrower(name: string, emoji = '🙂', phone?: string, avatarUrl?: string): string {
   const id = uuid();
-  const borrower: Borrower = { id, name, emoji, phone, avatarUrl, exempt: false };
+  const borrower: Borrower = { id, name, emoji, phone, avatarUrl, exempt: false, updatedAt: nowIso() };
   commitBorrowers([...borrowers, borrower]);
   persistBorrowerWithPhoto(borrower);
   return id;
@@ -700,7 +808,7 @@ export function updateBorrower(
   commitBorrowers(
     borrowers.map((b) => {
       if (b.id !== id) return b;
-      updated = { ...b, ...clean };
+      updated = { ...b, ...clean, updatedAt: nowIso() };
       return updated;
     }),
   );

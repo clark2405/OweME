@@ -19,6 +19,7 @@ interface BorrowerRow {
   avatar_url: string | null;
   emoji: string;
   exempt: boolean;
+  updated_at: string;
 }
 
 interface LoanRow {
@@ -36,6 +37,7 @@ interface LoanRow {
   returned_at: string | null;
   reminder: string | null;
   nudges: string[] | null;
+  updated_at: string;
 }
 
 // --- read mappers (row → domain) -------------------------------------------
@@ -48,6 +50,7 @@ function rowToBorrower(r: BorrowerRow): Borrower {
     phone: r.phone ?? undefined,
     avatarUrl: r.avatar_url ?? undefined,
     exempt: r.exempt,
+    updatedAt: r.updated_at ?? undefined,
   };
 }
 
@@ -63,6 +66,7 @@ function rowToLoan(r: LoanRow): Loan {
     status: r.status,
     // returned_at is timestamptz in the DB; the app treats it as a YYYY-MM-DD date.
     returnedAt: r.returned_at ? r.returned_at.slice(0, 10) : undefined,
+    updatedAt: r.updated_at ?? undefined,
   };
   return r.type === 'item'
     ? { ...base, type: 'item', itemName: r.item_name ?? 'Something', photoUrl: r.photo_url ?? undefined }
@@ -79,6 +83,7 @@ function borrowerToRow(b: Borrower): BorrowerRow {
     avatar_url: b.avatarUrl ?? null,
     emoji: b.emoji,
     exempt: b.exempt ?? false,
+    updated_at: b.updatedAt ?? new Date().toISOString(),
   };
 }
 
@@ -98,6 +103,7 @@ function loanToRow(l: Loan): Omit<LoanRow, 'amount'> & { amount: number | null }
     returned_at: l.returnedAt ?? null,
     reminder: l.reminder ?? null,
     nudges: l.nudges ?? [],
+    updated_at: l.updatedAt ?? new Date().toISOString(),
   };
 }
 
@@ -122,6 +128,13 @@ export async function upsertLoan(loan: Loan): Promise<void> {
   if (error) throw error;
 }
 
+/** Batch upsert — used to push a merged ledger up after a sign-in merge. */
+export async function upsertLoans(loans: Loan[]): Promise<void> {
+  if (!loans.length) return;
+  const { error } = await supabase.from('loans').upsert(loans.map(loanToRow));
+  if (error) throw error;
+}
+
 export async function deleteLoan(id: string): Promise<void> {
   const { error } = await supabase.from('loans').delete().eq('id', id);
   if (error) throw error;
@@ -129,6 +142,13 @@ export async function deleteLoan(id: string): Promise<void> {
 
 export async function upsertBorrower(b: Borrower): Promise<void> {
   const { error } = await supabase.from('borrowers').upsert(borrowerToRow(b));
+  if (error) throw error;
+}
+
+/** Batch upsert — used to push a merged ledger up after a sign-in merge. */
+export async function upsertBorrowers(bs: Borrower[]): Promise<void> {
+  if (!bs.length) return;
+  const { error } = await supabase.from('borrowers').upsert(bs.map(borrowerToRow));
   if (error) throw error;
 }
 

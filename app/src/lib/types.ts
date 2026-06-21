@@ -21,6 +21,9 @@ export interface Borrower {
   emoji: string;
   /** Opt this person out of the Hall of Shame board (task D) — tita, boss, etc. */
   exempt?: boolean;
+  /** ISO timestamp of the last local edit — drives last-write-wins on sign-in
+   *  merge. Optional so older backups (without it) still import. */
+  updatedAt?: string;
 }
 
 export interface LoanBase {
@@ -37,6 +40,9 @@ export interface LoanBase {
   status: LoanStatus;
   /** ISO timestamp, set when status leaves `active`. */
   returnedAt?: string;
+  /** ISO timestamp of the last local edit — drives last-write-wins on sign-in
+   *  merge. Optional so older backups (without it) still import. */
+  updatedAt?: string;
 }
 
 export interface ItemLoan extends LoanBase {

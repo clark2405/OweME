@@ -1,14 +1,14 @@
 /**
- * Back up & restore — OweMe is local-first with no account, so this is the only
- * safety net for the ledger. Reached from Settings › Back up & restore.
+ * Back up & restore — OweMe is local-first. Without an account this is the only
+ * safety net for the ledger; when signed in the ledger also syncs to the cloud,
+ * but a manual backup is still worth keeping. Reached from Settings › Back up.
  *
  * Back up: share a structured JSON backup (restore-ready) or a readable text
  * copy. Restore: paste a backup and replace the current ledger with it.
  *
- * Frontend only / device-to-device by hand: there's no sync and no cloud — you
- * move the backup yourself (AirDrop, notes, email). Photos are NOT included
- * (local file URIs don't survive a device hop). When a backend lands this grows
- * into real file pick + photo hosting — see docs/CHANGELOG.md "Future work".
+ * Device-to-device by hand: you move the backup yourself (AirDrop, notes, email).
+ * Photos are NOT included (local file URIs don't survive a device hop; synced
+ * photos travel via the account instead).
  */
 
 import { useState } from 'react';
@@ -171,8 +171,10 @@ export default function BackupScreen() {
 
         <Reveal index={2} from={16}>
           <Text style={styles.lead}>
-            OweMe lives only on this phone. Keep a backup somewhere safe — then you
-            can bring your whole ledger to a new phone.
+            OweMe lives on this phone. Without an account this is your only copy, so
+            keep a backup somewhere safe — then you can bring your whole ledger to a
+            new phone. Signed in to sync? It’s also in the cloud, but a backup never
+            hurts.
           </Text>
         </Reveal>
 

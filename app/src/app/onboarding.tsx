@@ -175,6 +175,13 @@ export default function OnboardingScreen() {
     router.replace('/(tabs)');
   };
 
+  // Optional: jump to the (dismissable) sign-in screen to sync across devices.
+  // Onboarding is done either way; `redirect=tabs` lands in the app afterwards.
+  const signInToSync = () => {
+    markOnboardingSeen();
+    router.replace('/auth?redirect=tabs');
+  };
+
   const next = () => {
     if (last) return finish();
     scrollRef.current?.scrollTo({ x: (page + 1) * width, animated: true });
@@ -319,6 +326,21 @@ export default function OnboardingScreen() {
               <Dot key={i} active={i === page} />
             ))}
           </View>
+          {/* Sits ABOVE the button so the CTA stays in the exact same spot as the
+              other pages (the button is always the last, bottom-anchored element). */}
+          {last && (
+            <PressableScale
+              onPress={signInToSync}
+              hitSlop={8}
+              style={styles.signInRow}
+              accessibilityRole="button"
+              accessibilityLabel="Sign in to sync across devices"
+            >
+              <Text style={styles.signInText}>
+                No account needed — or <Text style={styles.signInLink}>sign in to sync</Text>
+              </Text>
+            </PressableScale>
+          )}
           <Button label={last ? 'Start lending smarter' : 'Next'} onPress={next} />
         </View>
       </SafeAreaView>
@@ -505,4 +527,7 @@ const makeStyles = (th: Theme) => StyleSheet.create({
   },
   dots: { flexDirection: 'row', gap: space.sm, alignSelf: 'center', alignItems: 'center' },
   dot: { height: 8, borderRadius: radius.pill },
+  signInRow: { alignSelf: 'center', alignItems: 'center', paddingVertical: 2 },
+  signInText: { ...th.type.small, color: th.colors.inkSoft, textAlign: 'center' },
+  signInLink: { color: th.colors.accent, fontWeight: '700' },
 });

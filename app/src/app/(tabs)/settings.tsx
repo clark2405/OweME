@@ -192,7 +192,7 @@ function NudgeRemindersCard({ index }: { index: number }) {
 // frontend only for now — see the route files).
 const ABOUT_ROWS: { title: string; sub: string; href: '/about' | '/privacy' | '/feedback' | '/rate'; icon?: IconName }[] = [
   { title: 'About OweMe', sub: 'What this little app is for', href: '/about' },
-  { title: 'Privacy', sub: 'Your stuff stays on your phone', href: '/privacy' },
+  { title: 'Privacy', sub: 'Local by default — sync only if you sign in', href: '/privacy' },
   { title: 'Send feedback', sub: 'Tell us what’s missing', href: '/feedback' },
   { title: 'Rate OweMe', sub: 'Help others get their stuff back', href: '/rate', icon: 'star' },
 ];
@@ -246,17 +246,40 @@ function DataRow({ index }: { index: number }) {
   );
 }
 
-/** Shows the signed-in email + signs out (the auth gate then routes to /auth). */
+/** Account: OweMe is local-first, so signing in is OPTIONAL. Signed out → an
+ *  opt-in "Sign in to sync"; signed in → the email + a Sign out that KEEPS the
+ *  local copy (it just stops syncing). */
 function AccountRow({ index }: { index: number }) {
   const { colors, type: t } = useTheme();
   const styles = useThemedStyles(makeStyles);
+  const router = useRouter();
   const { session } = useSession();
   const email = session?.user.email;
+
+  if (!session) {
+    return (
+      <Reveal index={index} from={20}>
+        <PressableScale
+          onPress={() => router.push('/auth')}
+          scaleTo={0.98}
+          style={styles.row}
+          accessibilityRole="button"
+          accessibilityLabel="Sign in to sync your ledger"
+        >
+          <View style={styles.toggleText}>
+            <Text style={t.h3}>Sign in to sync</Text>
+            <Text style={styles.sub}>Optional — back up your ledger and use it on all your devices</Text>
+          </View>
+          <Icon name="chevronRight" size={20} color={colors.inkFaint} strokeWidth={2.2} />
+        </PressableScale>
+      </Reveal>
+    );
+  }
 
   const confirm = () => {
     Alert.alert(
       'Sign out?',
-      'Your ledger stays safe in the cloud — sign back in anytime to pick up where you left off.',
+      'Your ledger stays on this phone — it just stops syncing. Sign back in anytime to pick up across devices.',
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
@@ -278,7 +301,7 @@ function AccountRow({ index }: { index: number }) {
         </View>
         <View style={styles.toggleText}>
           <Text style={[t.h3, { color: colors.danger }]}>Sign out</Text>
-          {email && <Text style={styles.sub} numberOfLines={1}>Signed in as {email}</Text>}
+          {email && <Text style={styles.sub} numberOfLines={1}>Synced as {email}</Text>}
         </View>
         <Icon name="chevronRight" size={20} color={colors.inkFaint} strokeWidth={2.2} />
       </PressableScale>

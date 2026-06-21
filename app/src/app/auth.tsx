@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -28,6 +28,7 @@ import { AmbientBackground } from '../components/AmbientBackground';
 import { Reveal } from '../components/Reveal';
 import { Button } from '../components/Button';
 import { CodeInput } from '../components/CodeInput';
+import { Icon } from '../components/Icon';
 import { PressableScale } from '../components/PressableScale';
 import { sendOtp, verifyOtp } from '../lib/auth';
 import { haptics } from '../lib/haptics';
@@ -43,6 +44,9 @@ export default function AuthScreen() {
   const { type: t, colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
+  // `redirect=tabs` (from onboarding) → finish into the app after sign-in/close;
+  // otherwise (from Settings) just dismiss back to where we came from.
+  const { redirect } = useLocalSearchParams<{ redirect?: string }>();
   const ready = useShellReady();
   const { width, height } = useWindowDimensions();
   // Bias the centered block upward: perfectly-centered, top-weighted content
@@ -73,6 +77,14 @@ export default function AuthScreen() {
   const emailValid = EMAIL_RE.test(email.trim());
   const codeValid = code.trim().length >= 6;
 
+  // Leave the (optional) sign-in screen. From onboarding we finish into the app;
+  // from Settings we just pop back. The store's auth listener does the sync.
+  const done = () => {
+    if (redirect === 'tabs') router.replace('/(tabs)');
+    else if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)');
+  };
+
   const send = async () => {
     if (!emailValid || busy) return;
     setBusy(true);
@@ -100,9 +112,9 @@ export default function AuthScreen() {
       await verifyOtp(email, c);
       await AsyncStorage.removeItem(PENDING_KEY);
       haptics.success();
-      // The auth listener sets the session; leave the auth route so the gate
-      // can route to onboarding (first launch) or the tabs.
-      router.replace('/(tabs)');
+      // The store's auth listener sets the session and merges the ledger; just
+      // leave the (optional) sign-in screen.
+      done();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'That code didn’t work. Try again.');
     } finally {
@@ -139,6 +151,18 @@ export default function AuthScreen() {
     <View style={styles.root}>
       <AmbientBackground variant="home" />
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+        {ready && (
+          <PressableScale
+            onPress={done}
+            scaleTo={0.9}
+            style={styles.close}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Close sign in"
+          >
+            <Icon name="close" size={20} color={colors.inkSoft} strokeWidth={2.2} />
+          </PressableScale>
+        )}
         <KeyboardAvoidingView
           style={styles.flex}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -248,6 +272,17 @@ const makeStyles = (th: Theme) => StyleSheet.create({
   root: { flex: 1, backgroundColor: th.colors.bg },
   safe: { flex: 1 },
   flex: { flex: 1 },
+  close: {
+    position: 'absolute',
+    top: space.sm,
+    right: space.lg,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   layer: {
     position: 'absolute',
     top: 0,

@@ -381,6 +381,50 @@ on the mock store, today.
 
 ---
 
+## P6 — Local-first ledger + optional account sync (2026-06-21, in progress)
+
+> **Pivot from E0's "require an account."** The app's privacy copy always
+> promised an on-device, no-account ledger, but E0 wired a hard auth gate +
+> cloud-only data, so a new user hit a login wall and the copy was false.
+> New model: **local-first by default, cloud as an opt-in.** The app opens
+> straight into use; the ledger persists on-device and works offline with no
+> account; signing in (optional) syncs to Supabase across devices. Supabase/auth
+> code all stays in `main` and is genuinely used when signed in.
+>
+> **Sync scope (v1, locked):** last-write-wins, refresh on sign-in / app-focus —
+> **NOT** a full offline conflict-resolution engine. For a one-person ledger on
+> ~two devices that's plenty; true concurrent-offline-edit merging is a much
+> bigger project, parked as F-future below.
+>
+> **Decisions:** merge by id on sign-in (union; per-id newer `updatedAt` wins,
+> nothing clobbered); sign-out KEEPS the local copy (just stops syncing);
+> sign-in is surfaced in Settings → Account AND on onboarding page 4.
+
+- [x] **F1. `updatedAt` for last-write-wins** — added to `Borrower`/`LoanBase`
+  (`types.ts`), the db mappers (`db.ts`), and a new migration
+  `20260622000000_add_updated_at.sql`; stamped on every local write in `store.ts`.
+  *Needs the migration applied to the Supabase project before sign-in sync runs.*
+- [x] **F2. Local ledger persistence** — `store.ts` mirrors the cache to
+  AsyncStorage (`oweme.ledger.v1`) on every change and hydrates from it on launch
+  (`hydrated` flips true immediately) — usable with no account, offline.
+- [x] **F3. Optional cloud sync** — `synced()` gates all cloud calls; anonymous
+  users never hit the network. On sign-in (or relaunch with a session)
+  `syncWithCloud()` fetches the cloud ledger, **merges by id**, and pushes the
+  merged set back up (uploading any local-URI photos first). Sign-out keeps local.
+- [x] **F4. Drop the auth gate** — `(tabs)/_layout.tsx` no longer redirects to
+  `/auth`; it waits on local hydration, then the onboarding gate. App opens to the
+  ledger.
+- [x] **F5. Optional sign-in screen** — `auth.tsx` is now a dismissable modal
+  (Close button; `redirect=tabs` from onboarding vs back-to-Settings); root
+  `_layout.tsx` presents it as a modal. Reached from Settings → Account and the
+  onboarding page-4 "sign in to sync" line.
+- [x] **F6. Truthful copy** — `privacy.tsx` + `backup.tsx` rewritten for the
+  local-first / opt-in-sync model; Settings Privacy subtitle + Account row updated.
+- [ ] **F-future. Real conflict resolution** — beyond last-write-wins (field-level
+  merge, offline edit queue, tombstones for deletes). Plus settings/user-prefs sync.
+
+---
+
 *Done so far (for context): onboarding flow, home dashboard (tappable bento
 filters + pinned overdue group + capped lineup + "See all"), full
 active-loans screen with search/sort, swipe-to-return / swipe-to-nudge on

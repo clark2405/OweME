@@ -4,31 +4,36 @@
 > Windows to Mac). Read this, then `PROJECT.md` (product source of truth) and
 > `CLAUDE.md` (agent rules). Update this file at the end of each work session.
 
-_Last updated: 2026-06-10 evening (Windows, ending session). Next session likely
-on Mac — `git clone` fresh (see "How to resume" below)._
+_Last updated: 2026-06-21 (Mac). App is feature-complete and local-first; current
+focus is the P7 security/launch-readiness backlog (see `TASKS.md`)._
 
 ---
 
 ## Where things stand
 
-**The mobile app is wired to Supabase (data layer + email-OTP auth) and
-typechecks clean** (`npx tsc --noEmit` exit 0; `expo export` bundles clean). It
-just needs the **manual project setup** to actually run (create the Supabase
-project, apply **all three** migrations, fill `app/.env`, add `{{ .Token }}` to
-the OTP email template — full steps in `CHANGELOG.md` 2026-06-17 + 06-18).
-**Photo Storage (E1) is now wired too** — item photos + avatars upload to a
-public `photos` bucket and persist (apply migration `20260618000000` for it).
-The **web** app is still scaffold-only (the `/n/[token]` nudge page is the next
-backend task, E2).
+**The mobile app is feature-complete, fully designed, and runs against live
+Supabase.** All v1 screens are built (`offbrand-design` applied) and wired to the
+real data layer; `npx tsc --noEmit` is clean.
+
+**Architecture is now LOCAL-FIRST with OPTIONAL account sync** (shipped 2026-06-21,
+P6): the ledger persists ON-DEVICE (AsyncStorage) and works offline with **no
+account** — the app opens straight in, **no auth gate**. Signing in is optional
+(Settings → Account, or onboarding page 4); on sign-in the store merges local ↔
+cloud BY ID (last-write-wins) and syncs to Supabase. Verified end-to-end on two
+simulators.
 
 - `app/` — Expo SDK 56, TypeScript strict, Expo Router, `src/` layout, StyleSheet.
-  - `src/app/_layout.tsx` (Stack), `src/app/index.tsx` (placeholder home).
-  - `src/components/`, `src/hooks/`, `src/lib/` exist but are empty (`.gitkeep`).
-- `web/` — Next.js 16, App Router, TypeScript strict, Tailwind v4.
-  - `app/page.tsx` (landing placeholder), `app/n/[token]/page.tsx` (nudge route,
-    async `params`, real DB lookup is a TODO), `lib/` empty (`.gitkeep`).
-- `supabase/migrations/20260610000000_init_schema.sql` — tables (borrowers,
-  loans, nudge_links) + RLS policies. **Not yet applied** to any Supabase project.
+  Fully built out: `src/app/(tabs)/` (home/borrowers/history/settings), `add.tsx`,
+  `auth.tsx`, `loan/[id]`, `borrower/[id]`, `loans.tsx`, `onboarding.tsx`,
+  `backup.tsx`, `privacy.tsx`, etc.; `src/lib/` (store, db, supabase, auth,
+  storage, notifications, …); `src/components/` (the design system).
+- `web/` — Next.js, App Router, Tailwind. **Still scaffold-only**: `app/n/[token]/
+  page.tsx` is a placeholder; the real service-role DB lookup is the next backend
+  task (E2 / R5). `lib/` empty.
+- `supabase/migrations/` — **FOUR** migrations: init (`20260610000000`), app
+  columns (`20260617000000`), photo storage (`20260618000000`), `updated_at` for
+  sync (`20260622000000`). RLS scopes everything to `owner_id = auth.uid()`. **Apply
+  all four** to a fresh project before sync runs.
 
 ## Decisions made (don't re-litigate)
 
@@ -44,52 +49,44 @@ language Clark wants emulated: premium feel, motion-with-meaning, 100%
 interaction feedback, ambient idle motion ("never a dull page"), custom expo-out
 easing, depth/parallax, first-seconds clarity, performance + reduced-motion
 discipline. §7 maps it onto OweMe's warm/playful brand; §8 is a pre-ship
-checklist. **Apply it to every screen** — the current placeholder home screen is
-intentionally undesigned and does NOT reflect the target look yet.
-
-## Current screen state (don't be confused)
-
-The Expo web preview (`npm run web` → localhost:8081) shows only the static
-placeholder home (`src/app/index.tsx`): logo, tagline, empty-state line. That is
-expected — it's the only route, has no Supabase connection, and no design pass.
-Real screens start once the backend is wired.
+checklist. **Apply it to every screen** — all v1 screens are already designed to
+this language; keep new/changed UI consistent with it.
 
 ## What's next (in order)
 
-**Manual setup (only Clark can do — unblocks everything below):**
+**Manual setup (only Clark can do — needed for cloud sync; the app already runs
+local-first without it):**
 1. Create the Supabase project (dashboard) → grab project URL + anon key (+
    service-role key, for the future web nudge page only).
-2. Apply **all three** migrations in order (`20260610` init →
-   `20260617` add_app_columns → `20260618` photo_storage) via `supabase db push`
-   after `supabase link`, or paste the SQL in the dashboard.
+2. Apply **all four** migrations in order (`20260610` init → `20260617`
+   add_app_columns → `20260618` photo_storage → `20260622` add_updated_at) via
+   `supabase db push` after `supabase link`, or paste the SQL in the dashboard.
+   _(As of 2026-06-21 these are applied to the live project.)_
 3. Auth → Email templates → **Magic Link**: include `{{ .Token }}` so the OTP
    email carries the 6-digit code (default template only sends a link).
 4. `cp app/.env.example app/.env`, fill the URL + anon key, restart Metro.
-5. Run on device, sign in with OTP, smoke-test CRUD + persistence + 2nd device.
 
-**Then (code, tracked as E2–E5 in TASKS.md):** web `/n/[token]` nudge page (+
-`web/lib/supabase.ts` service-role client) → atomic restore RPC → settings sync
-→ Storage GC. (E1 photo Storage is done — see CHANGELOG 2026-06-18.)
+**Then (the active backlog — P7 in TASKS.md):** account deletion (App Store
+blocker) → move auth session to `expo-secure-store` → lock down the photos bucket
+→ app lock (Face ID) → remove unused Android RECORD_AUDIO → Sentry → sync-layer
+unit tests. **Backend tail (E2–E5):** web `/n/[token]` nudge page (+
+`web/lib/supabase.ts` service-role client) → atomic restore RPC → settings sync →
+Storage GC.
 
-**Already wired (this session):** `app/src/lib/{supabase,auth,db,id}.ts`,
-`store.ts` (Supabase-backed cache, optimistic writes — synchronous selector API
-preserved so screens were untouched), `app/src/app/auth.tsx`, session gating in
-`(tabs)/_layout.tsx`, Sign out in Settings, and the new migration.
-
-### Frontend backup/restore already exists — wire it through, don't reinvent
+### Backup/restore (wired) + how it relates to sync
 
 There's a working **Back up & restore** screen (`app/src/app/backup.tsx`,
-Settings › Your data) on top of the mock store. When swapping `store.ts` for
-Supabase, carry these through (full detail in `CHANGELOG.md`):
-- `importData()` (in `store.ts`) currently replaces the in-memory arrays. With a
-  backend it becomes a **transactional wipe-and-insert scoped to
-  `owner_id = auth.uid()`** so a failed restore can't half-replace the ledger.
-- The backup format (`lib/export.ts`, `buildLedgerBackup`/`parseLedgerBackup`,
-  `BACKUP_VERSION`) **strips photos** today because they're local file URIs. Once
-  Supabase **Storage** is live, stop stripping `photo_url`/`avatar_url` — store
-  resolvable Storage URLs so images round-trip across devices.
-- This is **manual** backup/restore, **not** live multi-device sync (that's a
-  separate later concern). Bump `BACKUP_VERSION` on any incompatible shape change.
+Settings › Your data). State of play:
+- `importData()` (in `store.ts`) replaces the in-memory + local-persisted ledger,
+  and **when signed in** mirrors the restore to Supabase via `db.replaceAll`
+  (owner-scoped wipe-and-insert). It is **not yet atomic** — a mid-way failure can
+  leave a partial cloud ledger; the transactional `restore_ledger` RPC is **E3**.
+- Photos: Storage is live (E1), so backups carry **resolvable Storage URLs**;
+  local-only URIs are dropped on export and read back on import (`lib/export.ts`,
+  `buildLedgerBackup`/`parseLedgerBackup`, `BACKUP_VERSION`). Bump `BACKUP_VERSION`
+  on any incompatible shape change.
+- Backup is the **off-device safety net for anonymous (no-account) users**; signed-
+  in users also get live multi-device sync (P6, last-write-wins). Both coexist.
 
 ## How to resume on a new machine
 
@@ -113,7 +110,7 @@ the real Supabase keys before anything talks to the backend.
 ## Repo facts
 
 - GitHub: `clark2405/OweME` (private). Default branch: `main`.
-- Active work branch: `scaffold/initial-apps`.
+- Work happens on `main` (branch per change when committing).
 - Node 24, npm 11 on the Windows machine.
 
 ## Gotchas (Mac)

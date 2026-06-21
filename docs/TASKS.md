@@ -344,8 +344,10 @@ on the mock store, today.
 - [x] **E0. Data layer + email-OTP auth** (2026-06-17) — Supabase client,
   `auth.ts`/`auth.tsx`, `store.ts` swapped to a Supabase-backed cache, new
   migration for the post-init columns, session gating + Sign out. *Needs the
-  manual project setup (create project, apply both migrations, fill `app/.env`,
+  manual project setup (create project, apply the migrations, fill `app/.env`,
   add `{{ .Token }}` to the OTP email template) before it runs — see CHANGELOG.*
+  **Superseded by P6 (2026-06-21):** the hard session gate was removed — the app
+  is now local-first with sync as an opt-in.
 - [x] **E1. Photo Storage** (2026-06-18) — public `photos` bucket (owner-scoped
   write RLS) via migration `20260618000000_photo_storage.sql`; new `lib/storage.ts`
   uploads local picker URIs through the store's persist path and swaps the
@@ -422,6 +424,74 @@ on the mock store, today.
   local-first / opt-in-sync model; Settings Privacy subtitle + Account row updated.
 - [ ] **F-future. Real conflict resolution** — beyond last-write-wins (field-level
   merge, offline edit queue, tombstones for deletes). Plus settings/user-prefs sync.
+
+---
+
+## P7 — Security & launch-readiness backlog (senior review, 2026-06-21)
+
+> Result of a security + readiness pass after local-first + optional sync (P6)
+> landed. Posture is solid (RLS on every table with `owner_id = auth.uid()`;
+> client holds only the public anon key; no hardcoded secrets, `.env` gitignored;
+> service-role isolated to the web page; local-first shrinks the cloud surface).
+> These are the gaps before this is "ready for real people's data." **Build order:
+> S1 → S2 → S3, then the rest.** Sources: Apple 5.1.1 (account deletion), RN
+> Security docs (token storage), App Store IOU-tracker norms.
+
+### Security findings
+
+- [ ] **S1. In-app account deletion (🔴 App Store blocker, Apple 5.1.1).** Now
+  that sign-in exists, Apple requires deleting the account **and** its data in-app
+  (Sign out isn't enough) — or it gets rejected. Add Settings → "Delete account"
+  → confirm → wipe the user's loans/borrowers/storage objects, then delete the
+  `auth.users` row. The client can't delete its own auth user → needs a **Supabase
+  Edge Function** (service-role) the app calls. Doubles as GDPR erasure.
+- [ ] **S2. Auth session in plaintext AsyncStorage (🟠).** `supabase.ts` uses
+  `storage: AsyncStorage`, so access+refresh tokens sit unencrypted (readable on a
+  jailbroken/rooted device or unencrypted backup — confirmed by reading the token
+  off a sim during verification). Move the auth session to **`expo-secure-store`**
+  (Keychain/Keystore) via a storage adapter. Note SecureStore's ~2KB Android limit
+  vs. the session size → adapter must chunk.
+- [ ] **S3. Photos bucket public + over-broad list policy (🟠).** `photos` is a
+  PUBLIC bucket (permanent bearer URLs) and the read policy
+  `for select using (bucket_id='photos')` has no role restriction → anyone with the
+  anon key can **list/enumerate** object paths, which embed user uids. Best:
+  private bucket + time-limited **signed URLs**. Minimum: drop/scope the public
+  `select` policy to the owner (public URL rendering doesn't need it).
+- [ ] **S4. Third-party PII without consent (🟠).** App stores other people's
+  names + phone numbers (and Contacts import) in the cloud. GDPR/CCPA: you're a
+  controller of their PII. Add a privacy-policy clause for added contacts + fill
+  **App Store privacy nutrition labels** (now collecting email + cloud PII).
+- [ ] **S5. Remove unused `android.permission.RECORD_AUDIO` (🟡).** Declared in
+  `app.json` but no audio feature (auto-pulled by expo-image-picker video path).
+  Over-broad permission → Play data-safety friction. Configure image-picker to
+  images-only / strip the permission.
+- [ ] **S6. OTP resend cooldown + 429 handling (🟡).** `auth.tsx` "Resend code"
+  can be hammered (relies solely on Supabase limits). Add a client cooldown timer
+  + a friendly message on rate-limit.
+- [ ] **S7. Surface real sync errors (🟡).** `store.ts` shows a generic "Check
+  your connection" for ANY failure (a 400 read as a network issue during
+  verification). Distinguish network vs. server (4xx/5xx) in the toast.
+- [ ] **S8. Web nudge page service-role hardening (ℹ️ when built, ties to E2).**
+  When the `/n/[token]` page lands: service-role server-side only, **single-use +
+  expiring tokens**, rate-limited, render only what's needed (no extra lender PII).
+
+### Launch-readiness gaps (expected for an app like this)
+
+- [ ] **R1. App lock (Face ID / passcode)** — near-universal for a private
+  ledger; `expo-local-authentication`. High value, low effort.
+- [ ] **R2. Hosted privacy-policy URL** — required for App Store submission now
+  that email/PII is collected (the in-app Privacy screen isn't a hosted URL).
+- [ ] **R3. Crash/error monitoring (Sentry or similar)** — none today; blind to
+  production errors.
+- [ ] **R4. Automated tests for the data/sync layer** — none exist. `mergeById`,
+  the store selectors, and the db row mappers are pure functions doing important
+  work; cheap, high-confidence unit tests (where a sync bug will eventually bite).
+- [ ] **R5. Web nudge "mark as returned" page (= E2)** — the signature feature is
+  still a placeholder; the other half of the killer loop.
+
+### Explicitly OUT of scope — do NOT add (PROJECT.md §2)
+> Competitor IOU apps have these; OweMe deliberately doesn't. Staying disciplined
+> is a feature: **running balances, bill-splitting, interest, partial payments.**
 
 ---
 

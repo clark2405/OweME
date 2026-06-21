@@ -67,29 +67,35 @@ oweme/
 > **iOS build gotchas live in `BUILD_NOTES.md`** — read it first if a device build fails. Key constraint: Clark is on a **free** Apple account, so NO push/`aps-environment` entitlement (local notifications only).
 
 - [x] Repo scaffolded (Expo app in `app/` + Next.js web in `web/`, both TS strict, tsc clean)
-- [x] Initial schema migration written (`supabase/migrations/20260610000000_init_schema.sql`, tables + RLS)
-- [x] iOS native build set up (prebuild + Pods, bundle id `com.clark24smoothoperator.oweme`, runs on simulator)
-- [x] **Mobile UI built on mock data** — full design system + all v1 screens, applying `offbrand-design`. Runs and verified on iOS sim. *Not wired to Supabase yet* (reads an in-memory store).
-- [ ] Supabase project created, schema migrated (manual: create project, apply migration, fill `.env`)
-- [ ] Supabase client wiring (`app/src/lib`, `web/lib`) + replace `src/lib/store.ts` reads/writes with real queries
-- [ ] Auth flow (email magic link)
-- [x] Home screen (active loans list + stats) — UI on mock data
-- [x] Add loan flow (item + money, <15s target) — UI on mock data
-- [x] Loan detail + mark returned (confetti) — UI on mock data
-- [x] Borrowers list + profile (reliability stats) — UI on mock data
-- [x] Local notification scheduling (expo-notifications; per-loan cadence synced by the store, tap deep-links to the loan; channel picker in Settings)
-- [ ] Nudge link generation + `/n/[token]` page (mobile share-sheet nudge w/ tones exists; web page still a TODO)
-- [x] History screen — UI on mock data
-- [x] First-launch onboarding (`src/app/onboarding.tsx`, 3-page welcome + tab tour; seen-flag in AsyncStorage via `src/lib/onboarding.ts`, gated in `(tabs)/_layout.tsx`).
-- [x] Home reworked into a dashboard: the two stat bentos are tappable type filters (item/money), the lineup is capped at `HOME_LIMIT` with a "See all N →" overflow row, and a new full active-loans screen (`src/app/loans.tsx`, route registered in root `_layout.tsx`) has search + type chips + oldest/newest sort. Store helper `activeLoansBy(list, {type,sort,query})` backs both.
+- [x] Schema migrations written — FOUR now: init (`20260610000000`), app columns
+  (`20260617000000`), photo storage (`20260618000000`), `updated_at` for sync
+  (`20260622000000`). RLS scopes everything to `owner_id = auth.uid()`.
+- [x] iOS native build set up (prebuild + Pods, bundle id `com.clark24smoothoperator.oweme`, runs on simulator). Free Apple account → no push entitlement.
+- [x] **Mobile UI** — full design system + all v1 screens (`offbrand-design`), verified on iOS sim.
+- [x] **Supabase backend wired & live** — `app/src/lib/supabase.ts` (anon client) +
+  `db.ts` (row↔domain mappers) + `store.ts` (synchronous selector API preserved →
+  screens unchanged). Verified end-to-end on two simulators.
+- [x] **Local-first + optional account sync (P6, 2026-06-21)** — the ledger now
+  persists ON-DEVICE (AsyncStorage `oweme.ledger.v1`) and works offline with **no
+  account**. There is **no auth gate** — the app opens straight in. Signing in is
+  OPTIONAL (Settings → Account, or onboarding page 4); on sign-in `store.ts`
+  `syncWithCloud()` MERGES local ↔ cloud BY ID (last-write-wins via `updatedAt`)
+  and pushes up. Sign-out keeps the local copy. Cloud calls are gated on a session,
+  so anonymous users never hit the network.
+- [x] Auth — **email OTP code** (`app/src/lib/auth.ts` + `app/src/app/auth.tsx`),
+  now a dismissable modal (not a gate); Sign out keeps local data.
+- [x] Photo Storage (E1) — public `photos` bucket + `lib/storage.ts`; uploads only
+  when signed in (anonymous keeps local URIs); photos ride in backups.
+- [x] Local notification scheduling (expo-notifications; per-loan cadence; channel picker).
+- [x] All v1 screens wired to the live store — Home dashboard (tappable bento
+  filters, pinned overdue, capped lineup + "See all", `loans.tsx` full list), Add
+  (item+money <15s), Loan detail (mark returned + confetti), Borrowers + profile
+  (reliability), History, first-launch onboarding.
+- [ ] **Manual setup before sync runs:** create the Supabase project, apply ALL
+  FOUR migrations, fill `app/.env`, add `{{ .Token }}` to the OTP email template.
+- [ ] Nudge web page `/n/[token]` — still a placeholder (TASKS E2 / R5).
 
-**UI layer (this session):** `src/lib/{theme,motion,types,format,store}.ts` are the
-design tokens + mock data layer; `src/components/*` are the animated primitives
-(PressableScale, Button, Reveal, AmbientBackground, LoanCard, Fab, Confetti,
-SegmentedToggle, TabBar, …); routes live under `src/app/(tabs)/`, `src/app/add.tsx`,
-`src/app/loan/[id].tsx`, `src/app/borrower/[id].tsx`.
-
-Next: create the Supabase project, apply the migration, then swap `src/lib/store.ts`
-(currently an in-memory mock with the same shapes as `types.ts`) for real Supabase
-queries — the UI already consumes it through `useLoans()` and the read/write helpers,
-so wiring is localized to that file + a new `supabase.ts` client.
+Next: **P7 — security & launch-readiness backlog** (see TASKS.md): account deletion
+(App Store blocker), move the auth session to `expo-secure-store`, lock down the
+photos bucket, app lock (Face ID), remove the unused Android RECORD_AUDIO
+permission, Sentry, and unit tests for the sync/merge layer. Then E2 (web nudge).

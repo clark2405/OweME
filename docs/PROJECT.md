@@ -164,17 +164,20 @@ create table nudge_links (
 
 **Row Level Security:** every table gets RLS where `owner_id = auth.uid()`. The Next.js nudge page reads via a server-side service role scoped to a single token lookup.
 
-**Backup / restore (frontend already built):** the app has a Back up & restore
-screen (Settings › Your data) that exports a versioned JSON backup of
-`borrowers` + `loans` + `settings` and restores it via **replace-all**. It runs
-on the mock store today. When wiring this table to Supabase:
-- restore (`importData` in `app/src/lib/store.ts`) should become a **transactional
-  wipe-and-insert scoped to `owner_id = auth.uid()`**;
-- photos (`photo_url` / `avatar_url`) are **stripped from backups for now** because
-  they're local file URIs — once **Supabase Storage** holds them, keep resolvable
-  Storage URLs in the backup so images survive a device hop;
-- this is manual backup/restore, **not** live sync (a separate later concern).
-See `docs/CHANGELOG.md` ("Backend note") for the full handoff.
+**Local-first + optional account sync (decided 2026-06-21):** OweMe is local-first.
+The lender needs **no account** — the ledger lives on the device (AsyncStorage),
+works offline, and the app opens straight in with no login gate. Signing in (email
+OTP, optional, from Settings or onboarding) turns on **Supabase sync** so the
+ledger appears across devices; conflicts resolve **by id, last-write-wins**
+(`updated_at`). Borrowers still never need accounts.
+
+**Backup / restore:** the Back up & restore screen (Settings › Your data) exports a
+versioned JSON backup of `borrowers` + `loans` + `settings` and restores via
+**replace-all** (`importData` in `app/src/lib/store.ts`; mirrors to Supabase via
+`db.replaceAll` when signed in — an atomic `restore_ledger` RPC is a follow-up).
+Backups carry resolvable **Storage** URLs for photos (E1 shipped). Backup is the
+off-device safety net for anonymous users; signed-in users also get live sync.
+See `docs/CHANGELOG.md` for full handoff detail.
 
 ---
 
@@ -204,12 +207,14 @@ Plus one **web page** (Next.js): `/n/[token]` — the borrower-facing nudge page
 ## 9. Roadmap
 
 ### v1 — MVP (ship this)
-- [ ] Supabase project + schema + RLS
-- [ ] Expo app: auth, home, add loan (item + money), loan detail, mark returned
-- [ ] Local notifications
-- [ ] Borrowers + history screens
-- [ ] Next.js nudge link page
-- [ ] Reliability stats (basic)
+- [x] Supabase project + schema + RLS (+ local-first, optional account sync)
+- [x] Expo app: auth, home, add loan (item + money), loan detail, mark returned
+- [x] Local notifications
+- [x] Borrowers + history screens
+- [ ] Next.js nudge link page (`/n/[token]` still a placeholder — TASKS E2/R5)
+- [x] Reliability stats (basic)
+- [ ] Launch readiness: account deletion, encrypted token storage, app lock,
+  privacy policy URL, Sentry (see TASKS.md P7) — required before App Store
 
 ### v2 — Later (do not start early!)
 - Push notifications (server-driven)

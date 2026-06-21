@@ -1,8 +1,31 @@
 # Changelog
 
 Human-readable log of notable changes, newest first. Append a dated section per
-working session. Frontend-only unless noted (no backend wired yet — see
-[HANDOFF.md](./HANDOFF.md)).
+working session. Backend (Supabase) is wired; the app is **local-first with
+optional account sync** — see [HANDOFF.md](./HANDOFF.md).
+
+---
+
+## 2026-06-21 — Local-first ledger + optional account sync (P6)
+
+OweMe is now local-first: the ledger persists on-device (AsyncStorage) and works
+offline with **no account** — the app opens straight in, no auth gate. Signing in
+(email OTP, optional, from Settings → Account or onboarding page 4) turns on
+Supabase sync; on sign-in the store merges local ↔ cloud **by id, last-write-wins**
+(new `updated_at` column, migration `20260622000000`) and pushes the merged set up.
+Sign-out keeps the local copy. Cloud calls are gated on a session, so anonymous
+users never hit the network. Verified end-to-end across two simulators.
+
+- `store.ts`: AsyncStorage ledger mirror + `syncWithCloud()` (merge + push) +
+  `mergeById` (last-write-wins); every write stamps `updatedAt`.
+- `types.ts` / `db.ts`: `updatedAt` ↔ `updated_at` + batch upserts.
+- `(tabs)/_layout.tsx`: auth gate removed (waits on local hydration instead).
+- `auth.tsx`: optional, dismissable modal (Close button) instead of a gate.
+- `settings.tsx`: state-aware Account row ("Sign in to sync" / email + Sign out).
+- `onboarding.tsx`: page-4 "sign in to sync" line (above the CTA).
+- `privacy.tsx` / `backup.tsx`: copy rewritten for the local-first + opt-in model.
+- Follow-up: **P7 security & launch-readiness backlog** (account deletion,
+  SecureStore tokens, lock down the photos bucket, app lock, …) — see TASKS.md.
 
 ---
 

@@ -158,7 +158,7 @@ export default function BackupScreen() {
   };
 
   return (
-    <Screen scroll contentStyle={styles.content}>
+    <Screen scroll ambient="settings" contentStyle={styles.content}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Reveal index={0} from={8}>
           <BackLink />

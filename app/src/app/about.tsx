@@ -23,7 +23,7 @@ export default function AboutScreen() {
   const { colors, type: t } = useTheme();
   const styles = useThemedStyles(makeStyles);
   return (
-    <Screen scroll contentStyle={styles.content}>
+    <Screen scroll ambient="settings" contentStyle={styles.content}>
       <Reveal index={0} from={8}>
         <BackLink />
       </Reveal>

@@ -22,7 +22,7 @@ const SECTIONS: { h: string; b: string }[] = [
   },
   {
     h: 'If you sign in to sync',
-    b: 'Signing in is optional. When you do, your ledger — loans, people, and the photos you attach — is stored in our database (Supabase) so it can appear on your other devices. Sign out anytime; the copy on your phone stays put.',
+    b: 'Signing in is optional. When you do, your ledger — loans, people, and the photos you attach — is stored securely in the cloud so it can appear on your other devices. Sign out anytime; the copy on your phone stays put.',
   },
   {
     h: 'Your email',
@@ -50,7 +50,7 @@ export default function PrivacyScreen() {
   const { type: t } = useTheme();
   const styles = useThemedStyles(makeStyles);
   return (
-    <Screen scroll contentStyle={styles.content}>
+    <Screen scroll ambient="settings" contentStyle={styles.content}>
       <Reveal index={0} from={8}>
         <BackLink />
       </Reveal>

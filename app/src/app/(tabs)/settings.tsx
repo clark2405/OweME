@@ -17,8 +17,10 @@ import { PressableScale } from '../../components/PressableScale';
 import { Icon, IconName } from '../../components/Icon';
 import {
   Appearance,
+  clearLocalLedger,
   CurrencyCode,
   setAppearance,
+  setAppLock,
   setDefaultCurrency,
   setNudgeChannel,
   setNudgesEnabled,
@@ -26,7 +28,9 @@ import {
   useSettings,
 } from '../../lib/store';
 import { NUDGE_CHANNELS } from '../../lib/nudge';
-import { signOut, useSession } from '../../lib/auth';
+import { deleteAccount, signOut, useSession } from '../../lib/auth';
+import { authenticate, canUseAppLock } from '../../lib/applock';
+import { showToast } from '../../lib/toast';
 import { getNotifPermission, NotifPermission, requestNotifPermission } from '../../lib/notifications';
 import { resetOnboarding } from '../../lib/onboarding';
 import { radius, space } from '../../lib/theme';
@@ -188,6 +192,69 @@ function NudgeRemindersCard({ index }: { index: number }) {
   );
 }
 
+/** App Lock (R1): require Face ID / passcode to open OweMe. Enabling AND
+ *  disabling both prompt for auth — so whoever holds an already-unlocked phone
+ *  can't quietly turn protection off. A hint shows when the device has no
+ *  biometric/passcode set up. */
+function AppLockCard({ index }: { index: number }) {
+  const { colors, type: t } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  const { appLock } = useSettings();
+  const [available, setAvailable] = useState(true);
+
+  // Re-check on focus so adding Face ID/passcode in iOS Settings clears the hint.
+  useFocusEffect(
+    useCallback(() => {
+      canUseAppLock().then(setAvailable).catch(() => {});
+    }, []),
+  );
+
+  const onToggle = async (v: boolean) => {
+    if (v) {
+      const ok = await canUseAppLock();
+      setAvailable(ok);
+      if (!ok) {
+        showToast({ message: 'Set up Face ID or a passcode on this device first.' });
+        return;
+      }
+      if (await authenticate('Turn on App Lock')) setAppLock(true);
+    } else if (await authenticate('Turn off App Lock')) {
+      setAppLock(false);
+    }
+  };
+
+  return (
+    <Card index={index}>
+      <View style={styles.toggleRow}>
+        <View style={styles.toggleText}>
+          <Text style={t.h3}>App Lock</Text>
+          <Text style={styles.sub}>Require Face ID or your passcode to open OweMe</Text>
+        </View>
+        <Switch
+          value={appLock}
+          onValueChange={onToggle}
+          trackColor={{ true: colors.accent, false: colors.hairline }}
+        />
+      </View>
+      {!available && (
+        <PressableScale
+          onPress={() => Linking.openSettings()}
+          scaleTo={0.98}
+          style={styles.permHint}
+          accessibilityRole="button"
+          accessibilityLabel="Set up Face ID or a passcode"
+        >
+          <Icon name="bellOff" size={18} color={colors.accentPress} strokeWidth={2} />
+          <Text style={styles.permHintText}>
+            No Face ID or passcode set up on this device yet — add one in iOS Settings to use App Lock.
+          </Text>
+          <Icon name="chevronRight" size={18} color={colors.accentPress} strokeWidth={2.2} />
+        </PressableScale>
+      )}
+    </Card>
+  );
+}
+
 // About / meta rows. Each opens its own sub-screen (content + forms are
 // frontend only for now — see the route files).
 const ABOUT_ROWS: { title: string; sub: string; href: '/about' | '/privacy' | '/feedback' | '/rate'; icon?: IconName }[] = [
@@ -221,62 +288,19 @@ function AboutRow({ title, sub, href, icon, last }: (typeof ABOUT_ROWS)[number] 
   );
 }
 
-/** Entry to the back-up & restore screen — the only safety net for a local-first,
- *  no-account ledger. */
-function DataRow({ index }: { index: number }) {
-  const { colors, type: t } = useTheme();
-  const styles = useThemedStyles(makeStyles);
-  const router = useRouter();
-  return (
-    <Reveal index={index} from={20}>
-      <PressableScale
-        onPress={() => router.push('/backup')}
-        scaleTo={0.98}
-        style={styles.row}
-        accessibilityRole="button"
-        accessibilityLabel="Back up and restore your ledger"
-      >
-        <View style={styles.toggleText}>
-          <Text style={t.h3}>Back up &amp; restore</Text>
-          <Text style={styles.sub}>Save your ledger, or bring it to a new phone</Text>
-        </View>
-        <Icon name="chevronRight" size={20} color={colors.inkFaint} strokeWidth={2.2} />
-      </PressableScale>
-    </Reveal>
-  );
-}
-
-/** Account: OweMe is local-first, so signing in is OPTIONAL. Signed out → an
- *  opt-in "Sign in to sync"; signed in → the email + a Sign out that KEEPS the
- *  local copy (it just stops syncing). */
-function AccountRow({ index }: { index: number }) {
+/** "Your data" bento — both ways to keep the ledger safe in ONE card (so the
+ *  section label sits inside a bento like the rest of Settings). Cloud sync vs
+ *  manual backup are made distinct by leading badge, copy, and grouping.
+ *  Signed in adds the account email + Sign out + (Apple 5.1.1) Delete account. */
+function YourDataCard({ index }: { index: number }) {
   const { colors, type: t } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const { session } = useSession();
   const email = session?.user.email;
+  const [deleting, setDeleting] = useState(false);
 
-  if (!session) {
-    return (
-      <Reveal index={index} from={20}>
-        <PressableScale
-          onPress={() => router.push('/auth')}
-          scaleTo={0.98}
-          style={styles.row}
-          accessibilityRole="button"
-          accessibilityLabel="Sign in to sync your ledger"
-        >
-          <View style={styles.toggleText}>
-            <Text style={t.h3}>Sign in to sync</Text>
-            <Text style={styles.sub}>Optional — back up your ledger and use it on all your devices</Text>
-          </View>
-          <Icon name="chevronRight" size={20} color={colors.inkFaint} strokeWidth={2.2} />
-        </PressableScale>
-      </Reveal>
-    );
-  }
-
-  const confirm = () => {
+  const confirmSignOut = () => {
     Alert.alert(
       'Sign out?',
       'Your ledger stays on this phone — it just stops syncing. Sign back in anytime to pick up across devices.',
@@ -287,24 +311,128 @@ function AccountRow({ index }: { index: number }) {
     );
   };
 
+  // Permanently erase the cloud account + its data (Edge Function), then wipe the
+  // local copy and sign out. Apple 5.1.1 requires this be doable in-app.
+  const runDelete = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      await deleteAccount();
+      clearLocalLedger();
+      await signOut();
+      showToast({ message: 'Your account and data were deleted.' });
+    } catch {
+      setDeleting(false);
+      showToast({ message: 'Couldn’t delete your account — try again.' });
+    }
+  };
+
+  const confirmDelete = () => {
+    Alert.alert(
+      'Delete your account?',
+      'This permanently erases your account and everything synced to it — all your loans, people, and photos — on every device. This can’t be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete account', style: 'destructive', onPress: () => void runDelete() },
+      ],
+    );
+  };
+
   return (
     <Reveal index={index} from={20}>
-      <PressableScale
-        onPress={confirm}
-        scaleTo={0.98}
-        style={styles.row}
-        accessibilityRole="button"
-        accessibilityLabel="Sign out"
-      >
-        <View style={styles.signOutIcon}>
-          <Icon name="logout" size={18} color={colors.danger} strokeWidth={2} />
-        </View>
-        <View style={styles.toggleText}>
-          <Text style={[t.h3, { color: colors.danger }]}>Sign out</Text>
-          {email && <Text style={styles.sub} numberOfLines={1}>Synced as {email}</Text>}
-        </View>
-        <Icon name="chevronRight" size={20} color={colors.inkFaint} strokeWidth={2.2} />
-      </PressableScale>
+      <View style={styles.aboutCard}>
+        <Text style={[t.overline, styles.cardLabel, styles.aboutLabel]}>Your data</Text>
+
+        {/* Cloud sync (automatic, needs an account) */}
+        {!session ? (
+          <PressableScale
+            onPress={() => router.push('/auth')}
+            scaleTo={0.98}
+            style={[styles.aboutRow, styles.aboutRowDivider]}
+            accessibilityRole="button"
+            accessibilityLabel="Sign in to sync your ledger"
+          >
+            <View style={styles.rowIcon}>
+              <Icon name="duo" size={20} color={colors.accent} strokeWidth={2} />
+            </View>
+            <View style={styles.toggleText}>
+              <Text style={t.h3}>Sign in to sync</Text>
+              <Text style={styles.sub}>
+                Keeps your ledger on all your devices, automatically. Needs an account.
+              </Text>
+            </View>
+            <Icon name="chevronRight" size={20} color={colors.inkFaint} strokeWidth={2.2} />
+          </PressableScale>
+        ) : (
+          <View style={[styles.aboutRow, styles.aboutRowDivider]}>
+            <View style={styles.rowIcon}>
+              <Icon name="duo" size={20} color={colors.accent} strokeWidth={2} />
+            </View>
+            <View style={styles.toggleText}>
+              <Text style={t.h3}>Synced</Text>
+              {email && <Text style={styles.sub} numberOfLines={1}>Signed in as {email}</Text>}
+            </View>
+          </View>
+        )}
+
+        {/* Manual backup (a file you control, no account) */}
+        <PressableScale
+          onPress={() => router.push('/backup')}
+          scaleTo={0.98}
+          style={[styles.aboutRow, session && styles.aboutRowDivider]}
+          accessibilityRole="button"
+          accessibilityLabel="Back up and restore your ledger"
+        >
+          <View style={styles.rowIconNeutral}>
+            <Icon name="parcel" size={20} color={colors.inkSoft} strokeWidth={2} />
+          </View>
+          <View style={styles.toggleText}>
+            <Text style={t.h3}>Back up &amp; restore</Text>
+            <Text style={styles.sub}>
+              Save a copy yourself — no account needed. Move it to a new phone by hand.
+            </Text>
+          </View>
+          <Icon name="chevronRight" size={20} color={colors.inkFaint} strokeWidth={2.2} />
+        </PressableScale>
+
+        {/* Signed-in only: sign out + delete account */}
+        {session && (
+          <>
+            <PressableScale
+              onPress={confirmSignOut}
+              scaleTo={0.98}
+              style={[styles.aboutRow, styles.aboutRowDivider]}
+              accessibilityRole="button"
+              accessibilityLabel="Sign out"
+            >
+              <View style={styles.signOutIcon}>
+                <Icon name="logout" size={18} color={colors.danger} strokeWidth={2} />
+              </View>
+              <View style={styles.toggleText}>
+                <Text style={[t.h3, { color: colors.danger }]}>Sign out</Text>
+                <Text style={styles.sub}>Keeps your local copy — just stops syncing</Text>
+              </View>
+            </PressableScale>
+
+            <PressableScale
+              onPress={confirmDelete}
+              scaleTo={0.98}
+              disabled={deleting}
+              style={styles.aboutRow}
+              accessibilityRole="button"
+              accessibilityLabel="Delete account"
+            >
+              <View style={styles.signOutIcon}>
+                <Icon name="trash" size={18} color={colors.danger} strokeWidth={2} />
+              </View>
+              <View style={styles.toggleText}>
+                <Text style={[t.h3, { color: colors.danger }]}>{deleting ? 'Deleting…' : 'Delete account'}</Text>
+                <Text style={styles.sub}>Permanently erase your account and all its data</Text>
+              </View>
+            </PressableScale>
+          </>
+        )}
+      </View>
     </Reveal>
   );
 }
@@ -325,47 +453,10 @@ export default function SettingsScreen() {
       <Header overline="The fine print" title="Settings" />
 
       <View style={styles.stack}>
-        <Card index={0}>
-          <Text style={[t.overline, styles.cardLabel]}>Appearance</Text>
-          <View style={styles.segmentRow}>
-            {APPEARANCES.map((a) => {
-              const on = a.value === appearance;
-              return (
-                <PressableScale
-                  key={a.value}
-                  onPress={() => setAppearance(a.value)}
-                  scaleTo={0.94}
-                  style={[styles.curChip, on && styles.curChipOn]}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: on }}
-                >
-                  <Text style={[styles.curText, styles.channelText, on && styles.curTextOn]}>
-                    {a.label}
-                  </Text>
-                </PressableScale>
-              );
-            })}
-          </View>
-          <Text style={styles.sub}>System follows your phone&apos;s light/dark switch.</Text>
-        </Card>
+        {/* Core feature first — nudges are what OweMe is for. */}
+        <NudgeRemindersCard index={0} />
 
         <Card index={1}>
-          <Text style={[t.overline, styles.cardLabel]}>Default currency</Text>
-          <View style={styles.segmentRow}>
-            {CURRENCIES.map((c) => (
-              <CurrencyButton
-                key={c}
-                c={c}
-                isSelected={c === defaultCurrency}
-                onPress={() => setDefaultCurrency(c)}
-              />
-            ))}
-          </View>
-        </Card>
-
-        <NudgeRemindersCard index={2} />
-
-        <Card index={3}>
           <Text style={[t.overline, styles.cardLabel]}>Nudges go through</Text>
           <View style={styles.segmentRow}>
             {NUDGE_CHANNELS.map((c) => {
@@ -392,7 +483,52 @@ export default function SettingsScreen() {
           </Text>
         </Card>
 
-        <Card index={4}>
+        <Card index={2}>
+          <Text style={[t.overline, styles.cardLabel]}>Default currency</Text>
+          <View style={styles.segmentRow}>
+            {CURRENCIES.map((c) => (
+              <CurrencyButton
+                key={c}
+                c={c}
+                isSelected={c === defaultCurrency}
+                onPress={() => setDefaultCurrency(c)}
+              />
+            ))}
+          </View>
+        </Card>
+
+        {/* Your data — both ways to keep the ledger safe in one bento, so the
+            label sits inside a card like the rest and the cloud-sync vs manual-
+            backup distinction is obvious. */}
+        <YourDataCard index={3} />
+
+        <AppLockCard index={4} />
+
+        <Card index={5}>
+          <Text style={[t.overline, styles.cardLabel]}>Appearance</Text>
+          <View style={styles.segmentRow}>
+            {APPEARANCES.map((a) => {
+              const on = a.value === appearance;
+              return (
+                <PressableScale
+                  key={a.value}
+                  onPress={() => setAppearance(a.value)}
+                  scaleTo={0.94}
+                  style={[styles.curChip, on && styles.curChipOn]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                >
+                  <Text style={[styles.curText, styles.channelText, on && styles.curTextOn]}>
+                    {a.label}
+                  </Text>
+                </PressableScale>
+              );
+            })}
+          </View>
+          <Text style={styles.sub}>System follows your phone&apos;s light/dark switch.</Text>
+        </Card>
+
+        <Card index={6}>
           <View style={styles.toggleRow}>
             <View style={styles.toggleText}>
               <Text style={t.h3}>Public shame mode 😈</Text>
@@ -409,7 +545,7 @@ export default function SettingsScreen() {
           </View>
         </Card>
 
-        <Reveal index={5} from={20}>
+        <Reveal index={7} from={20}>
           <PressableScale onPress={replayTour} scaleTo={0.98} style={styles.row}>
             <View style={styles.toggleText}>
               <Text style={t.h3}>Replay the tour</Text>
@@ -419,9 +555,7 @@ export default function SettingsScreen() {
           </PressableScale>
         </Reveal>
 
-        <DataRow index={6} />
-
-        <Reveal index={7} from={20}>
+        <Reveal index={8} from={20}>
           <View style={styles.aboutCard}>
             <Text style={[t.overline, styles.cardLabel, styles.aboutLabel]}>About</Text>
             {ABOUT_ROWS.map((row, i) => (
@@ -429,8 +563,6 @@ export default function SettingsScreen() {
             ))}
           </View>
         </Reveal>
-
-        <AccountRow index={8} />
 
         <Reveal index={9} from={18}>
           <View style={styles.footerRow}>
@@ -477,6 +609,24 @@ const makeStyles = (th: Theme) => StyleSheet.create({
   },
   toggleRow: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
   toggleText: { flex: 1, gap: 4 },
+  // Leading icon badges that visually tell the two "Your data" rows apart:
+  // accent = cloud sync, neutral = manual on-device backup.
+  rowIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: th.colors.accentSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowIconNeutral: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: th.colors.bgSunken,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   // Red-tinted circle that flags Sign out as the one destructive row.
   signOutIcon: {
     width: 38,

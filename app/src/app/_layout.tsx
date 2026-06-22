@@ -11,6 +11,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Toaster } from '../components/Toaster';
 import { AnimatedSplash } from '../components/AnimatedSplash';
+import { AppLockGate } from '../components/AppLockGate';
 import { ACTION_RETURNED } from '../lib/notifications';
 import { markReturned, unreturn } from '../lib/store';
 import { markShellReady } from '../lib/shell';
@@ -74,6 +75,9 @@ export default function RootLayout() {
         <ThemeProvider>
           <ThemedNavigation />
           <Toaster />
+          {/* App lock (R1): covers everything when enabled, until Face ID /
+              passcode. Above the nav, below the splash (so the splash plays first). */}
+          <AppLockGate />
           {/* Inside ThemeProvider so the preloader resolves the active palette
               (warm-charcoal in dark) instead of always painting cream. */}
           {!splashDone && (

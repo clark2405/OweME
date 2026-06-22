@@ -3,13 +3,14 @@
  * never the service-role key (that lives only in the web nudge page, server-side).
  *
  * `react-native-url-polyfill` is required: supabase-js builds URLs that RN's
- * runtime doesn't fully implement. Sessions persist in AsyncStorage and auto-
- * refresh; `detectSessionInUrl` is off (no web-style URL callback on native).
+ * runtime doesn't fully implement. The session persists in the device keychain
+ * (SecureStore, via `secureStorage`) — not plaintext AsyncStorage — and auto-
+ * refreshes; `detectSessionInUrl` is off (no web-style URL callback on native).
  */
 
 import 'react-native-url-polyfill/auto';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
+import { secureStorage } from './secure-storage';
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -24,7 +25,7 @@ if (!url || !anonKey) {
 
 export const supabase = createClient(url ?? '', anonKey ?? '', {
   auth: {
-    storage: AsyncStorage,
+    storage: secureStorage,
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: false,

@@ -115,6 +115,8 @@ export interface Settings {
   shameMode: boolean;
   /** Display theme (device-local; not carried in a backup). */
   appearance: Appearance;
+  /** Require Face ID / passcode to open the app (device-local, security). */
+  appLock: boolean;
 }
 
 const SETTINGS_KEY = 'oweme.settings.v1';
@@ -125,6 +127,7 @@ let settings: Settings = {
   channel: 'share',
   shameMode: false,
   appearance: 'system',
+  appLock: false,
 };
 let settingsSnapshot = settings;
 function getSettingsSnapshot() {
@@ -258,6 +261,21 @@ async function pushUp(bs: Borrower[], ls: Loan[]) {
   }
 }
 
+/** Classify a sync failure so the toast tells the truth instead of always
+ *  blaming the connection. Postgrest/Storage/Auth errors carry a Postgres
+ *  `code` or an HTTP `status`; a bare fetch rejection ("Network request failed")
+ *  has neither — that's the only case that's genuinely a connection problem. */
+function syncErrorMessage(e: unknown): string {
+  const err = (e ?? {}) as { code?: string; status?: number; message?: string };
+  const status = typeof err.status === 'number' ? err.status : undefined;
+  const isNetwork =
+    status === 0 ||
+    (status === undefined && !err.code && /network|fetch|timeout|connection|offline/i.test(err.message ?? ''));
+  if (isNetwork) return 'Couldn’t reach the cloud — check your connection.';
+  if (status !== undefined && status >= 500) return 'Sync hit a snag on our end — we’ll retry shortly.';
+  return 'Couldn’t sync your ledger — we’ll try again.';
+}
+
 /** Pull the cloud ledger, merge it with the local one (last-write-wins), then
  *  push the merged result back up so the account is complete. Runs on sign-in
  *  and as the reconcile path after a failed write. Keeps showing local data the
@@ -275,7 +293,7 @@ async function syncWithCloud() {
     await pushUp(b.fromLocal, l.fromLocal);
   } catch (e) {
     console.warn('[OweMe] cloud sync failed', e);
-    showToast({ message: 'Couldn’t sync your ledger. Check your connection.' });
+    showToast({ message: syncErrorMessage(e) });
   }
 }
 
@@ -362,6 +380,10 @@ export function setShameMode(v: boolean) {
 
 export function setAppearance(v: Appearance) {
   commitSettings({ ...settings, appearance: v });
+}
+
+export function setAppLock(v: boolean) {
+  commitSettings({ ...settings, appLock: v });
 }
 
 /** Re-mirror every active loan's cadence into pending notifications. */
@@ -767,6 +789,16 @@ export function importData(data: {
   cancelAllReminders();
   resyncAllReminders();
   persist(() => db.replaceAll(data.borrowers, data.loans));
+}
+
+/** Wipe the on-device ledger with NO cloud calls. Used right after the
+ *  account-deletion Edge Function has erased the cloud copy, before we sign out —
+ *  the account and its data should leave nothing behind on the device either. */
+export function clearLocalLedger() {
+  cancelAllReminders();
+  commit([]);
+  commitBorrowers([]);
+  AsyncStorage.removeItem(LEDGER_KEY).catch(() => {});
 }
 
 /** Re-insert a just-deleted loan (undo). Reminders re-sync from its state. */

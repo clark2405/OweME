@@ -439,46 +439,56 @@ on the mock store, today.
 
 ### Security findings
 
-- [ ] **S1. In-app account deletion (🔴 App Store blocker, Apple 5.1.1).** Now
-  that sign-in exists, Apple requires deleting the account **and** its data in-app
-  (Sign out isn't enough) — or it gets rejected. Add Settings → "Delete account"
-  → confirm → wipe the user's loans/borrowers/storage objects, then delete the
-  `auth.users` row. The client can't delete its own auth user → needs a **Supabase
-  Edge Function** (service-role) the app calls. Doubles as GDPR erasure.
-- [ ] **S2. Auth session in plaintext AsyncStorage (🟠).** `supabase.ts` uses
-  `storage: AsyncStorage`, so access+refresh tokens sit unencrypted (readable on a
-  jailbroken/rooted device or unencrypted backup — confirmed by reading the token
-  off a sim during verification). Move the auth session to **`expo-secure-store`**
-  (Keychain/Keystore) via a storage adapter. Note SecureStore's ~2KB Android limit
-  vs. the session size → adapter must chunk.
-- [ ] **S3. Photos bucket public + over-broad list policy (🟠).** `photos` is a
-  PUBLIC bucket (permanent bearer URLs) and the read policy
-  `for select using (bucket_id='photos')` has no role restriction → anyone with the
-  anon key can **list/enumerate** object paths, which embed user uids. Best:
-  private bucket + time-limited **signed URLs**. Minimum: drop/scope the public
-  `select` policy to the owner (public URL rendering doesn't need it).
+- [x] **S1. In-app account deletion (🔴 App Store blocker, Apple 5.1.1)** *(done
+  2026-06-22)*. Settings → Account now has a **Delete account** row (signed-in only)
+  → confirm Alert → `deleteAccount()` (`lib/auth.ts`) invokes the new
+  `supabase/functions/delete-account/index.ts` Edge Function (service-role): it
+  verifies the caller's JWT, removes their photos, deletes their loans (nudge_links
+  cascade) + borrowers, then `auth.admin.deleteUser`. On success the client wipes
+  the local copy (`clearLocalLedger()`) and signs out. Doubles as GDPR erasure.
+  **Manual step: `supabase functions deploy delete-account` before it works.**
+- [x] **S2. Auth session in plaintext AsyncStorage (🟠)** *(done 2026-06-22)*.
+  Added `expo-secure-store` + `lib/secure-storage.ts` — a chunked (~2KB) Keychain/
+  Keystore adapter — wired as `supabase.ts` `auth.storage`. Tokens no longer sit in
+  plaintext AsyncStorage. (Native module → needs a dev rebuild; a pre-existing
+  AsyncStorage session won't carry over, so a signed-in user re-signs-in once —
+  local data untouched, and OweMe hasn't shipped.)
+- [x] **S3. Photos bucket over-broad list policy (🟠)** *(done 2026-06-22, partial)*.
+  New migration `20260622000001_lock_down_photos_select.sql` drops the open
+  `for select using (bucket_id='photos')` policy (which let any role enumerate
+  object paths/uids) and replaces it with an owner-scoped read. Public-URL rendering
+  is unaffected — the public bucket serves via the unauthenticated CDN path. **Manual
+  step: apply the migration.** *Deeper hardening (private bucket + signed URLs to
+  kill the permanent bearer URLs) is parked — it changes the render model.*
 - [ ] **S4. Third-party PII without consent (🟠).** App stores other people's
   names + phone numbers (and Contacts import) in the cloud. GDPR/CCPA: you're a
   controller of their PII. Add a privacy-policy clause for added contacts + fill
   **App Store privacy nutrition labels** (now collecting email + cloud PII).
-- [ ] **S5. Remove unused `android.permission.RECORD_AUDIO` (🟡).** Declared in
-  `app.json` but no audio feature (auto-pulled by expo-image-picker video path).
-  Over-broad permission → Play data-safety friction. Configure image-picker to
-  images-only / strip the permission.
-- [ ] **S6. OTP resend cooldown + 429 handling (🟡).** `auth.tsx` "Resend code"
-  can be hammered (relies solely on Supabase limits). Add a client cooldown timer
-  + a friendly message on rate-limit.
-- [ ] **S7. Surface real sync errors (🟡).** `store.ts` shows a generic "Check
-  your connection" for ANY failure (a 400 read as a network issue during
-  verification). Distinguish network vs. server (4xx/5xx) in the toast.
+- [x] **S5. Remove unused `android.permission.RECORD_AUDIO` (🟡)** *(done
+  2026-06-22)*. `app.json`: set `expo-image-picker` `microphonePermission: false`,
+  emptied `android.permissions`, and added `RECORD_AUDIO` to `android.blockedPermissions`
+  so nothing can re-inject it. (Config — applies on next Android rebuild.)
+- [x] **S6. OTP resend cooldown + 429 handling (🟡)** *(done 2026-06-22)*.
+  `auth.tsx` now locks "Resend code" for 30s after each send (shows "Resend in Ns");
+  a 429 parses Supabase's "…after N seconds" and uses that window with a friendly
+  "too many requests" message (`describeSendError`).
+- [x] **S7. Surface real sync errors (🟡)** *(done 2026-06-22)*. `store.ts`
+  `syncErrorMessage()` distinguishes a genuine connection drop (bare fetch reject,
+  no code/status) from a server response (5xx vs other) instead of always blaming
+  the connection.
 - [ ] **S8. Web nudge page service-role hardening (ℹ️ when built, ties to E2).**
   When the `/n/[token]` page lands: service-role server-side only, **single-use +
   expiring tokens**, rate-limited, render only what's needed (no extra lender PII).
 
 ### Launch-readiness gaps (expected for an app like this)
 
-- [ ] **R1. App lock (Face ID / passcode)** — near-universal for a private
-  ledger; `expo-local-authentication`. High value, low effort.
+- [x] **R1. App lock (Face ID / passcode)** *(done 2026-06-22)*. Added
+  `expo-local-authentication` + `lib/applock.ts` (`canUseAppLock`/`authenticate`).
+  A Settings → **App Lock** toggle (enabling AND disabling both require auth)
+  gates a full-screen `components/AppLockGate.tsx` overlay (mounted in root
+  `_layout.tsx`, below the splash) that locks on cold start and on every
+  background→foreground, re-prompting Face ID/passcode. Pref is device-local
+  (`Settings.appLock`). (Native module → needs a dev rebuild to work.)
 - [ ] **R2. Hosted privacy-policy URL** — required for App Store submission now
   that email/PII is collected (the in-app Privacy screen isn't a hosted URL).
 - [ ] **R3. Crash/error monitoring (Sentry or similar)** — none today; blind to

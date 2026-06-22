@@ -169,4 +169,54 @@ most testing, but no camera/haptics, and it won't put the app on your phone.
 
 ---
 
-*Last updated: 2026-06-11, after wiring expo-contacts (Batch B).*
+## 7. ⭐ gesture-handler won't link against SDK 56's *prebuilt* React Native
+
+**Blocked the P7 rebuild on 2026-06-22** (after adding expo-secure-store +
+expo-local-authentication).
+
+### Symptom
+`xcodebuild` fails at the **link** step (code 65):
+```
+❌  Undefined symbols for architecture arm64
+┌─ Symbol: facebook::react::Sealable::Sealable()
+└─ Referenced from: facebook::react::RNGestureHandlerButtonProps::RNGestureHandlerButtonProps()
+                    in libRNGestureHandler.a[...](RNGestureHandlerButtonComponentView.o)
+```
+
+### Root cause
+Expo SDK 54+ ships **React Native as prebuilt binaries** (the `[Expo-precompiled]`
+/ "prebuilt React compatibility" lines during `pod install`). `react-native-
+gesture-handler` (2.31.x) references an inline RN core symbol (`Sealable`'s
+constructor) that the prebuilt React framework doesn't export → the linker can't
+resolve it.
+
+### The fix (applied)
+Build React Native **from source** instead of the prebuilt binaries. In
+`ios/Podfile.properties.json`:
+```json
+{ "ios.buildReactNativeFromSource": "true" }
+```
+(The Podfile maps this to `RCT_USE_PREBUILT_RNCORE=0` / `RCT_USE_RN_DEP=0`.) Then
+`pod install` + rebuild. First from-source compile is slow (~10–15 min) but caches.
+
+### ⚠️ Durability
+`ios/Podfile.properties.json` is git-ignored (see §4), so **a future `expo
+prebuild` drops this and the linker error returns.** Persist it via
+`expo-build-properties` in `app.json`:
+```json
+["expo-build-properties", { "ios": { "buildReactNativeFromSource": true } }]
+```
+(Not yet added — currently only set in the local `Podfile.properties.json`.)
+
+### Also seen / handled this round
+- Don't `rm -rf ios/build` to "clean" — it deletes the **React codegen** output
+  (`build/generated/ios/ReactCodegen/*-generated.mm`) and the next build fails with
+  "Build input file cannot be found". Recover with a forced `pod install` (re-runs
+  codegen). Prefer cleaning **DerivedData** + a `pod install` over nuking `ios/build`.
+- App lock (R1) needs `NSFaceIDUsageDescription` in Info.plist — durable via the
+  `expo-local-authentication` plugin's `faceIDPermission` in `app.json` (added), so
+  prebuild regenerates it; also poked into the local plist for the current binary.
+
+---
+
+*Last updated: 2026-06-22, after the P7 security/app-lock rebuild (from-source RN).*

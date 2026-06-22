@@ -39,6 +39,24 @@ import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PENDING_KEY = 'oweme.auth.pending.v1';
+// Seconds to lock "Resend code" after a send, so the link can't be hammered into
+// Supabase's own rate limit. A 429 (with its own retry window) overrides this.
+const RESEND_COOLDOWN = 30;
+
+/** Turn a sendOtp failure into a friendly line + (for rate limits) how long to
+ *  wait. Supabase returns 429 with "…you can only request this after N seconds." */
+function describeSendError(e: unknown): { message: string; retryAfter?: number } {
+  const err = (e ?? {}) as { status?: number; message?: string };
+  const msg = err.message ?? '';
+  if (err.status === 429 || /rate limit|too many|only request this after/i.test(msg)) {
+    const secs = Number(msg.match(/after (\d+)\s*second/i)?.[1]);
+    return {
+      message: 'Easy there — too many requests. Give it a moment, then try again.',
+      retryAfter: Number.isFinite(secs) && secs > 0 ? secs : RESEND_COOLDOWN,
+    };
+  }
+  return { message: e instanceof Error ? e.message : 'Could not send the code. Try again.' };
+}
 
 export default function AuthScreen() {
   const { type: t, colors } = useTheme();
@@ -58,6 +76,14 @@ export default function AuthScreen() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cooldown, setCooldown] = useState(0);
+
+  // Tick the resend cooldown down to zero.
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const id = setInterval(() => setCooldown((s) => (s <= 1 ? 0 : s - 1)), 1000);
+    return () => clearInterval(id);
+  }, [cooldown]);
 
   // Restore a mid-flow sign-in (left for email, app got reclaimed) so we land
   // back on the code step instead of resetting to the email field.
@@ -86,7 +112,7 @@ export default function AuthScreen() {
   };
 
   const send = async () => {
-    if (!emailValid || busy) return;
+    if (!emailValid || busy || cooldown > 0) return;
     setBusy(true);
     setError(null);
     haptics.tap();
@@ -95,8 +121,11 @@ export default function AuthScreen() {
       await AsyncStorage.setItem(PENDING_KEY, JSON.stringify({ email: email.trim().toLowerCase() }));
       setStep('code');
       setCode('');
+      setCooldown(RESEND_COOLDOWN);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not send the code. Try again.');
+      const { message, retryAfter } = describeSendError(e);
+      setError(message);
+      if (retryAfter) setCooldown(retryAfter);
     } finally {
       setBusy(false);
     }
@@ -251,8 +280,10 @@ export default function AuthScreen() {
                   />
                 </Reveal>
                 <View style={styles.altRow}>
-                  <PressableScale onPress={send} disabled={busy} hitSlop={8}>
-                    <Text style={styles.altLink}>Resend code</Text>
+                  <PressableScale onPress={send} disabled={busy || cooldown > 0} hitSlop={8}>
+                    <Text style={[styles.altLink, cooldown > 0 && styles.altLinkDisabled]}>
+                      {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
+                    </Text>
                   </PressableScale>
                   <Text style={styles.altDot}>·</Text>
                   <PressableScale onPress={useDifferentEmail} hitSlop={8}>
@@ -310,5 +341,6 @@ const makeStyles = (th: Theme) => StyleSheet.create({
   error: { ...th.type.small, color: th.colors.accentPress, fontWeight: '600' },
   altRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm, marginTop: space.sm },
   altLink: { ...th.type.small, color: th.colors.inkSoft, fontWeight: '700' },
+  altLinkDisabled: { color: th.colors.inkFaint },
   altDot: { ...th.type.small, color: th.colors.inkFaint },
 });

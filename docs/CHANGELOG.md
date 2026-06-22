@@ -6,6 +6,45 @@ optional account sync** — see [HANDOFF.md](./HANDOFF.md).
 
 ---
 
+## 2026-06-22 — App lock (P7: R1)
+
+- **R1 — app lock (Face ID / passcode).** `expo-local-authentication` +
+  `lib/applock.ts`; a Settings → **App Lock** toggle (auth required to flip either
+  way) gates `components/AppLockGate.tsx`, a full-screen cover mounted in the root
+  layout that locks on cold start and on every background→foreground and re-prompts
+  to unlock. Pref is device-local (`Settings.appLock`). *Native module — needs a
+  dev rebuild to activate.*
+
+---
+
+## 2026-06-22 — Security batch (P7: S1–S3, S5–S7)
+
+First pass of the P7 security backlog, hardest-last:
+
+- **S1 — in-app account deletion (App Store blocker, Apple 5.1.1).** Settings →
+  Account → **Delete account** (signed-in only) → confirm → `deleteAccount()`
+  invokes a new service-role Edge Function (`supabase/functions/delete-account`)
+  that wipes the user's photos, loans (nudge_links cascade), borrowers, then the
+  `auth.users` row; the client then clears the local copy and signs out. *Deploy:
+  `supabase functions deploy delete-account`.*
+- **S2 — auth session out of plaintext AsyncStorage.** Added `expo-secure-store` +
+  `lib/secure-storage.ts` (chunked ~2KB Keychain/Keystore adapter), wired as the
+  Supabase `auth.storage`.
+- **S3 — photos read-policy lockdown.** Migration `20260622000001` drops the open
+  `select using (bucket_id='photos')` (enumeration of uid-embedding paths) for an
+  owner-scoped read; public-URL rendering unaffected. *Apply the migration.*
+  (Private-bucket + signed URLs parked.)
+- **S5 — dropped Android `RECORD_AUDIO`** (image-picker `microphonePermission:
+  false` + `blockedPermissions`).
+- **S6 — OTP resend cooldown (30s) + 429 handling** in `auth.tsx`.
+- **S7 — truthful sync-error messages** (`syncErrorMessage` distinguishes
+  connection drop vs. server error).
+
+*Manual steps: apply migration `20260622000001`; `supabase functions deploy
+delete-account`. Native rebuild needed for S2 (SecureStore) + S5 (Android perms).*
+
+---
+
 ## 2026-06-21 — Local-first ledger + optional account sync (P6)
 
 OweMe is now local-first: the ledger persists on-device (AsyncStorage) and works

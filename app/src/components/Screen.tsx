@@ -104,6 +104,24 @@ export function Screen({
   useFocusEffect(
     useCallback(() => {
       const fade = { duration: AMBIENT_FADE_MS, easing: Easing.inOut(Easing.sin), reduceMotion };
+
+      // Pushed sub-screens / modals (about, backup, loan detail, …): show the
+      // ambient immediately. Re-fading it in on every entrance read as the
+      // background "reloading" each time you opened or closed a screen.
+      if (!crossfade) {
+        ambientOpacity.value = 1;
+        return;
+      }
+
+      // Tab screens (iOS native tabs). Re-focusing the SAME tab — e.g. popping
+      // back from a pushed sub-screen, where this scene never unmounted — must
+      // NOT re-animate, or the blobs flash a reload. Only a genuine tab *switch*
+      // (a different ambient last showed) cross-fades.
+      if (lastTabAmbient === ambient) {
+        ambientOpacity.value = 1;
+        return;
+      }
+
       ambientOpacity.value = 0;
       ambientOpacity.value = withTiming(1, fade);
 
@@ -111,9 +129,7 @@ export function Screen({
       // warm (visited before) — otherwise a first visit would flash a fresh,
       // reset-position prev layer (the "jumpy" first-load behaviour).
       const from =
-        crossfade && lastTabAmbient && lastTabAmbient !== ambient && ambientVisited.has(ambient)
-          ? lastTabAmbient
-          : null;
+        lastTabAmbient && ambientVisited.has(ambient) ? lastTabAmbient : null;
       let timer: ReturnType<typeof setTimeout> | undefined;
       if (from) {
         setPrevVariant(from);
@@ -122,10 +138,8 @@ export function Screen({
         // Drop the outgoing layer once it's invisible.
         timer = setTimeout(() => setPrevVariant(null), AMBIENT_FADE_MS + 80);
       }
-      if (crossfade) {
-        ambientVisited.add(ambient);
-        lastTabAmbient = ambient;
-      }
+      ambientVisited.add(ambient);
+      lastTabAmbient = ambient;
 
       return () => {
         if (timer) clearTimeout(timer);

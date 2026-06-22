@@ -67,9 +67,10 @@ oweme/
 > **iOS build gotchas live in `BUILD_NOTES.md`** — read it first if a device build fails. Key constraint: Clark is on a **free** Apple account, so NO push/`aps-environment` entitlement (local notifications only).
 
 - [x] Repo scaffolded (Expo app in `app/` + Next.js web in `web/`, both TS strict, tsc clean)
-- [x] Schema migrations written — FOUR now: init (`20260610000000`), app columns
+- [x] Schema migrations written — FIVE now: init (`20260610000000`), app columns
   (`20260617000000`), photo storage (`20260618000000`), `updated_at` for sync
-  (`20260622000000`). RLS scopes everything to `owner_id = auth.uid()`.
+  (`20260622000000`), photos read lockdown (`20260622000001`). RLS scopes
+  everything to `owner_id = auth.uid()`.
 - [x] iOS native build set up (prebuild + Pods, bundle id `com.clark24smoothoperator.oweme`, runs on simulator). Free Apple account → no push entitlement.
 - [x] **Mobile UI** — full design system + all v1 screens (`offbrand-design`), verified on iOS sim.
 - [x] **Supabase backend wired & live** — `app/src/lib/supabase.ts` (anon client) +
@@ -91,11 +92,21 @@ oweme/
   filters, pinned overdue, capped lineup + "See all", `loans.tsx` full list), Add
   (item+money <15s), Loan detail (mark returned + confetti), Borrowers + profile
   (reliability), History, first-launch onboarding.
+- [x] **P7 security batch (2026-06-22)** — S1 in-app account deletion (Settings →
+  Delete account → `delete-account` Edge Function + local wipe), S2 auth session in
+  SecureStore (`lib/secure-storage.ts`), S3 photos read-policy lockdown (migration
+  `20260622000001`), S5 dropped Android RECORD_AUDIO, S6 OTP resend cooldown, S7
+  truthful sync-error messages.
 - [ ] **Manual setup before sync runs:** create the Supabase project, apply ALL
-  FOUR migrations, fill `app/.env`, add `{{ .Token }}` to the OTP email template.
+  FIVE migrations, fill `app/.env`, add `{{ .Token }}` to the OTP email template,
+  and **`supabase functions deploy delete-account`** (needed for S1 account deletion).
 - [ ] Nudge web page `/n/[token]` — still a placeholder (TASKS E2 / R5).
 
-Next: **P7 — security & launch-readiness backlog** (see TASKS.md): account deletion
-(App Store blocker), move the auth session to `expo-secure-store`, lock down the
-photos bucket, app lock (Face ID), remove the unused Android RECORD_AUDIO
-permission, Sentry, and unit tests for the sync/merge layer. Then E2 (web nudge).
+**Pending native rebuild** (`npx expo prebuild` + run) to activate the on-device
+P7 pieces: S2 (SecureStore session), S5 (Android RECORD_AUDIO drop), and R1 (app
+lock — `expo-local-authentication`, new `components/AppLockGate.tsx` + Settings
+toggle). Backend S1/S3 are already live (function deployed, migration applied).
+
+Next: **P7 launch-readiness** (see TASKS.md): R2 hosted privacy URL, S4 App Store
+privacy labels, R3 Sentry, R4 unit tests for the sync/merge layer. Then E2 (web
+nudge). Deeper S3 (private bucket + signed URLs) is parked.

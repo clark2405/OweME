@@ -25,7 +25,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "permissions": [
+      "permissions": [],
+      "blockedPermissions": [
         "android.permission.RECORD_AUDIO"
       ],
       "package": "com.clark24smoothoperator.oweme"
@@ -55,7 +56,8 @@
         "expo-image-picker",
         {
           "photosPermission": "OweMe uses your photos so you can attach a picture of the thing you lent.",
-          "cameraPermission": "OweMe uses your camera so you can snap a quick photo of the thing you're lending."
+          "cameraPermission": "OweMe uses your camera so you can snap a quick photo of the thing you're lending.",
+          "microphonePermission": false
         }
       ],
       [
@@ -72,7 +74,14 @@
       ],
       "expo-image",
       "expo-quick-actions",
-      "expo-sharing"
+      "expo-sharing",
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "OweMe uses Face ID to lock your private ledger so only you can open it."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

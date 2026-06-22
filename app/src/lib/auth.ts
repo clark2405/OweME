@@ -65,3 +65,18 @@ export async function verifyOtp(email: string, token: string): Promise<void> {
 export async function signOut(): Promise<void> {
   await supabase.auth.signOut();
 }
+
+/**
+ * Permanently delete the signed-in user's cloud account and all of its data
+ * (loans, borrowers, photos, then the auth.users row) via the `delete-account`
+ * Edge Function — the in-app deletion Apple 5.1.1 requires, and GDPR erasure.
+ * The client can't delete its own auth user, so this runs service-role
+ * server-side; `functions.invoke` attaches the caller's JWT automatically.
+ * Throws on failure so the caller can keep the user signed in and show an error.
+ */
+export async function deleteAccount(): Promise<void> {
+  const { data, error } = await supabase.functions.invoke('delete-account');
+  if (error) throw error;
+  const body = data as { error?: string } | null;
+  if (body?.error) throw new Error(body.error);
+}

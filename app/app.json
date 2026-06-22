@@ -81,7 +81,16 @@
         {
           "faceIDPermission": "OweMe uses Face ID to lock your private ledger so only you can open it."
         }
-      ]
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "buildReactNativeFromSource": true
+          }
+        }
+      ],
+      "@sentry/react-native"
     ],
     "experiments": {
       "typedRoutes": true,

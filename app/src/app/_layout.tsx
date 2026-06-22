@@ -18,14 +18,18 @@ import { markShellReady } from '../lib/shell';
 import { showToast } from '../lib/toast';
 import { graveyard } from '../lib/theme';
 import { ThemeProvider, useTheme } from '../lib/theme-context';
+import { initSentry, Sentry, sentryEnabled } from '../lib/sentry';
 
 const IS_NATIVE = Platform.OS === 'ios' || Platform.OS === 'android';
+
+// Start crash/error monitoring before anything renders (no-op without a DSN).
+initSentry();
 
 // Hold the native splash so our animated preloader can take over without a
 // blank frame in between (it hides the native splash once its first frame is up).
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 
-export default function RootLayout() {
+function RootLayout() {
   const router = useRouter();
   const [splashDone, setSplashDone] = useState(false);
 
@@ -95,6 +99,10 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+
+// Wrap with Sentry's error boundary + instrumentation only when a DSN is set;
+// otherwise export the plain root (no monitoring overhead).
+export default sentryEnabled ? Sentry.wrap(RootLayout) : RootLayout;
 
 /**
  * The navigator + status bar, themed. Lives under ThemeProvider so it can paint

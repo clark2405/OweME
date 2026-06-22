@@ -460,10 +460,11 @@ on the mock store, today.
   is unaffected — the public bucket serves via the unauthenticated CDN path. **Manual
   step: apply the migration.** *Deeper hardening (private bucket + signed URLs to
   kill the permanent bearer URLs) is parked — it changes the render model.*
-- [ ] **S4. Third-party PII without consent (🟠).** App stores other people's
-  names + phone numbers (and Contacts import) in the cloud. GDPR/CCPA: you're a
-  controller of their PII. Add a privacy-policy clause for added contacts + fill
-  **App Store privacy nutrition labels** (now collecting email + cloud PII).
+- [x] **S4. Third-party PII without consent (🟠)** *(done 2026-06-22)*. Added a
+  "The people you add" clause to the privacy policy (in-app `privacy.tsx` + the
+  hosted `web/app/privacy`) covering stored names/numbers + the deletion path.
+  **App Store privacy labels** mapped in `docs/APP_STORE_PRIVACY.md` (fill in App
+  Store Connect — the actual labels live there, not in code).
 - [x] **S5. Remove unused `android.permission.RECORD_AUDIO` (🟡)** *(done
   2026-06-22)*. `app.json`: set `expo-image-picker` `microphonePermission: false`,
   emptied `android.permissions`, and added `RECORD_AUDIO` to `android.blockedPermissions`
@@ -489,13 +490,19 @@ on the mock store, today.
   `_layout.tsx`, below the splash) that locks on cold start and on every
   background→foreground, re-prompting Face ID/passcode. Pref is device-local
   (`Settings.appLock`). (Native module → needs a dev rebuild to work.)
-- [ ] **R2. Hosted privacy-policy URL** — required for App Store submission now
-  that email/PII is collected (the in-app Privacy screen isn't a hosted URL).
-- [ ] **R3. Crash/error monitoring (Sentry or similar)** — none today; blind to
-  production errors.
-- [ ] **R4. Automated tests for the data/sync layer** — none exist. `mergeById`,
-  the store selectors, and the db row mappers are pure functions doing important
-  work; cheap, high-confidence unit tests (where a sync bug will eventually bite).
+- [x] **R2. Hosted privacy-policy URL** *(done 2026-06-22)*. Added
+  `web/app/privacy/page.tsx` — a public, deployable mirror of the in-app policy
+  (Tailwind, cream theme). Set this page's URL in App Store Connect once deployed.
+- [x] **R3. Crash/error monitoring (Sentry)** *(done 2026-06-22)*. Wired
+  `@sentry/react-native` via `lib/sentry.ts`, **DSN-gated** (no-op without
+  `EXPO_PUBLIC_SENTRY_DSN`); root wrapped with `Sentry.wrap` only when enabled.
+  PII off (`sendDefaultPii: false`). Set the DSN in `app/.env` + rebuild to turn
+  on; then declare "Crash Data" in the privacy labels.
+- [x] **R4. Automated tests for the data/sync layer** *(done 2026-06-22)*. Set up
+  jest-expo (`npm test`); extracted the pure functions into `lib/merge.ts`
+  (`mergeById`) + `lib/mappers.ts` (row↔domain) so they're testable without native
+  mocks. 22 tests cover last-write-wins (incl. ties / missing stamps) + every
+  mapper field, null-handling, and round-trips.
 - [ ] **R5. Web nudge "mark as returned" page (= E2)** — the signature feature is
   still a placeholder; the other half of the killer loop.
 

@@ -24,6 +24,7 @@ import { supabase } from './supabase';
 import { uuid } from './id';
 import { showToast } from './toast';
 import { isLocalUri, uploadImage } from './storage';
+import { mergeById } from './merge';
 import * as db from './db';
 
 function today(): string {
@@ -208,26 +209,6 @@ function synced(): boolean {
 
 export function isSignedIn(): boolean {
   return synced();
-}
-
-/** Union two lists by id; per id keep whichever was edited most recently
- *  (last-write-wins). Returns the merged set + the records sourced from LOCAL —
- *  the ones the cloud is missing or that local edited later, i.e. to push up. */
-function mergeById<T extends { id: string; updatedAt?: string }>(
-  local: T[],
-  cloud: T[],
-): { merged: T[]; fromLocal: T[] } {
-  const cloudMap = new Map(cloud.map((c) => [c.id, c]));
-  const chosen = new Map<string, T>(cloudMap);
-  const fromLocal: T[] = [];
-  for (const l of local) {
-    const c = cloudMap.get(l.id);
-    if (!c || (l.updatedAt ?? '') >= (c.updatedAt ?? '')) {
-      chosen.set(l.id, l);
-      fromLocal.push(l);
-    }
-  }
-  return { merged: [...chosen.values()], fromLocal };
 }
 
 /** Upload any local-URI photos on the to-push records, then upsert them to the

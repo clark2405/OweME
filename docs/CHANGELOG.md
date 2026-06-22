@@ -6,6 +6,25 @@ optional account sync** — see [HANDOFF.md](./HANDOFF.md).
 
 ---
 
+## 2026-06-22 — Launch-readiness batch (P7: R2, S4, R3, R4)
+
+- **R2 — hosted privacy policy.** `web/app/privacy/page.tsx`: a public, deployable
+  mirror of the in-app policy (the URL App Store Connect requires).
+- **S4 — third-party PII disclosure + privacy labels.** New "The people you add"
+  clause in `privacy.tsx` + the web policy; App Store/Play data-collection mapping
+  in `docs/APP_STORE_PRIVACY.md`.
+- **R3 — crash/error monitoring.** `@sentry/react-native` wired via `lib/sentry.ts`,
+  DSN-gated (no-op without `EXPO_PUBLIC_SENTRY_DSN`), PII off, root `Sentry.wrap`ped
+  only when enabled. `.env.example` documents the DSN.
+- **R4 — sync-layer unit tests.** jest-expo set up (`npm test`); pure functions
+  extracted into `lib/merge.ts` + `lib/mappers.ts`; 22 tests for last-write-wins +
+  the row↔domain mappers.
+- **Build durability.** `expo-build-properties` added so
+  `ios.buildReactNativeFromSource: true` survives a future `expo prebuild` (was
+  only in the git-ignored `ios/Podfile.properties.json`).
+
+---
+
 ## 2026-06-22 — App lock (P7: R1)
 
 - **R1 — app lock (Face ID / passcode).** `expo-local-authentication` +

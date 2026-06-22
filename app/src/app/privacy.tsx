@@ -22,7 +22,11 @@ const SECTIONS: { h: string; b: string }[] = [
   },
   {
     h: 'If you sign in to sync',
-    b: 'Signing in is optional. When you do, your ledger — loans, people, and the photos you attach — is stored securely in the cloud so it can appear on your other devices. Sign out anytime; the copy on your phone stays put.',
+    b: 'Signing in is optional. When you do, your ledger — loans, people, and the photos you attach — is stored securely in the cloud so it can appear on your other devices. Sign out anytime; the copy on your phone stays put. You can permanently delete your account and everything synced to it right from the app (Settings → Your data → Delete account).',
+  },
+  {
+    h: 'The people you add',
+    b: 'OweMe is a record of who has your stuff, so it keeps the names — and any phone numbers or notes you add — of the people you lend to. With an account, that travels to the cloud with the rest of your ledger. Only add people you have a reason to track, and remove anyone you don’t need (deleting a person clears their details). OweMe never contacts them on its own.',
   },
   {
     h: 'Your email',

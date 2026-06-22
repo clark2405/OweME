@@ -100,13 +100,19 @@ oweme/
 - [ ] **Manual setup before sync runs:** create the Supabase project, apply ALL
   FIVE migrations, fill `app/.env`, add `{{ .Token }}` to the OTP email template,
   and **`supabase functions deploy delete-account`** (needed for S1 account deletion).
+- [x] **P7 launch-readiness batch (2026-06-22)** — R2 hosted privacy page
+  (`web/app/privacy`), S4 third-party-PII clause + `docs/APP_STORE_PRIVACY.md`
+  labels map, R3 Sentry (DSN-gated, `lib/sentry.ts`), R4 sync-layer unit tests
+  (jest-expo; pure fns extracted to `lib/merge.ts` + `lib/mappers.ts`; `npm test`).
+  Build durability: `expo-build-properties` pins `ios.buildReactNativeFromSource`.
 - [ ] Nudge web page `/n/[token]` — still a placeholder (TASKS E2 / R5).
 
-**Pending native rebuild** (`npx expo prebuild` + run) to activate the on-device
-P7 pieces: S2 (SecureStore session), S5 (Android RECORD_AUDIO drop), and R1 (app
-lock — `expo-local-authentication`, new `components/AppLockGate.tsx` + Settings
-toggle). Backend S1/S3 are already live (function deployed, migration applied).
+**Pending native rebuild** (`npx expo prebuild` + run) to activate on-device
+pieces: S2 (SecureStore), S5 (Android RECORD_AUDIO drop), R1 (app lock), and R3
+(Sentry native — only matters once a DSN is set). Backend S1/S3 are live (function
+deployed, migration applied).
 
-Next: **P7 launch-readiness** (see TASKS.md): R2 hosted privacy URL, S4 App Store
-privacy labels, R3 Sentry, R4 unit tests for the sync/merge layer. Then E2 (web
-nudge). Deeper S3 (private bucket + signed URLs) is parked.
+Next (biggest gap): **the web nudge page `/n/[token]`** (E2 / B1 / R5 + S8
+hardening) — the borrower-facing "mark as returned" half of the killer feature.
+Then backend niceties (E3 atomic restore, E4 settings sync, E5 storage GC) and QA
+(D1 Android, D2 VoiceOver/contrast). Deeper S3 (private bucket + signed URLs) parked.

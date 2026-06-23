@@ -88,7 +88,8 @@ export type IconName =
   | 'mailbox'
   | 'envelope'
   | 'logout'
-  | 'hourglass';
+  | 'hourglass'
+  | 'lock';
 
 interface Props {
   name: IconName;
@@ -478,6 +479,16 @@ export function Icon({ name, size = 24, color, strokeWidth = 2, focused = false,
           <Path d="M9.8 6 14.2 6 12 10.6Z" fill={GLYPH.sand} />
           <Path d="M9.6 18.4 14.4 18.4 12 14.2Z" fill={GLYPH.sand} />
           <Path d="M12 11.6v3" fill="none" stroke={GLYPH.sand} strokeWidth={1.4} strokeLinecap="round" />
+        </>
+      )}
+
+      {name === 'lock' && (
+        <>
+          {/* padlock — App Lock / privacy */}
+          <Path d="M6.8 10.8h10.4a1.4 1.4 0 0 1 1.4 1.4v6.4a1.4 1.4 0 0 1-1.4 1.4H6.8a1.4 1.4 0 0 1-1.4-1.4v-6.4a1.4 1.4 0 0 1 1.4-1.4Z" {...common} />
+          <Path d="M8.2 10.8V8a3.8 3.8 0 0 1 7.6 0v2.8" {...common} />
+          <Circle cx="12" cy="15" r="1.3" {...common} />
+          <Line x1="12" y1="16.1" x2="12" y2="17.6" {...common} />
         </>
       )}
     </Svg>

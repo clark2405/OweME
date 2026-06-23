@@ -7,6 +7,7 @@
 
 import { markReturned, recordNudge, unreturn, useSettings } from './store';
 import { deliverNudge } from './nudge';
+import { ensureNudgeLink } from './nudgeLink';
 import { showToast } from './toast';
 import { haptics } from './haptics';
 import { LoanWithBorrower } from './types';
@@ -25,7 +26,8 @@ export function useLoanQuickActions() {
   };
 
   const onNudge = async ({ loan, borrower }: LoanWithBorrower) => {
-    const sent = await deliverNudge(loan, borrower, 'friendly', channel);
+    const link = await ensureNudgeLink(loan);
+    const sent = await deliverNudge(loan, borrower, 'friendly', channel, link);
     if (sent) {
       recordNudge(loan.id);
       showToast({ message: `Nudge sent to ${borrower.name} 📨` });
@@ -41,7 +43,8 @@ export function useLoanQuickActions() {
     haptics.tap();
     let sent = 0;
     for (const { loan, borrower } of list) {
-      if (await deliverNudge(loan, borrower, 'friendly', channel)) {
+      const link = await ensureNudgeLink(loan);
+      if (await deliverNudge(loan, borrower, 'friendly', channel, link)) {
         recordNudge(loan.id);
         sent += 1;
       }

@@ -306,10 +306,10 @@ on the mock store, today.
 - [x] **A2a. People empty state** *(done 2026-06-13)*. `(tabs)/borrowers.tsx` shows
   a friendly zero-state ("No one here yet…" + an "Add a person" CTA that opens the
   sheet) when there are no borrowers, matching Home/History.
-- [ ] **A2b. Settings "ship" rows** — About / Help / Privacy / "Send feedback" /
-  "Rate OweMe". Deferred: these need real destinations (an About screen, privacy
-  URL, App Store id, support email) that don't exist pre-release — adding dead
-  rows now would be placeholder cruft. Revisit when there's content to point at.
+- [x] **A2b. Settings "ship" rows** *(done; confirmed shipped 2026-06-22)*. Settings
+  → About card has **About OweMe** (`about.tsx`, version 1.0.0), **Privacy**, **Send
+  feedback** (`/feedback`), **Rate OweMe** (`/rate`) rows (`ABOUT_ROWS` in
+  `(tabs)/settings.tsx`). The earlier "deferred" note was stale.
 - [x] **A3. Borrower photo avatars** *(done 2026-06-13)*. `Avatar.tsx` gained a
   `uri` prop (renders an `expo-image` disc, emoji fallback when absent);
   `BorrowerEditSheet.tsx` got Photo / Gallery / Remove controls (square crop via
@@ -325,19 +325,30 @@ on the mock store, today.
 
 ### B — Signature flow, backend-coupled (do in backend phase)
 
-- [ ] **B1. Shareable nudge *link* + `/n/[token]` web page.** Today "Send a
-  nudge" shares **plain text** (`lib/nudge.ts`). The spec's core mechanic
-  (§3.2 / Flow B step 4) is a **tokenized link → Next.js `/n/[token]` page where
-  the borrower taps "Mark as returned" with zero install/signup**. The web app
-  (`web/`) and the `nudge_links` token both need the DB — the single biggest
-  remaining *product* gap, deferred to backend.
+- [x] **B1. Shareable nudge *link* + `/n/[token]` web page.** *(done 2026-06-22 —
+  see E2.)* Signed-in nudges now carry a tokenized link to the Next.js page where
+  the borrower taps "Mark as returned" with zero install/signup. The single biggest
+  remaining product gap is closed (pending the manual backend deploy).
 
 ### C — Auth shell (frontend screens, backend-coupled)
 
-- [ ] **C1. Login / email magic-link screens.** There's an onboarding tour but
-  no account entry. v1 uses Supabase email magic-link; the screens are frontend
-  but awkward to build without the auth client, so do them at the start of the
-  backend phase (avoid throwaway scaffolding).
+- [x] **C1. Login / email-OTP screens** *(done — E0)*. `auth.tsx` does passwordless
+  email-OTP (a compliant, data-minimal login). Now a dismissable modal (P6 F5).
+
+- [ ] **C2. Social login — Sign in with Apple + Google (deferred 2026-06-22).**
+  Decision: keep email-OTP for v1; add Apple + Google **together** later. Blocked /
+  gated on:
+  - **Sign in with Apple needs a PAID Apple Developer account** — it's a capability/
+    entitlement the free "Personal Team" can't add (same class as the push
+    entitlement we skip; see [[oweme-free-apple-account]] / BUILD_NOTES §1). Uses
+    `expo-apple-authentication` + `supabase.auth.signInWithIdToken`.
+  - **Apple Guideline 4.8:** offering Google (third-party login) generally requires
+    also offering Sign in with Apple → ship them as a pair, not Google alone.
+  - **Google setup (your side):** Google Cloud OAuth client (iOS + web) + enable the
+    Google provider in Supabase; client flow via `expo-auth-session`/
+    `signInWithOAuth` (or `@react-native-google-signin` + `signInWithIdToken` for a
+    native sheet). Add deep-link redirect handling.
+  Do this once on a paid account — Apple sign-in is then low-friction and clears 4.8.
 
 ### E — Backend (in progress)
 
@@ -358,10 +369,21 @@ on the mock store, today.
   Orphaned objects are intentionally NOT deleted on loan-delete (undo re-inserts
   the same row pointing at the same URL, so the object must outlive the delete);
   a GC pass is parked as **E5** below.
-- [ ] **E2. Web nudge page `/n/[token]`** — the borrower-facing "mark as returned"
-  flow (the other half of the killer feature): generate a `nudge_links` row +
-  token from the mobile nudge flow, build the Next.js page (service-role,
-  single-token lookup), round-trip `nudge_links.responded` into the loan status.
+- [x] **E2. Web nudge page `/n/[token]`** *(done 2026-06-22)*. The borrower-facing
+  "mark as returned" flow — the other half of the killer feature. Signed-in lenders'
+  nudges now carry a `…/n/<token>` link (`app/src/lib/nudgeLink.ts` get-or-creates a
+  `nudge_links` row; `lib/nudge.ts` appends it; loan-detail + swipe + nudge-all pass
+  it). Migration `20260622000002_nudge_link_tokens.sql` makes the token DB-generated
+  (no client crypto) + adds `expires_at` (30d) + `responded_at`. The Next.js page
+  (`web/app/n/[token]/page.tsx`, service-role via `web/lib/supabase-admin.ts`, lazy
+  client) renders not-found / expired / already-returned / active states; the
+  "Mark as returned" Server Action (`actions.ts`) flips the loan returned +
+  `updated_at=now()` so the lender's last-write-wins sync picks it up, and consumes
+  the token. **Manual: apply the migration; set `EXPO_PUBLIC_WEB_URL` (app) +
+  `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` (web); deploy `web/`.** Anonymous
+  lenders keep plain-text nudges (no link). Verified: tsc (app+web) + `next build`
+  clean; page renders the graceful invalid-link state on a failed lookup. NOT yet
+  driven end-to-end against a live token (gated on the manual backend setup).
 - [ ] **E3. Atomic restore** — replace the sequential delete-then-insert in
   `db.replaceAll` with a transactional `restore_ledger` RPC.
 - [ ] **E4. Settings sync** — move non-appearance settings (currency / nudges /
@@ -477,9 +499,14 @@ on the mock store, today.
   `syncErrorMessage()` distinguishes a genuine connection drop (bare fetch reject,
   no code/status) from a server response (5xx vs other) instead of always blaming
   the connection.
-- [ ] **S8. Web nudge page service-role hardening (ℹ️ when built, ties to E2).**
-  When the `/n/[token]` page lands: service-role server-side only, **single-use +
-  expiring tokens**, rate-limited, render only what's needed (no extra lender PII).
+- [x] **S8. Web nudge page service-role hardening (done 2026-06-22 with E2).**
+  Service-role server-side only (`web/lib/supabase-admin.ts`, `server-only` guard,
+  lazy construct, no `NEXT_PUBLIC_*` key); **expiring tokens** (`expires_at`, 30d)
+  + **single-use** (consumed by setting `responded`/`responded_at`, guarded in both
+  the page and the action); renders **minimal PII** — item/amount + lent date only,
+  no lender identity or contact. *Remaining (low pri): IP/rate limiting on the
+  action; tokens are unguessable (~128-bit) and the mutation is idempotent, so the
+  exposure is small.*
 
 ### Launch-readiness gaps (expected for an app like this)
 
@@ -503,8 +530,84 @@ on the mock store, today.
   (`mergeById`) + `lib/mappers.ts` (row↔domain) so they're testable without native
   mocks. 22 tests cover last-write-wins (incl. ties / missing stamps) + every
   mapper field, null-handling, and round-trips.
-- [ ] **R5. Web nudge "mark as returned" page (= E2)** — the signature feature is
-  still a placeholder; the other half of the killer loop.
+- [x] **R5. Web nudge "mark as returned" page (= E2)** *(done 2026-06-22)* — see
+  E2 above. The signature loop is now code-complete; only the manual backend
+  deploy + an end-to-end live test remain.
+
+### Added 2026-06-22 (this session)
+
+- [x] **R6. Biometric gate on backup export.** `backup.tsx` now requires Face ID /
+  Touch ID / passcode before **Share a backup** OR **export a readable copy**
+  (`confirmOwner()` → `applock.authenticate`). Falls through gracefully when the
+  device has no lock enrolled (won't strand the owner). Restore stays ungated (it
+  brings data in, and already has the "Replace your ledger?" confirm). **Decision:
+  gate ALWAYS when a device lock exists** (independent of the in-app App Lock
+  toggle) — Clark's call, 2026-06-22.
+- [x] **R7. "Keep a backup" reminder (account-less data-loss guard).** Local-first
+  means the ledger lives only on the phone; `store.shouldRemindBackup(loans,
+  settings, signedIn)` surfaces a calm dismissable `BackupReminderCard` on Home when
+  **not signed in**, **≥2 loans**, **not snoozed**, and **never/stale (>30d) backup**.
+  `markBackedUp()` stamps a successful restore-ready share; **Later** snoozes 7d.
+  Device-local `lastBackupAt` / `backupSnoozeUntil` on `Settings` (not carried in a
+  backup). Pure predicate kept out of the jest suite (it lives in `store.ts`, which
+  pulls native deps R4 deliberately avoids importing).
+
+### P9 — "Stuff I borrowed" (pulled forward from v2, local-only, 2026-06-22)
+
+> Clark first parked this, then chose to build it. Pulled forward as a v1 **local-only**
+> slice (the backend-heavy "borrower accounts" half of the v2 item stays parked).
+> One model: a `direction` field on the loan ('lent' | 'borrowed'), so the whole
+> loan machinery (add/edit/return/photos/dates/sync) serves both ways.
+
+- [x] **P9. Borrowed-side ledger** *(done 2026-06-22)*.
+  - **Data:** `LoanDirection` + `direction?` on `LoanBase` (`types.ts`), round-tripped
+    in `mappers.ts`, defaulting to `'lent'` for pre-feature rows/backups. Migration
+    `20260622000003_loan_direction.sql` adds the column (default 'lent' + CHECK).
+  - **Store:** `addLoan`/`updateLoan` stamp/preserve direction; `dirOf()` helper;
+    `activeLoans`/`activeLoansBy`/`archivedLoans`/`archivedLoansBy`/`archivedStats`
+    take a direction (default 'lent'); `reliabilityFor`/`mostWanted`/`shameBoard`
+    forced lent-only so People/History/Shame never show borrowed. `moneyByCurrency`
+    (format.ts) gained a direction arg.
+  - **UI:** Home has a segmented **"Owed to me" / "I owe"** toggle (resets the type
+    filter), with directional copy, money/items, empty states, nudge-all gating, and
+    a direction-aware FAB + "See all". `/loans` honors a `direction=borrowed` param.
+    Add flow has an **"I lent / I borrowed"** toggle (new loans only), adaptive copy,
+    and hides the nudge cadence for borrowed. Loan detail flips framing ("lent to
+    you"), hides nudge tools, and uses "I gave it back 🎉". `SwipeableLoanCard`
+    gained `canNudge` (off for borrowed — return swipe still works).
+  - **Tests:** +3 mapper tests (direction default + both-way round-trip); 25 pass.
+  - **Manual: apply migration `20260622000003` (one line) — needed before a SIGNED-IN
+    user creates/syncs any loan (the client now always sends `direction`).**
+  - *Known v1 limitation:* a person you only ever borrowed FROM still appears in the
+    People tab (borrowers are shared, lent-only stats show 0). Acceptable for the
+    local-only slice; revisit if borrowed grows its own people surface.
+
+- **Still parked (v2):** borrower-facing **accounts** + a shared/borrower view of
+  "stuff I borrowed" (`PROJECT.md` §9). Only the local lender-side view shipped.
+
+### Go-live checklist (manual / external — code is done, these are your steps)
+> The launch-readiness code (R2–R4, S4) is in. These are the human/console steps
+> to actually flip it on; none are code.
+
+- [ ] **Deploy `web/`** (Vercel) → grab the `/privacy` URL → paste it into App
+  Store Connect as the Privacy Policy URL. (R2 page is built at `web/app/privacy`.)
+- [ ] **Nudge links (E2/R5/S8) — DB done, deploy pending (2026-06-22).**
+  - [x] Migration `20260622000002_nudge_link_tokens.sql` **APPLIED** to the live
+    Supabase project (`oweme`, ref `agrhlakrbzvdhbvkzums`) via the SQL editor,
+    together with the `updated_at` columns. ✅
+  - [ ] **Deploy `web/` to Vercel** and set server env vars there: `SUPABASE_URL`
+    + `SUPABASE_SERVICE_ROLE_KEY` (server-only, NOT `NEXT_PUBLIC_*`).
+  - [ ] Set `EXPO_PUBLIC_WEB_URL` in `app/.env` to the deployed web URL + rebuild
+    the app.
+  - [ ] Then send yourself a nudge while signed in and open the link end-to-end
+    (the only path not yet driven against a live token).
+  - *Until the deploy + env are done, nudges keep sending plain text (no link) —
+    nothing breaks, the link just isn't attached yet.*
+- [ ] **Sentry (R3):** create a Sentry project → put its DSN in `app/.env` as
+  `EXPO_PUBLIC_SENTRY_DSN` → rebuild. Then tick **"Crash Data"** in the App Store
+  privacy labels.
+- [ ] **App Store privacy labels (S4):** fill them in App Store Connect from the
+  mapping in `docs/APP_STORE_PRIVACY.md`. Mirror into Play Data safety if Android ships.
 
 ### Explicitly OUT of scope — do NOT add (PROJECT.md §2)
 > Competitor IOU apps have these; OweMe deliberately doesn't. Staying disciplined

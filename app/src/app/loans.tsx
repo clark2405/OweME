@@ -18,6 +18,7 @@ import { SkeletonRow } from '../components/Skeleton';
 import { activeLoansBy, LoanSort, LoanTypeFilter, useHydrated, useLoans } from '../lib/store';
 import { useLoanQuickActions } from '../lib/quickActions';
 import { isOverdue } from '../lib/format';
+import { LoanDirection } from '../lib/types';
 import { radius, space } from '../lib/theme';
 import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
 
@@ -35,8 +36,10 @@ export default function LoansScreen() {
   const { colors, type: t } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
-  const params = useLocalSearchParams<{ type?: string; focus?: string }>();
+  const params = useLocalSearchParams<{ type?: string; focus?: string; direction?: string }>();
   const loans = useLoans();
+  const dir: LoanDirection = params.direction === 'borrowed' ? 'borrowed' : 'lent';
+  const lent = dir === 'lent';
 
   const hydrated = useHydrated();
   const [type, setType] = useState<LoanTypeFilter>(asTypeFilter(params.type));
@@ -44,7 +47,7 @@ export default function LoansScreen() {
   const [query, setQuery] = useState('');
 
   const { onReturn, onNudge } = useLoanQuickActions();
-  const results = activeLoansBy(loans, { type, sort, query });
+  const results = activeLoansBy(loans, { type, sort, query, direction: dir });
   // Overdue pins to the top of any view — the urgent stuff shouldn't hide
   // behind the sort order.
   const overdue = results.filter((d) => isOverdue(d.loan));
@@ -57,8 +60,8 @@ export default function LoansScreen() {
           <Icon name="chevronLeft" size={20} color={colors.inkSoft} strokeWidth={2.2} />
           <Text style={styles.backText}>Home</Text>
         </PressableScale>
-        <Text style={t.overline}>Out in the wild</Text>
-        <Text style={[t.title, styles.title]}>Everything out</Text>
+        <Text style={t.overline}>{lent ? 'Out in the wild' : 'On your tab'}</Text>
+        <Text style={[t.title, styles.title]}>{lent ? 'Everything out' : 'Everything you owe'}</Text>
         <View style={styles.list}>
           {Array.from({ length: 5 }).map((_, i) => (
             <SkeletonRow key={i} />
@@ -78,8 +81,8 @@ export default function LoansScreen() {
       </Reveal>
 
       <Reveal index={1} clip from={40}>
-        <Text style={t.overline}>Out in the wild</Text>
-        <Text style={[t.title, styles.title]}>Everything out</Text>
+        <Text style={t.overline}>{lent ? 'Out in the wild' : 'On your tab'}</Text>
+        <Text style={[t.title, styles.title]}>{lent ? 'Everything out' : 'Everything you owe'}</Text>
       </Reveal>
 
       {/* Search */}
@@ -148,7 +151,7 @@ export default function LoansScreen() {
           <View style={styles.empty}>
             <Text style={styles.emptyEmoji}>🔍</Text>
             <Text style={styles.emptyText}>
-              {query ? `Nothing matches “${query}”.` : 'Nothing out in this view.'}
+              {query ? `Nothing matches “${query}”.` : lent ? 'Nothing out in this view.' : 'Nothing owed in this view.'}
             </Text>
           </View>
         </Reveal>
@@ -167,6 +170,7 @@ export default function LoansScreen() {
                       onPress={() => router.push(`/loan/${data.loan.id}`)}
                       onReturn={() => onReturn(data)}
                       onNudge={() => onNudge(data)}
+                      canNudge={lent}
                     />
                   </Reveal>
                 ))}

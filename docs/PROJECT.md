@@ -211,7 +211,9 @@ Plus one **web page** (Next.js): `/n/[token]` — the borrower-facing nudge page
 - [x] Expo app: auth, home, add loan (item + money), loan detail, mark returned
 - [x] Local notifications
 - [x] Borrowers + history screens
-- [ ] Next.js nudge link page (`/n/[token]` still a placeholder — TASKS E2/R5)
+- [x] Next.js nudge link page (`/n/[token]` — borrower taps "Mark as returned",
+  zero install/signup; code-complete 2026-06-22, see TASKS E2/R5/S8. Pending the
+  manual backend deploy: apply the token migration, set web + app env, deploy `web/`.)
 - [x] Reliability stats (basic)
 - [ ] Launch readiness: account deletion, encrypted token storage, app lock,
   privacy policy URL, Sentry (see TASKS.md P7) — required before App Store
@@ -220,7 +222,10 @@ Plus one **web page** (Next.js): `/n/[token]` — the borrower-facing nudge page
 - Push notifications (server-driven)
 - "Favors/promises" loan type
 - Recurring nudge escalation automation
-- Borrower accounts + "stuff I borrowed" view
+- Borrower accounts (the borrower-facing half). *Note: the lender-side **"stuff I
+  borrowed" view** was pulled forward to v1 as a local-only feature on 2026-06-22 —
+  a `direction` field on the loan + a Home "Owed to me / I owe" toggle. Borrower
+  **accounts** remain v2.*
 - iOS release
 - Photos with condition notes ("lent with minor scratch")
 

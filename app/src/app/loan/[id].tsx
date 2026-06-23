@@ -24,6 +24,7 @@ import {
   writeOff,
 } from '../../lib/store';
 import { deliverNudge, deliverThanks, NUDGE_TONES } from '../../lib/nudge';
+import { ensureNudgeLink } from '../../lib/nudgeLink';
 import { showToast } from '../../lib/toast';
 import { loanLabel, relativeDays, relativeSince, shortDate } from '../../lib/format';
 import { haptics } from '../../lib/haptics';
@@ -79,6 +80,9 @@ export default function LoanDetailScreen() {
   }
 
   const borrower = getBorrower(loan.borrowerId)!;
+  // Borrowed loans (you owe someone) flip the framing and drop the nudge tools —
+  // you don't nudge yourself to give something back.
+  const borrowed = (loan.direction ?? 'lent') === 'borrowed';
   const what = loanLabel(loan);
   const nudges = loan.nudges ?? [];
   const lastNudge = nudges[nudges.length - 1];
@@ -118,7 +122,8 @@ export default function LoanDetailScreen() {
   const sendNudge = async (tone: NudgeTone) => {
     setNudgeOpen(false);
     haptics.tap();
-    const sent = await deliverNudge(loan, borrower, tone, channel);
+    const link = await ensureNudgeLink(loan, tone);
+    const sent = await deliverNudge(loan, borrower, tone, channel, link);
     if (sent) recordNudge(loan.id);
   };
 
@@ -220,16 +225,20 @@ export default function LoanDetailScreen() {
                 <Icon name={loan.type === 'item' ? 'box' : 'money'} size={30} color={colors.ink} strokeWidth={1.9} />
               </View>
             )}
-            <Text style={t.overline}>{loan.type === 'item' ? 'Item · out in the wild' : 'Money · still owed'}</Text>
+            <Text style={t.overline}>
+              {loan.type === 'item'
+                ? borrowed ? 'Item · borrowed' : 'Item · out in the wild'
+                : borrowed ? 'Money · you owe' : 'Money · still owed'}
+            </Text>
             <Text style={[t.hero, styles.heroTitle]}>{loanLabel(loan)}</Text>
             <View style={styles.heroMeta}>
               <Avatar name={borrower.name} emoji={borrower.emoji} uri={borrower.avatarUrl} size={26} />
               <Text style={styles.heroWho}>
-                {borrower.name} · borrowed {relativeDays(loan.lentAt)}
+                {borrower.name} · {borrowed ? 'lent to you' : 'borrowed'} {relativeDays(loan.lentAt)}
               </Text>
             </View>
             <View style={styles.chipRow}>
-              <Chip label={`Lent ${shortDate(loan.lentAt)}`} tone="sand" />
+              <Chip label={`${borrowed ? 'Borrowed' : 'Lent'} ${shortDate(loan.lentAt)}`} tone="sand" />
               {loan.dueAt && <Chip label={`Due ${shortDate(loan.dueAt)}`} tone="sand" />}
               <AgeChip loan={loan} />
               {loan.status === 'active' && loan.reminder && loan.reminder !== 'off' && (
@@ -256,7 +265,7 @@ export default function LoanDetailScreen() {
 
         {/* Reminder — reschedule (or pause) the nudge cadence in place, without
             opening the full edit flow. */}
-        {loan.status === 'active' && (
+        {loan.status === 'active' && !borrowed && (
           <Reveal index={3} from={18}>
             <View style={styles.reminderCard}>
               <Text style={[t.overline, styles.reminderLabel]}>Reminder</Text>
@@ -345,39 +354,45 @@ export default function LoanDetailScreen() {
       <View style={styles.dock}>
         {loan.status === 'active' ? (
           <>
-            <Button
-              label={nudgeOpen ? 'Maybe later' : nudgedRecently ? 'Nudge again?' : 'Send a nudge'}
-              variant="ghost"
-              onPress={() => setNudgeOpen((v) => !v)}
-            />
-            <Button label="Mark as returned" onPress={onReturned} />
+            {!borrowed && (
+              <Button
+                label={nudgeOpen ? 'Maybe later' : nudgedRecently ? 'Nudge again?' : 'Send a nudge'}
+                variant="ghost"
+                onPress={() => setNudgeOpen((v) => !v)}
+              />
+            )}
+            <Button label={borrowed ? 'I gave it back 🎉' : 'Mark as returned'} onPress={onReturned} />
             <PressableScale onPress={onWriteOff} style={styles.writeOff}>
-              <Text style={styles.writeOffText}>Write it off</Text>
+              <Text style={styles.writeOffText}>{borrowed ? 'Lost track of it' : 'Write it off'}</Text>
             </PressableScale>
           </>
         ) : (
           <>
             <View style={styles.homeBanner}>
               <Text style={styles.homeText}>
-                {loan.status === 'returned' ? 'It found its way home 🎉' : 'Written off 🪦'}
+                {loan.status === 'returned'
+                  ? borrowed ? 'You gave it back 🎉' : 'It found its way home 🎉'
+                  : 'Written off 🪦'}
               </Text>
             </View>
-            {loan.status === 'returned' && (
+            {loan.status === 'returned' && !borrowed && (
               <Button label="Say thanks 🙏" variant="ghost" onPress={sayThanks} />
             )}
             <Button
-              label="Lend it again 🔁"
+              label={borrowed ? 'Borrow it again 🔁' : 'Lend it again 🔁'}
               onPress={() => router.push({ pathname: '/add', params: { clone: loan.id } })}
             />
             <PressableScale
               onPress={() => unreturn(loan.id)}
               scaleTo={0.97}
               style={styles.undo}
-              accessibilityLabel="Send this loan back out into the wild"
+              accessibilityLabel={borrowed ? 'Mark that you still have this' : 'Send this loan back out into the wild'}
             >
               <Icon name="chevronLeft" size={16} color={colors.inkSoft} strokeWidth={2.2} />
               <Text style={styles.undoText}>
-                {loan.status === 'returned' ? 'Undo — sent it back too soon' : 'Back out in the wild'}
+                {loan.status === 'returned'
+                  ? borrowed ? 'Undo — I still have it' : 'Undo — sent it back too soon'
+                  : 'Back out in the wild'}
               </Text>
             </PressableScale>
           </>

@@ -66,10 +66,7 @@ export default function AuthScreen() {
   // otherwise (from Settings) just dismiss back to where we came from.
   const { redirect } = useLocalSearchParams<{ redirect?: string }>();
   const ready = useShellReady();
-  const { width, height } = useWindowDimensions();
-  // Bias the centered block upward: perfectly-centered, top-weighted content
-  // reads as sitting low (big void below). Lifting it ~10% balances it.
-  const lift = Math.round(height * 0.1);
+  const { width } = useWindowDimensions();
 
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');
@@ -201,7 +198,7 @@ export default function AuthScreen() {
           {ready && (
             <View style={styles.flex}>
               <Animated.View
-                style={[styles.layer, { paddingBottom: lift }, emailLayerStyle]}
+                style={[styles.layer, emailLayerStyle]}
                 pointerEvents={step === 'email' ? 'auto' : 'none'}
               >
                 <Reveal index={0} from={10}>
@@ -245,7 +242,7 @@ export default function AuthScreen() {
               </Animated.View>
 
               <Animated.View
-                style={[styles.layer, { paddingBottom: lift }, codeLayerStyle]}
+                style={[styles.layer, codeLayerStyle]}
                 pointerEvents={step === 'code' ? 'auto' : 'none'}
               >
                 <Reveal index={0} from={10}>

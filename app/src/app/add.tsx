@@ -35,7 +35,7 @@ import {
 } from '../lib/store';
 import { pickContact } from '../lib/contacts';
 import { showToast } from '../lib/toast';
-import { ReminderCadence } from '../lib/types';
+import { LoanDirection, ReminderCadence } from '../lib/types';
 import { currencySymbol, shortDate } from '../lib/format';
 import { radius, space } from '../lib/theme';
 import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
@@ -73,7 +73,7 @@ export default function AddLoanScreen() {
   const { colors, type: t } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
-  const { id, clone } = useLocalSearchParams<{ id?: string; clone?: string }>();
+  const { id, clone, direction: dirParam } = useLocalSearchParams<{ id?: string; clone?: string; direction?: string }>();
   const loans = useLoans();
   const editing = id ? loanById(loans, id) : undefined;
   // "Lend it again": prefill the item's identity from a past loan, but start
@@ -82,6 +82,13 @@ export default function AddLoanScreen() {
   const source = editing ?? template;
   const borrowers = useBorrowers();
   const { defaultCurrency } = useSettings();
+
+  // Lending direction — fixed once a loan exists (you don't flip lent↔borrowed);
+  // new loans default from the param Home passed, else 'lent'.
+  const [direction, setDirection] = useState<LoanDirection>(
+    source?.direction ?? (dirParam === 'borrowed' ? 'borrowed' : 'lent'),
+  );
+  const borrowed = direction === 'borrowed';
 
   const [type, setType] = useState<LoanType>(source?.type ?? 'item');
   // Edit/clone keep the loan's own currency; otherwise a new money loan starts
@@ -205,6 +212,7 @@ export default function AddLoanScreen() {
     if (!valid || !borrowerId) return;
     const input = {
       borrowerId,
+      direction,
       type,
       itemName: type === 'item' ? itemName.trim() || undefined : undefined,
       photoUrl: type === 'item' ? photoUri : undefined,
@@ -213,7 +221,8 @@ export default function AddLoanScreen() {
       notes: notes.trim() || undefined,
       lentAt,
       dueAt,
-      reminder,
+      // You don't nudge yourself — borrowed loans never schedule reminders.
+      reminder: borrowed ? 'off' : reminder,
     };
     if (editing) {
       updateLoan(editing.id, input);
@@ -253,9 +262,29 @@ export default function AddLoanScreen() {
           >
             <Reveal index={1} clip from={40}>
               <Text style={[t.title, styles.title]}>
-                {editing ? 'Edit loan' : template ? 'Lend it again' : 'Lend something'}
+                {editing
+                  ? 'Edit loan'
+                  : template
+                    ? 'Lend it again'
+                    : borrowed
+                      ? 'Borrowed something'
+                      : 'Lend something'}
               </Text>
             </Reveal>
+
+            {/* Direction — only on a brand-new loan; a loan's direction is fixed. */}
+            {!editing && (
+              <Reveal index={2} from={20}>
+                <SegmentedToggle<LoanDirection>
+                  value={direction}
+                  onChange={setDirection}
+                  options={[
+                    { value: 'lent', label: 'I lent' },
+                    { value: 'borrowed', label: 'I borrowed' },
+                  ]}
+                />
+              </Reveal>
+            )}
 
             <Reveal index={2} from={20}>
               <SegmentedToggle<LoanType>
@@ -274,7 +303,7 @@ export default function AddLoanScreen() {
                   <TextInput
                     value={itemName}
                     onChangeText={setItemName}
-                    placeholder="What did you lend?"
+                    placeholder={borrowed ? 'What did you borrow?' : 'What did you lend?'}
                     placeholderTextColor={colors.inkFaint}
                     style={[styles.input, styles.itemInput]}
                     autoFocus={!editing}
@@ -395,7 +424,7 @@ export default function AddLoanScreen() {
 
             {/* Borrower */}
             <Reveal index={5} from={20}>
-              <Text style={[t.overline, styles.label]}>Who has it?</Text>
+              <Text style={[t.overline, styles.label]}>{borrowed ? 'Who’d you borrow from?' : 'Who has it?'}</Text>
               <View style={styles.borrowerWrap}>
                 {borrowers.map((b) => {
                   const selected = b.id === borrowerId;
@@ -455,7 +484,9 @@ export default function AddLoanScreen() {
 
             {/* When it was lent — backdate stuff that's already been out a while */}
             <Reveal index={6} from={18}>
-              <Text style={[t.overline, styles.label]}>When did you lend it?</Text>
+              <Text style={[t.overline, styles.label]}>
+                {borrowed ? 'When did you borrow it?' : 'When did you lend it?'}
+              </Text>
               <View style={styles.chipRow}>
                 {LENT_PRESETS.map((p) => {
                   const iso = isoInDays(p.days);
@@ -522,25 +553,27 @@ export default function AddLoanScreen() {
               </View>
             </Reveal>
 
-            {/* Reminder cadence */}
-            <Reveal index={8} from={18}>
-              <Text style={[t.overline, styles.label]}>Nudge me</Text>
-              <View style={styles.chipRow}>
-                {CADENCES.map((c) => {
-                  const on = reminder === c.value;
-                  return (
-                    <PressableScale
-                      key={c.value}
-                      onPress={() => setReminder(c.value)}
-                      scaleTo={0.94}
-                      style={[styles.chip, on && styles.chipOn]}
-                    >
-                      <Text style={[styles.chipText, on && styles.chipTextOn]}>{c.label}</Text>
-                    </PressableScale>
-                  );
-                })}
-              </View>
-            </Reveal>
+            {/* Reminder cadence — lent only; you don't nudge yourself to return. */}
+            {!borrowed && (
+              <Reveal index={8} from={18}>
+                <Text style={[t.overline, styles.label]}>Nudge me</Text>
+                <View style={styles.chipRow}>
+                  {CADENCES.map((c) => {
+                    const on = reminder === c.value;
+                    return (
+                      <PressableScale
+                        key={c.value}
+                        onPress={() => setReminder(c.value)}
+                        scaleTo={0.94}
+                        style={[styles.chip, on && styles.chipOn]}
+                      >
+                        <Text style={[styles.chipText, on && styles.chipTextOn]}>{c.label}</Text>
+                      </PressableScale>
+                    );
+                  })}
+                </View>
+              </Reveal>
+            )}
 
             <Reveal index={9} from={20}>
               <Text style={[t.overline, styles.label]}>Notes (optional)</Text>
@@ -557,7 +590,7 @@ export default function AddLoanScreen() {
 
           <View style={styles.footer}>
             <Button
-              label={editing ? 'Save changes' : 'Lend it 🤝'}
+              label={editing ? 'Save changes' : borrowed ? 'Add it 📥' : 'Lend it 🤝'}
               onPress={submit}
               disabled={!valid}
             />

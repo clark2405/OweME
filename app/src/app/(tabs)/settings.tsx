@@ -244,7 +244,7 @@ function AppLockCard({ index }: { index: number }) {
           accessibilityRole="button"
           accessibilityLabel="Set up Face ID or a passcode"
         >
-          <Icon name="bellOff" size={18} color={colors.accentPress} strokeWidth={2} />
+          <Icon name="lock" size={18} color={colors.accentPress} strokeWidth={2} />
           <Text style={styles.permHintText}>
             No Face ID or passcode set up on this device yet — add one in iOS Settings to use App Lock.
           </Text>

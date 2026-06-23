@@ -165,6 +165,7 @@ describe('loan mappers', () => {
     const item: ItemLoan = {
       id: 'l1',
       borrowerId: 'b1',
+      direction: 'lent',
       type: 'item',
       itemName: 'Drill',
       photoUrl: 'https://x/d.jpg',
@@ -178,5 +179,29 @@ describe('loan mappers', () => {
     };
     // loanToRow returns a LoanRow-compatible shape; cast back through rowToLoan.
     expect(rowToLoan(loanToRow(item) as LoanRow)).toEqual(item);
+  });
+
+  it('rowToLoan defaults a missing/null direction to lent', () => {
+    expect(rowToLoan(itemRow).direction).toBe('lent');
+    expect(rowToLoan({ ...itemRow, direction: null }).direction).toBe('lent');
+  });
+
+  it('a borrowed direction round-trips both ways', () => {
+    expect(loanToRow({ ...rowToLoan(itemRow), direction: 'borrowed' }).direction).toBe('borrowed');
+    expect(rowToLoan({ ...itemRow, direction: 'borrowed' }).direction).toBe('borrowed');
+  });
+
+  it('loanToRow defaults direction to lent when unset', () => {
+    const item: ItemLoan = {
+      id: 'l1',
+      borrowerId: 'b1',
+      type: 'item',
+      itemName: 'Drill',
+      lentAt: '2026-05-01',
+      status: 'active',
+      nudges: [],
+      updatedAt: '2026-05-01',
+    };
+    expect(loanToRow(item).direction).toBe('lent');
   });
 });

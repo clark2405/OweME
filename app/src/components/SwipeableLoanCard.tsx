@@ -29,9 +29,12 @@ interface Props {
   onPress?: () => void;
   onReturn: () => void;
   onNudge: () => void;
+  /** Show the swipe-left "Nudge" action. Off for borrowed loans — you don't
+   *  nudge yourself; the return swipe (you gave it back) still works. */
+  canNudge?: boolean;
 }
 
-export function SwipeableLoanCard({ data, onPress, onReturn, onNudge }: Props) {
+export function SwipeableLoanCard({ data, onPress, onReturn, onNudge, canNudge = true }: Props) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const ref = useRef<SwipeableMethods>(null);
@@ -63,19 +66,23 @@ export function SwipeableLoanCard({ data, onPress, onReturn, onNudge }: Props) {
             <Text style={[styles.label, { color: colors.mintInk }]}>Returned</Text>
           </View>
         )}
-        renderRightActions={() => (
-          <View style={[styles.action, styles.nudgeAction]}>
-            <Icon name="send" size={18} color={colors.surface} strokeWidth={2} />
-            <Text style={[styles.label, { color: colors.surface }]}>Nudge</Text>
-          </View>
-        )}
+        renderRightActions={
+          canNudge
+            ? () => (
+                <View style={[styles.action, styles.nudgeAction]}>
+                  <Icon name="send" size={18} color={colors.surface} strokeWidth={2} />
+                  <Text style={[styles.label, { color: colors.surface }]}>Nudge</Text>
+                </View>
+              )
+            : undefined
+        }
         onSwipeableWillOpen={(direction) => {
           haptics.tap();
           // gesture-handler 2.31 reports the swipe direction, not the panel side:
           // 'right' = row dragged right = left "Returned" panel revealed;
           // 'left'  = row dragged left  = right "Nudge" panel revealed.
           if (direction === 'right') onReturn();
-          else onNudge();
+          else if (canNudge) onNudge();
           ref.current?.close();
         }}
       >

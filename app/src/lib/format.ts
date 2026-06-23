@@ -3,7 +3,7 @@
  * warm/playful strings ("3 weeks ago", "out in the wild"), not sterile ones.
  */
 
-import { Loan } from './types';
+import { Loan, LoanDirection } from './types';
 
 const CURRENCY_SYMBOL: Record<string, string> = {
   PHP: '₱',
@@ -126,10 +126,13 @@ export function loanEmoji(loan: Loan): string {
 /** Sum active money loans grouped by currency, largest total first. Currencies
  *  must never be added together (₱ + $ is meaningless), so the home total shows
  *  one primary currency and footnotes the rest. */
-export function moneyByCurrency(loans: Loan[]): { currency: string; total: number }[] {
+export function moneyByCurrency(
+  loans: Loan[],
+  direction: LoanDirection = 'lent',
+): { currency: string; total: number }[] {
   const totals = new Map<string, number>();
   for (const l of loans) {
-    if (l.status === 'active' && l.type === 'money') {
+    if (l.status === 'active' && l.type === 'money' && (l.direction ?? 'lent') === direction) {
       totals.set(l.currency, (totals.get(l.currency) ?? 0) + l.amount);
     }
   }

@@ -9,6 +9,11 @@
 export type LoanStatus = 'active' | 'returned' | 'written_off';
 export type NudgeTone = 'friendly' | 'casual' | 'pointed';
 
+/** Which way a loan points: `lent` = you gave it to someone (they owe you);
+ *  `borrowed` = you took it from someone (you owe them). Defaults to `lent`
+ *  everywhere it's missing (older rows/backups predate the field). */
+export type LoanDirection = 'lent' | 'borrowed';
+
 /** How often OweMe reminds you about a still-active loan. `off` = no nudges. */
 export type ReminderCadence = 'off' | 'weekly' | 'biweekly' | 'monthly';
 
@@ -29,6 +34,8 @@ export interface Borrower {
 export interface LoanBase {
   id: string;
   borrowerId: string;
+  /** Lending direction. Missing = `lent` (back-compat with pre-feature data). */
+  direction?: LoanDirection;
   notes?: string;
   /** ISO date (YYYY-MM-DD). */
   lentAt: string;

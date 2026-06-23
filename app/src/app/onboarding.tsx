@@ -86,7 +86,7 @@ const PAGES: Page[] = [
     kicker: 'The lay of the land',
     headline: 'Find your way ',
     accentWord: 'around.',
-    body: 'Everything OweMe does, in four places. Tap any to peek inside.',
+    body: 'Everything OweMe does, a few taps away. Tap any to peek inside.',
     visual: 'tour',
   },
 ];
@@ -119,6 +119,12 @@ const TOUR: { icon: IconName; label: string; blurb: string; details: string }[] 
     label: 'History',
     blurb: 'Everything that found its way home',
     details: 'A clean archive of returned or written-off loans. Tap any completed loan to copy details and lend it again, or easily undo accidental returns.',
+  },
+  {
+    icon: 'settings',
+    label: 'Settings',
+    blurb: 'Currency, nudges, sync & lock',
+    details: 'Set your default currency and how nudges go out, sign in to sync across devices or back up your ledger by hand, lock the app with Face ID, and replay this tour.',
   },
   {
     icon: 'plus',

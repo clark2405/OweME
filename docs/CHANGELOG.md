@@ -6,6 +6,81 @@ optional account sync** — see [HANDOFF.md](./HANDOFF.md).
 
 ---
 
+## 2026-06-23 — Native segmented control on iOS
+
+- **`SegmentedToggle` is now platform-split** (mirrors the tab bar): **iOS renders
+  the REAL native SwiftUI segmented `Picker`** (`@expo/ui/swift-ui`, the same native
+  family as `NativeTabs`) — so it looks and behaves exactly like the system control
+  (on iOS 26: Liquid Glass, press-and-drag thumb, haptics), no emulation. Android /
+  non-iOS keep the original custom ink-pill control (tap or drag). Same API, so
+  Home's "Owed to me / I owe", the add flow's Item/Money, and the loans sort all use it.
+- **No rebuild needed** — `ExpoUI` was already in the built Pods.
+- *Tradeoff:* the system control is text-only, so the add flow's Item/Money lose
+  their little SVG icons on iOS (labels stay). The native control is given an
+  explicit measured width so it spans the layout instead of hugging its content.
+- Supersedes the same-day `expo-glass-effect` emulation attempt (it couldn't match
+  the native drag/feel).
+
+---
+
+## 2026-06-22 — "Stuff I borrowed" (P9, local-only)
+
+- **The other direction.** OweMe was lend-only ("they owe you"); now it also tracks
+  what **you owe** others. One model: a `direction` ('lent' | 'borrowed') field on
+  the loan, so add/edit/return/photos/dates/sync all serve both ways. Pulled forward
+  from the v2 roadmap as a **local-only** slice (borrower *accounts* stay parked).
+- **Data:** `LoanDirection` + `direction?` on `LoanBase` (defaults to 'lent' for old
+  rows/backups), round-tripped in `mappers.ts`; migration
+  `20260622000003_loan_direction.sql` adds the column (default 'lent' + CHECK).
+- **Store:** `dirOf()` helper; the active/archived/stats selectors take a direction
+  (default 'lent'); `reliabilityFor`/`mostWanted`/`shameBoard` forced lent-only so the
+  borrowed side never pollutes People / History / Shame. `moneyByCurrency` gained a
+  direction arg.
+- **UI:** Home segmented **"Owed to me" / "I owe"** toggle (directional headline,
+  money, items, empty states, FAB, "See all"); nudge affordances hidden on the
+  borrowed side (`SwipeableLoanCard` `canNudge`, nudge-all gate). Add flow has an
+  **"I lent / I borrowed"** toggle (new loans), adaptive copy, no nudge cadence for
+  borrowed. Loan detail reframes ("lent to you") and uses "I gave it back 🎉".
+  `/loans` honors `direction=borrowed`.
+- **Tests:** +3 mapper tests (direction default + both-way round-trip); 25 pass. tsc clean.
+- **Manual:** apply migration `20260622000003` (one line) — required before a
+  **signed-in** user creates/syncs any loan (the client now always sends `direction`).
+
+---
+
+## 2026-06-22 — Web nudge page + backup hardening (E2/R5/B1/S8, R6/R7)
+
+- **E2/R5/B1 — the killer loop's other half.** Signed-in lenders' nudges now carry
+  a one-tap `…/n/<token>` link. `app/src/lib/nudgeLink.ts` get-or-creates a
+  `nudge_links` row (reusing a live one) and builds the URL from
+  `EXPO_PUBLIC_WEB_URL`; `lib/nudge.ts` appends it; loan-detail + swipe + nudge-all
+  pass it. Anonymous lenders keep plain-text nudges. Migration
+  `20260622000002_nudge_link_tokens.sql`: DB-generated `token` (no client crypto),
+  `expires_at` (30d), `responded_at`.
+- **Web `/n/[token]`.** Real page (`web/app/n/[token]/page.tsx`) over a service-role,
+  server-only, lazily-constructed client (`web/lib/supabase-admin.ts`, `server-only`
+  guard, `@supabase/supabase-js` added). States: not-found / expired / already-done /
+  active. "Mark as returned" Server Action (`actions.ts`) flips the loan returned
+  with `updated_at=now()` (lender's last-write-wins sync picks it up) and consumes
+  the token. Cream/coral theme, `noindex`, minimal PII (item + lent date only).
+- **S8 — hardening baked in.** Service-role server-only, single-use + expiring
+  tokens, minimal PII. (IP rate-limiting parked — tokens are ~128-bit, mutation
+  idempotent.)
+- **R6 — biometric gate on backup export.** `backup.tsx` requires Face ID / Touch ID
+  / passcode before *Share a backup* or *export a readable copy* (`confirmOwner` →
+  `applock.authenticate`); graceful fallthrough when no device lock is enrolled;
+  restore stays ungated.
+- **R7 — "keep a backup" reminder.** `store.shouldRemindBackup()` surfaces a calm,
+  dismissable `BackupReminderCard` on Home for account-less users with ≥2 loans and
+  no recent backup; `markBackedUp()` stamps a successful share; **Later** snoozes 7d.
+- **Verified:** app + web `tsc` clean, web `next build` clean, `/n/[token]` renders
+  the graceful invalid-link state at runtime. NOT yet driven against a live token
+  (gated on the manual backend deploy — see TASKS go-live checklist).
+- **Manual:** apply migration `20260622000002`; set web env `SUPABASE_URL` +
+  `SUPABASE_SERVICE_ROLE_KEY` and app `EXPO_PUBLIC_WEB_URL`; deploy `web/`.
+
+---
+
 ## 2026-06-22 — Launch-readiness batch (P7: R2, S4, R3, R4)
 
 - **R2 — hosted privacy policy.** `web/app/privacy/page.tsx`: a public, deployable

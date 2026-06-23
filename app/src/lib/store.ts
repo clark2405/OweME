@@ -16,7 +16,7 @@
 import { useSyncExternalStore } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session } from '@supabase/supabase-js';
-import { Borrower, Loan, LoanBase, LoanWithBorrower, ReminderCadence } from './types';
+import { Borrower, Loan, LoanBase, LoanDirection, LoanWithBorrower, ReminderCadence } from './types';
 import { daysSince } from './format';
 import { NudgeChannel } from './nudge';
 import { cancelAllReminders, cancelLoanReminder, syncLoanReminder } from './notifications';
@@ -118,6 +118,11 @@ export interface Settings {
   appearance: Appearance;
   /** Require Face ID / passcode to open the app (device-local, security). */
   appLock: boolean;
+  /** ISO time of the last restore-ready backup the user shared (device-local).
+   *  Drives the "keep a backup" reminder for account-less users. */
+  lastBackupAt?: string;
+  /** ISO time until which the backup reminder is hushed after a "Later" tap. */
+  backupSnoozeUntil?: string;
 }
 
 const SETTINGS_KEY = 'oweme.settings.v1';
@@ -367,6 +372,34 @@ export function setAppLock(v: boolean) {
   commitSettings({ ...settings, appLock: v });
 }
 
+/** Stamp a successful restore-ready backup — clears any active snooze so the
+ *  reminder restarts its clock from now. */
+export function markBackedUp() {
+  commitSettings({ ...settings, lastBackupAt: new Date().toISOString(), backupSnoozeUntil: undefined });
+}
+
+/** Hush the "keep a backup" reminder for a while after a "Later" tap. */
+export function snoozeBackupReminder(days = 7) {
+  const until = new Date(Date.now() + days * 86_400_000).toISOString();
+  commitSettings({ ...settings, backupSnoozeUntil: until });
+}
+
+/** How long a backup stays "fresh" before we gently remind again. */
+const BACKUP_STALE_DAYS = 30;
+
+/** Whether to surface the "keep a backup" nudge. Account-less only — a signed-in
+ *  user already has a cloud copy. Pure so it's trivially testable. */
+export function shouldRemindBackup(list: Loan[], s: Settings, signedIn: boolean): boolean {
+  if (signedIn) return false; // cloud copy exists — no data-loss risk
+  if (list.length < 2) return false; // not enough at stake to nag yet
+  const now = Date.now();
+  if (s.backupSnoozeUntil && Date.parse(s.backupSnoozeUntil) > now) return false;
+  if (s.lastBackupAt) {
+    return (now - Date.parse(s.lastBackupAt)) / 86_400_000 >= BACKUP_STALE_DAYS;
+  }
+  return true; // never backed up, and there's a ledger worth losing
+}
+
 /** Re-mirror every active loan's cadence into pending notifications. */
 function resyncAllReminders() {
   for (const l of loans) {
@@ -388,10 +421,14 @@ export function withBorrower(loan: Loan): LoanWithBorrower {
   return { loan, borrower: getBorrower(loan.borrowerId)! };
 }
 
-/** Active loans, oldest-lent first — the stuff most at risk of being forgotten. */
-export function activeLoans(list: Loan[]): LoanWithBorrower[] {
+/** Direction of a loan, defaulting to `lent` for pre-feature rows/backups. */
+export const dirOf = (l: Loan): LoanDirection => l.direction ?? 'lent';
+
+/** Active loans, oldest-lent first — the stuff most at risk of being forgotten.
+ *  Scoped to one direction (default `lent`) so the borrowed side never leaks in. */
+export function activeLoans(list: Loan[], direction: LoanDirection = 'lent'): LoanWithBorrower[] {
   return list
-    .filter((l) => l.status === 'active')
+    .filter((l) => l.status === 'active' && dirOf(l) === direction)
     .sort((a, b) => a.lentAt.localeCompare(b.lentAt))
     .map(withBorrower);
 }
@@ -406,12 +443,12 @@ export type LoanSort = 'oldest' | 'newest';
  */
 export function activeLoansBy(
   list: Loan[],
-  opts: { type?: LoanTypeFilter; sort?: LoanSort; query?: string } = {},
+  opts: { type?: LoanTypeFilter; sort?: LoanSort; query?: string; direction?: LoanDirection } = {},
 ): LoanWithBorrower[] {
-  const { type = 'all', sort = 'oldest', query = '' } = opts;
+  const { type = 'all', sort = 'oldest', query = '', direction = 'lent' } = opts;
   const q = query.trim().toLowerCase();
   return list
-    .filter((l) => l.status === 'active')
+    .filter((l) => l.status === 'active' && dirOf(l) === direction)
     .filter((l) => type === 'all' || l.type === type)
     .map(withBorrower)
     .filter(({ loan, borrower }) => {
@@ -426,9 +463,9 @@ export function activeLoansBy(
     );
 }
 
-export function archivedLoans(list: Loan[]): LoanWithBorrower[] {
+export function archivedLoans(list: Loan[], direction: LoanDirection = 'lent'): LoanWithBorrower[] {
   return list
-    .filter((l) => l.status !== 'active')
+    .filter((l) => l.status !== 'active' && dirOf(l) === direction)
     .sort((a, b) => (b.returnedAt ?? '').localeCompare(a.returnedAt ?? ''))
     .map(withBorrower);
 }
@@ -439,11 +476,11 @@ export type ArchiveFilter = 'all' | 'returned' | 'written_off';
  *  search — backs the History list's filter chips + search box. */
 export function archivedLoansBy(
   list: Loan[],
-  opts: { status?: ArchiveFilter; query?: string } = {},
+  opts: { status?: ArchiveFilter; query?: string; direction?: LoanDirection } = {},
 ): LoanWithBorrower[] {
-  const { status = 'all', query = '' } = opts;
+  const { status = 'all', query = '', direction = 'lent' } = opts;
   const q = query.trim().toLowerCase();
-  return archivedLoans(list)
+  return archivedLoans(list, direction)
     .filter(({ loan }) => status === 'all' || loan.status === status)
     .filter(({ loan, borrower }) => {
       if (!q) return true;
@@ -461,12 +498,14 @@ export interface ArchiveStats {
   writtenOff: number;
 }
 
-/** The "payoff" tally for the History hero: what actually came back. */
-export function archivedStats(list: Loan[]): ArchiveStats {
+/** The "payoff" tally for the History hero: what actually came back. Lent-side
+ *  only by default — History tracks the stuff you got back, not what you returned. */
+export function archivedStats(list: Loan[], direction: LoanDirection = 'lent'): ArchiveStats {
   let itemsReturned = 0;
   let writtenOff = 0;
   const recovered = new Map<string, number>();
   for (const l of list) {
+    if (dirOf(l) !== direction) continue;
     if (l.status === 'returned') {
       if (l.type === 'item') itemsReturned += 1;
       else recovered.set(l.currency, (recovered.get(l.currency) ?? 0) + l.amount);
@@ -497,7 +536,8 @@ export interface ReliabilityStat {
 }
 
 export function reliabilityFor(list: Loan[], borrowerId: string): ReliabilityStat {
-  const mine = list.filter((l) => l.borrowerId === borrowerId);
+  // Lent-only: reliability is "how they return YOUR stuff", not what you owe them.
+  const mine = list.filter((l) => l.borrowerId === borrowerId && dirOf(l) === 'lent');
   const active = mine.filter((l) => l.status === 'active');
   const returned = mine.filter((l) => l.status === 'returned' && l.returnedAt);
 
@@ -523,7 +563,7 @@ export function reliabilityFor(list: Loan[], borrowerId: string): ReliabilitySta
 
 /** The single longest-outstanding active loan — the "🏆 most wanted". */
 export function mostWanted(list: Loan[]): LoanWithBorrower | null {
-  const active = list.filter((l) => l.status === 'active');
+  const active = list.filter((l) => l.status === 'active' && dirOf(l) === 'lent');
   if (active.length === 0) return null;
   const oldest = active.reduce((a, b) => (a.lentAt <= b.lentAt ? a : b));
   return withBorrower(oldest);
@@ -578,7 +618,9 @@ export function shameBoard(list: Loan[], people: Borrower[]): ShameEntry[] {
   const entries: ShameEntry[] = [];
   for (const b of people) {
     if (b.exempt) continue; // opted out of the board (task D)
-    const active = list.filter((l) => l.borrowerId === b.id && l.status === 'active');
+    const active = list.filter(
+      (l) => l.borrowerId === b.id && l.status === 'active' && dirOf(l) === 'lent',
+    );
     if (active.length === 0) continue;
 
     const money = new Map<string, number>();
@@ -666,6 +708,8 @@ export function unreturn(id: string) {
 
 export interface NewLoanInput {
   borrowerId: string;
+  /** Lending direction; defaults to `lent` on create, preserved on edit. */
+  direction?: LoanDirection;
   notes?: string;
   /** ISO date the loan started; defaults to today on create, preserved on edit. */
   lentAt?: string;
@@ -690,6 +734,7 @@ export function addLoan(input: NewLoanInput): string {
   const base: LoanBase = {
     id,
     borrowerId: input.borrowerId,
+    direction: input.direction ?? 'lent',
     notes: input.notes,
     dueAt: input.dueAt,
     reminder: input.reminder,
@@ -715,6 +760,9 @@ export function updateLoan(id: string, input: NewLoanInput) {
       const base: LoanBase = {
         id: l.id,
         borrowerId: input.borrowerId,
+        // Direction is intrinsic to the loan — keep the original unless the edit
+        // explicitly changes it.
+        direction: input.direction ?? dirOf(l),
         notes: input.notes,
         dueAt: input.dueAt,
         reminder: input.reminder,

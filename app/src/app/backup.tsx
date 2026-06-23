@@ -34,8 +34,9 @@ import { BackLink } from '../components/BackLink';
 import { Button } from '../components/Button';
 import { PressableScale } from '../components/PressableScale';
 import { Icon } from '../components/Icon';
-import { importData, useBorrowers, useLoans, useSettings } from '../lib/store';
+import { importData, markBackedUp, useBorrowers, useLoans, useSettings } from '../lib/store';
 import { buildLedgerBackup, buildLedgerText, parseLedgerBackup, ParseResult } from '../lib/export';
+import { authenticate, canUseAppLock } from '../lib/applock';
 import { showToast } from '../lib/toast';
 import { haptics } from '../lib/haptics';
 import { radius, space } from '../lib/theme';
@@ -55,12 +56,24 @@ export default function BackupScreen() {
   // text — so the user sees a friendly summary, not a wall of JSON.
   const [pending, setPending] = useState<Restorable | null>(null);
 
+  // A backup carries the whole ledger off the phone, so confirm it's really the
+  // owner before anything leaves — Face ID / Touch ID / device passcode. If the
+  // device has no lock enrolled we can't gate (and won't strand the owner from
+  // their own data), so we let it through.
+  const confirmOwner = async (reason: string): Promise<boolean> => {
+    if (!(await canUseAppLock())) return true;
+    const ok = await authenticate(reason);
+    if (!ok) showToast({ message: 'Couldn’t verify it’s you — backup cancelled.' });
+    return ok;
+  };
+
   // Share the backup as a tidy named *file* (not a wall of JSON in the share
   // sheet) so a non-technical user just sees "OweMe-Backup-….json" to AirDrop or
   // Save to Files. Falls back to a plain-text share only if file sharing isn't
   // available (e.g. some simulators).
   const shareBackup = async () => {
     haptics.tap();
+    if (!(await confirmOwner('Confirm it’s you to share a backup'))) return;
     const json = buildLedgerBackup(loans, borrowers, settings);
     const filename = `OweMe-Backup-${new Date().toISOString().slice(0, 10)}.json`;
     try {
@@ -72,16 +85,19 @@ export default function BackupScreen() {
           UTI: 'public.json',
           dialogTitle: 'OweMe backup',
         });
+        markBackedUp();
         return;
       }
     } catch {
       // fall through to a plain-text share
     }
     void Share.share({ message: json });
+    markBackedUp();
   };
 
-  const shareReadable = () => {
+  const shareReadable = async () => {
     haptics.tap();
+    if (!(await confirmOwner('Confirm it’s you to export a copy'))) return;
     void Share.share({ message: buildLedgerText(loans, borrowers) });
   };
 

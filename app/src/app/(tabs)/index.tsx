@@ -6,14 +6,17 @@ import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated'
 import { Screen } from '../../components/Screen';
 import { Reveal } from '../../components/Reveal';
 import { SwipeableLoanCard } from '../../components/SwipeableLoanCard';
+import { SegmentedToggle } from '../../components/SegmentedToggle';
 import { PressableScale } from '../../components/PressableScale';
 import { Icon } from '../../components/Icon';
 import { Fab } from '../../components/Fab';
 import { Skeleton, SkeletonRow } from '../../components/Skeleton';
+import { BackupReminderCard } from '../../components/BackupReminderCard';
 import { TAB_BAR_HEIGHT, tabBarBottomInset } from '../../components/TabBar';
-import { activeLoans, activeLoansBy, LoanTypeFilter, useHydrated, useLoans, useSettings } from '../../lib/store';
+import { activeLoans, activeLoansBy, isSignedIn, LoanTypeFilter, shouldRemindBackup, useHydrated, useLoans, useSettings } from '../../lib/store';
 import { useLoanQuickActions } from '../../lib/quickActions';
 import { compactMoney, currencySymbol, isOverdue, moneyByCurrency } from '../../lib/format';
+import { LoanDirection } from '../../lib/types';
 import { reduceMotion } from '../../lib/motion';
 import { radius, space } from '../../lib/theme';
 import { Theme, useTheme, useThemedStyles } from '../../lib/theme-context';
@@ -55,7 +58,10 @@ export default function HomeScreen() {
   const { height } = useWindowDimensions();
   const hydrated = useHydrated();
   const loans = useLoans();
-  const active = activeLoans(loans);
+  // Which side of the ledger Home is showing: stuff lent out, or stuff you owe.
+  const [dir, setDir] = useState<LoanDirection>('lent');
+  const lent = dir === 'lent';
+  const active = activeLoans(loans, dir);
 
   // Tapping a stat tile filters the lineup to that type; tapping it again
   // clears back to everything. Accent stays reserved for the FAB, so the
@@ -72,7 +78,9 @@ export default function HomeScreen() {
   const fabBottom = tabBarTop + space.md;
   const listClearance = fabBottom + FAB_HEIGHT + space.xxl;
 
-  const { defaultCurrency } = useSettings();
+  const settings = useSettings();
+  const { defaultCurrency } = settings;
+  const remindBackup = shouldRemindBackup(loans, settings, isSignedIn());
 
   const itemCount = active.filter((a) => a.loan.type === 'item').length;
   const itemText = String(itemCount);
@@ -80,7 +88,7 @@ export default function HomeScreen() {
   // Currencies can't be summed together. Show one primary currency big (the
   // user's default if they have money in it, else the largest), and footnote
   // any others as "+$20 €5".
-  const byCurrency = moneyByCurrency(loans);
+  const byCurrency = moneyByCurrency(loans, dir);
   const primary =
     byCurrency.find((c) => c.currency === defaultCurrency) ?? byCurrency[0];
   const others = byCurrency.filter((c) => c !== primary);
@@ -91,15 +99,19 @@ export default function HomeScreen() {
 
   const { onReturn, onNudge, onNudgeAll } = useLoanQuickActions();
 
-  const filtered = activeLoansBy(loans, { type: filter });
+  const filtered = activeLoansBy(loans, { type: filter, direction: dir });
   // Overdue jumps the queue into its own pinned group; the rest form the lineup.
   const overdue = filtered.filter((d) => isOverdue(d.loan));
   const rest = filtered.filter((d) => !isOverdue(d.loan));
   const shown = rest.slice(0, homeLimitFor(height));
   const overflow = filtered.length - overdue.length - shown.length;
 
-  const seeAll = () =>
-    router.push(filter === 'all' ? '/loans' : `/loans?type=${filter}`);
+  const seeAll = () => {
+    const parts: string[] = [];
+    if (filter !== 'all') parts.push(`type=${filter}`);
+    if (!lent) parts.push('direction=borrowed');
+    router.push(parts.length ? `/loans?${parts.join('&')}` : '/loans');
+  };
 
   const lineupLabel =
     filter === 'item' ? 'Things · oldest first'
@@ -146,21 +158,37 @@ export default function HomeScreen() {
           <View style={styles.overlineRow}>
             <Text style={t.overline}>OweMe</Text>
             <Icon name="parcel" size={17} />
-            <Text style={t.overline}>· Out in the wild</Text>
+            <Text style={t.overline}>{lent ? '· Out in the wild' : '· On your tab'}</Text>
           </View>
         </Reveal>
         <Reveal index={1} clip from={44}>
           <View style={styles.headRow}>
-            <Text style={[t.title, styles.headline]}>You&apos;re owed</Text>
+            <Text style={[t.title, styles.headline]}>{lent ? "You're owed" : 'You owe'}</Text>
             <PressableScale
-              onPress={() => router.push('/loans?focus=search')}
+              onPress={() => router.push(lent ? '/loans?focus=search' : '/loans?focus=search&direction=borrowed')}
               scaleTo={0.9}
               style={styles.searchBtn}
               accessibilityRole="button"
-              accessibilityLabel="Search everything you've lent"
+              accessibilityLabel={lent ? "Search everything you've lent" : 'Search everything you owe'}
             >
               <Icon name="search" size={20} color={colors.inkSoft} strokeWidth={2.2} />
             </PressableScale>
+          </View>
+        </Reveal>
+
+        <Reveal index={1} from={20}>
+          <View style={styles.dirToggle}>
+            <SegmentedToggle<LoanDirection>
+              value={dir}
+              onChange={(v) => {
+                setDir(v);
+                setFilter('all');
+              }}
+              options={[
+                { value: 'lent', label: 'Owed to me' },
+                { value: 'borrowed', label: 'I owe' },
+              ]}
+            />
           </View>
         </Reveal>
 
@@ -181,7 +209,11 @@ export default function HomeScreen() {
               >
                 {itemText}
               </Text>
-              <Text style={styles.statLabel}>thing{itemCount === 1 ? '' : 's'} lent out</Text>
+              <Text style={styles.statLabel}>
+                {lent
+                  ? `thing${itemCount === 1 ? '' : 's'} lent out`
+                  : `thing${itemCount === 1 ? '' : 's'} you borrowed`}
+              </Text>
             </StatTile>
             <StatTile
               selected={filter === 'money'}
@@ -200,10 +232,20 @@ export default function HomeScreen() {
               {othersText !== '' && (
                 <Text style={styles.statOthers} numberOfLines={1}>{othersText}</Text>
               )}
-              <Text style={[styles.statLabel, styles.statLabelOnDark]}>still owed to you</Text>
+              <Text style={[styles.statLabel, styles.statLabelOnDark]}>
+                {lent ? 'still owed to you' : 'you still owe'}
+              </Text>
             </StatTile>
           </View>
         </Reveal>
+
+        {remindBackup && (
+          <Reveal index={3} from={18}>
+            <View style={styles.backupReminder}>
+              <BackupReminderCard />
+            </View>
+          </Reveal>
+        )}
 
         {filtered.length === 0 ? (
           <>
@@ -214,9 +256,13 @@ export default function HomeScreen() {
               <View style={styles.empty}>
                 <Icon name={filter === 'all' ? 'cactus' : 'search'} size={54} color={colors.inkSoft} />
                 <Text style={styles.emptyText}>
-                  {filter === 'all'
-                    ? 'Nobody owes you anything. Either you’re very organized or very stingy.'
-                    : `No ${filter === 'item' ? 'things' : 'money'} out right now.`}
+                  {filter !== 'all'
+                    ? lent
+                      ? `No ${filter === 'item' ? 'things' : 'money'} out right now.`
+                      : `Nothing ${filter === 'item' ? 'borrowed' : 'owed'} right now.`
+                    : lent
+                      ? 'Nobody owes you anything. Either you’re very organized or very stingy.'
+                      : 'You don’t owe anyone a thing. Clean slate. ✨'}
                 </Text>
               </View>
             </Reveal>
@@ -231,7 +277,7 @@ export default function HomeScreen() {
                     <Text style={[t.overline, styles.overdueLabel]}>
                       👀 {overdue.length} overdue
                     </Text>
-                    {overdue.length > 1 && (
+                    {overdue.length > 1 && lent && (
                       <PressableScale
                         onPress={() => onNudgeAll(overdue)}
                         scaleTo={0.95}
@@ -253,6 +299,7 @@ export default function HomeScreen() {
                         onPress={() => router.push(`/loan/${data.loan.id}`)}
                         onReturn={() => onReturn(data)}
                         onNudge={() => onNudge(data)}
+                        canNudge={lent}
                       />
                     </Reveal>
                   ))}
@@ -277,6 +324,7 @@ export default function HomeScreen() {
                         onPress={() => router.push(`/loan/${data.loan.id}`)}
                         onReturn={() => onReturn(data)}
                         onNudge={() => onNudge(data)}
+                        canNudge={lent}
                       />
                     </Reveal>
                   ))}
@@ -300,7 +348,7 @@ export default function HomeScreen() {
       </Screen>
 
       <View style={[styles.fabSlot, { bottom: fabBottom }]} pointerEvents="box-none">
-        <Fab onPress={() => router.push('/add')} />
+        <Fab onPress={() => router.push(lent ? '/add' : '/add?direction=borrowed')} />
       </View>
     </View>
   );
@@ -376,6 +424,8 @@ const makeStyles = (th: Theme) => StyleSheet.create({
     ...th.shadow.card,
   },
   statRow: { flexDirection: 'row', gap: space.md, marginBottom: space.lg },
+  dirToggle: { marginTop: space.sm, marginBottom: space.lg },
+  backupReminder: { marginBottom: space.lg },
   statWrap: { flex: 1 },
   stat: {
     borderRadius: radius.lg,

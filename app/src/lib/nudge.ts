@@ -86,9 +86,13 @@ export async function deliverNudge(
   borrower: Borrower,
   tone: NudgeTone,
   channel: NudgeChannel,
+  link?: string | null,
 ): Promise<boolean> {
   const what = loanLabel(loan);
-  const message = nudgeMessage(tone, what, borrower.name, shortDate(loan.lentAt));
+  let message = nudgeMessage(tone, what, borrower.name, shortDate(loan.lentAt));
+  // When the lender is signed in, a one-tap "mark it returned" link rides along —
+  // the borrower closes the loop with zero install/signup (the killer feature).
+  if (link) message += `\n\n📦 Tap to mark it returned: ${link}`;
   return deliver(message, channel, borrower.phone);
 }
 

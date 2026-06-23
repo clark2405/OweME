@@ -7,7 +7,7 @@
  * null-handling slip would silently corrupt data.
  */
 
-import { Borrower, Loan, LoanBase, LoanStatus, ReminderCadence } from './types';
+import { Borrower, Loan, LoanBase, LoanDirection, LoanStatus, ReminderCadence } from './types';
 
 // --- row shapes (as they come back from / go to Postgres) ------------------
 
@@ -24,6 +24,8 @@ export interface BorrowerRow {
 export interface LoanRow {
   id: string;
   borrower_id: string;
+  /** 'lent' | 'borrowed'; optional/nullable so pre-feature rows map to 'lent'. */
+  direction?: LoanDirection | null;
   type: 'item' | 'money';
   item_name: string | null;
   photo_url: string | null;
@@ -57,6 +59,7 @@ export function rowToLoan(r: LoanRow): Loan {
   const base: LoanBase = {
     id: r.id,
     borrowerId: r.borrower_id,
+    direction: r.direction ?? 'lent',
     notes: r.notes ?? undefined,
     lentAt: r.lent_at,
     dueAt: r.due_at ?? undefined,
@@ -90,6 +93,7 @@ export function loanToRow(l: Loan): Omit<LoanRow, 'amount'> & { amount: number |
   return {
     id: l.id,
     borrower_id: l.borrowerId,
+    direction: l.direction ?? 'lent',
     type: l.type,
     item_name: l.type === 'item' ? l.itemName : null,
     photo_url: l.type === 'item' ? l.photoUrl ?? null : null,

@@ -67,10 +67,12 @@ oweme/
 > **iOS build gotchas live in `BUILD_NOTES.md`** — read it first if a device build fails. Key constraint: Clark is on a **free** Apple account, so NO push/`aps-environment` entitlement (local notifications only).
 
 - [x] Repo scaffolded (Expo app in `app/` + Next.js web in `web/`, both TS strict, tsc clean)
-- [x] Schema migrations written — FIVE now: init (`20260610000000`), app columns
+- [x] Schema migrations written — SEVEN now: init (`20260610000000`), app columns
   (`20260617000000`), photo storage (`20260618000000`), `updated_at` for sync
-  (`20260622000000`), photos read lockdown (`20260622000001`). RLS scopes
-  everything to `owner_id = auth.uid()`.
+  (`20260622000000`), photos read lockdown (`20260622000001`), nudge-link tokens
+  (`20260622000002` — DB-generated token + `expires_at`/`responded_at` for E2),
+  loan `direction` (`20260622000003` — lent/borrowed for the "stuff I borrowed" view).
+  RLS scopes everything to `owner_id = auth.uid()`.
 - [x] iOS native build set up (prebuild + Pods, bundle id `com.clark24smoothoperator.oweme`, runs on simulator). Free Apple account → no push entitlement.
 - [x] **Mobile UI** — full design system + all v1 screens (`offbrand-design`), verified on iOS sim.
 - [x] **Supabase backend wired & live** — `app/src/lib/supabase.ts` (anon client) +
@@ -98,21 +100,32 @@ oweme/
   `20260622000001`), S5 dropped Android RECORD_AUDIO, S6 OTP resend cooldown, S7
   truthful sync-error messages.
 - [ ] **Manual setup before sync runs:** create the Supabase project, apply ALL
-  FIVE migrations, fill `app/.env`, add `{{ .Token }}` to the OTP email template,
+  SEVEN migrations, fill `app/.env`, add `{{ .Token }}` to the OTP email template,
   and **`supabase functions deploy delete-account`** (needed for S1 account deletion).
+  *(Migrations `…000` + `…002` are applied to the live `oweme` project; `…003`
+  (loan direction) is PENDING — apply it before a signed-in user adds any loan.)*
 - [x] **P7 launch-readiness batch (2026-06-22)** — R2 hosted privacy page
   (`web/app/privacy`), S4 third-party-PII clause + `docs/APP_STORE_PRIVACY.md`
   labels map, R3 Sentry (DSN-gated, `lib/sentry.ts`), R4 sync-layer unit tests
   (jest-expo; pure fns extracted to `lib/merge.ts` + `lib/mappers.ts`; `npm test`).
   Build durability: `expo-build-properties` pins `ios.buildReactNativeFromSource`.
-- [ ] Nudge web page `/n/[token]` — still a placeholder (TASKS E2 / R5).
+- [x] **Nudge web page `/n/[token]` (E2 / R5 / B1 / S8, 2026-06-22)** — borrower-facing
+  "Mark as returned", zero install/signup. Signed-in nudges carry a `…/n/<token>`
+  link (`app/src/lib/nudgeLink.ts` + `lib/nudge.ts`); Next.js page is service-role
+  server-only (`web/lib/supabase-admin.ts`) with not-found/expired/done/active states
+  + a Server Action that flips the loan returned (`updated_at=now()` → sync picks it
+  up) and consumes the token. Migration `20260622000002`. Code-complete + `next build`
+  clean; **needs the manual backend deploy** (apply migration, set web env
+  `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` + app `EXPO_PUBLIC_WEB_URL`, deploy `web/`)
+  for an end-to-end live test.
 
 **Pending native rebuild** (`npx expo prebuild` + run) to activate on-device
 pieces: S2 (SecureStore), S5 (Android RECORD_AUDIO drop), R1 (app lock), and R3
 (Sentry native — only matters once a DSN is set). Backend S1/S3 are live (function
 deployed, migration applied).
 
-Next (biggest gap): **the web nudge page `/n/[token]`** (E2 / B1 / R5 + S8
-hardening) — the borrower-facing "mark as returned" half of the killer feature.
-Then backend niceties (E3 atomic restore, E4 settings sync, E5 storage GC) and QA
-(D1 Android, D2 VoiceOver/contrast). Deeper S3 (private bucket + signed URLs) parked.
+Next: the killer loop is code-complete — remaining work is the **manual backend
+deploy** to light up nudge links end-to-end (apply the token migration, set web/app
+env, deploy `web/`), then backend niceties (E3 atomic restore, E4 settings sync,
+E5 storage GC) and QA (D1 Android, D2 VoiceOver/contrast). Deeper S3 (private bucket
++ signed URLs) parked; "stuff I borrowed" stays v2 (PROJECT.md §9).

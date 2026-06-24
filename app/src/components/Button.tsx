@@ -51,6 +51,9 @@ export function Button({ label, onPress, variant = 'primary', icon, disabled, st
       onPressOut={() => (press.value = withSpring(0, spring.press))}
       scaleTo={0.97}
       disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !!disabled }}
       style={[
         styles.base,
         isPrimary && styles.primary,

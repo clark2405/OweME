@@ -22,8 +22,9 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { Host, Picker, Text as UIText } from '@expo/ui/swift-ui';
+import { Host, Label, Picker, Text as UIText } from '@expo/ui/swift-ui';
 import { frame, pickerStyle, tag } from '@expo/ui/swift-ui/modifiers';
+import type { SFSymbol } from 'sf-symbols-typescript';
 import { PressableScale } from './PressableScale';
 import { Icon, IconName } from './Icon';
 import { radius, space } from '../lib/theme';
@@ -33,7 +34,10 @@ import { duration, expoOut, reduceMotion } from '../lib/motion';
 export interface Segment<T extends string> {
   value: T;
   label: string;
+  /** Custom SVG icon for the Android/custom control. */
   icon?: IconName;
+  /** SF Symbol for the native iOS control (e.g. 'shippingbox', 'dollarsign'). */
+  sfSymbol?: SFSymbol;
 }
 
 interface Props<T extends string> {
@@ -64,11 +68,15 @@ function NativeSegmented<T extends string>({ options, value, onChange }: Props<T
             }}
             modifiers={[pickerStyle('segmented'), frame({ width: w })]}
           >
-            {options.map((o) => (
-              <UIText key={o.value} modifiers={[tag(o.value)]}>
-                {o.label}
-              </UIText>
-            ))}
+            {options.map((o) =>
+              o.sfSymbol ? (
+                <Label key={o.value} title={o.label} systemImage={o.sfSymbol} modifiers={[tag(o.value)]} />
+              ) : (
+                <UIText key={o.value} modifiers={[tag(o.value)]}>
+                  {o.label}
+                </UIText>
+              ),
+            )}
           </Picker>
         </Host>
       )}
@@ -122,6 +130,9 @@ function PlainSegmented<T extends string>({ options, value, onChange }: Props<T>
               onPress={() => onChange(o.value)}
               scaleTo={0.97}
               style={styles.segment}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={o.label}
             >
               {o.icon && (
                 <Icon

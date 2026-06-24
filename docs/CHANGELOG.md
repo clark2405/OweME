@@ -6,6 +6,24 @@ optional account sync** — see [HANDOFF.md](./HANDOFF.md).
 
 ---
 
+## 2026-06-23 — Borrowed loose ends, native toggle icons, a11y pass
+
+- **Item/Money icons back on the native iOS toggle.** `Segment` gained an optional
+  `sfSymbol`; the native `Picker` renders `Label(title, systemImage)` so the add
+  flow shows shippingbox / dollarsign on iOS again (Android keeps the SVG `icon`).
+- **"Stuff I borrowed" loose ends finished:**
+  - **History** gained an "Owed to me / I owe" toggle (`archivedLoans/archivedStats/
+    archivedLoansBy` already take a direction) so returned *borrowed* items have a
+    home; the payoff card copy adapts ("Settled up", "paid back", "you lost track of").
+  - **Borrower profile** now splits by direction: "Currently holding" + "Their
+    history" stay lent-only, and a new **"You owe them"** section lists active
+    borrowed loans — so a person you only borrowed from no longer reads as empty.
+- **Accessibility pass:** `Button` now sets `accessibilityRole="button"` + label +
+  disabled state (covers every CTA app-wide); the custom segmented control's segments
+  announce role + selected state; the loans type-filter chips announce selected state.
+
+---
+
 ## 2026-06-23 — Native segmented control on iOS
 
 - **`SegmentedToggle` is now platform-split** (mirrors the tab bar): **iOS renders

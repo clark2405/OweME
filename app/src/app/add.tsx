@@ -291,8 +291,8 @@ export default function AddLoanScreen() {
                 value={type}
                 onChange={setType}
                 options={[
-                  { value: 'item', label: 'Item', icon: 'box' },
-                  { value: 'money', label: 'Money', icon: 'money' },
+                  { value: 'item', label: 'Item', icon: 'box', sfSymbol: 'shippingbox' },
+                  { value: 'money', label: 'Money', icon: 'money', sfSymbol: 'dollarsign.circle' },
                 ]}
               />
             </Reveal>

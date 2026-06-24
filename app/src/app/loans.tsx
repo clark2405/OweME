@@ -124,6 +124,9 @@ export default function LoansScreen() {
                 onPress={() => setType(opt.value)}
                 scaleTo={0.94}
                 style={[styles.chip, active && styles.chipActive]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={`Filter by ${opt.label}`}
               >
                 <Text style={[styles.chipText, active && styles.chipTextActive]}>{opt.label}</Text>
               </PressableScale>

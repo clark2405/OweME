@@ -9,7 +9,7 @@ import { LoanCard } from '../../components/LoanCard';
 import { StatusChip } from '../../components/Chip';
 import { Icon } from '../../components/Icon';
 import { BorrowerEditSheet } from '../../components/BorrowerEditSheet';
-import { getBorrower, reliabilityFor, useLoans, withBorrower } from '../../lib/store';
+import { dirOf, getBorrower, reliabilityFor, useLoans, withBorrower } from '../../lib/store';
 import { loanLabel } from '../../lib/format';
 import { radius, space } from '../../lib/theme';
 import { Theme, useTheme, useThemedStyles } from '../../lib/theme-context';
@@ -33,8 +33,10 @@ export default function BorrowerProfileScreen() {
 
   const stat = reliabilityFor(loans, id);
   const mine = loans.filter((l) => l.borrowerId === id);
-  const active = mine.filter((l) => l.status === 'active');
-  const past = mine.filter((l) => l.status !== 'active');
+  // Split by direction: what they hold of yours vs. what you owe them.
+  const active = mine.filter((l) => l.status === 'active' && dirOf(l) === 'lent');
+  const past = mine.filter((l) => l.status !== 'active' && dirOf(l) === 'lent');
+  const owedToThem = mine.filter((l) => l.status === 'active' && dirOf(l) === 'borrowed');
 
   const reliability =
     stat.avgDaysToReturn == null
@@ -95,6 +97,21 @@ export default function BorrowerProfileScreen() {
           <View style={styles.list}>
             {active.map((loan, i) => (
               <Reveal key={loan.id} index={3 + i} from={20}>
+                <LoanCard data={withBorrower(loan)} onPress={() => router.push(`/loan/${loan.id}`)} />
+              </Reveal>
+            ))}
+          </View>
+        </>
+      )}
+
+      {owedToThem.length > 0 && (
+        <>
+          <Reveal from={16}>
+            <Text style={[t.overline, styles.section]}>You owe them</Text>
+          </Reveal>
+          <View style={styles.list}>
+            {owedToThem.map((loan) => (
+              <Reveal key={loan.id} from={20}>
                 <LoanCard data={withBorrower(loan)} onPress={() => router.push(`/loan/${loan.id}`)} />
               </Reveal>
             ))}

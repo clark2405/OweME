@@ -4,6 +4,7 @@ import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Screen } from '../../components/Screen';
 import { Header } from '../../components/Header';
 import { Reveal } from '../../components/Reveal';
+import { SegmentedToggle } from '../../components/SegmentedToggle';
 import { PressableScale } from '../../components/PressableScale';
 import { Avatar } from '../../components/Avatar';
 import { Icon } from '../../components/Icon';
@@ -17,7 +18,7 @@ import {
   useHydrated,
   useLoans,
 } from '../../lib/store';
-import { LoanWithBorrower } from '../../lib/types';
+import { LoanDirection, LoanWithBorrower } from '../../lib/types';
 import { compactMoney, loanLabel, monthLabel, shortDate } from '../../lib/format';
 import { radius, space } from '../../lib/theme';
 import { Theme, useTheme, useThemedStyles } from '../../lib/theme-context';
@@ -40,12 +41,16 @@ export default function HistoryScreen() {
   const hydrated = useHydrated();
   const loans = useLoans();
 
+  const [dir, setDir] = useState<LoanDirection>('lent');
+  const lent = dir === 'lent';
   const [filter, setFilter] = useState<ArchiveFilter>('all');
   const [query, setQuery] = useState('');
 
-  const hasArchive = archivedLoans(loans).length > 0;
-  const stats = archivedStats(loans);
-  const results = archivedLoansBy(loans, { status: filter, query });
+  // Show the direction toggle whenever either side has any archived loans.
+  const anyArchive = archivedLoans(loans, 'lent').length > 0 || archivedLoans(loans, 'borrowed').length > 0;
+  const hasArchive = archivedLoans(loans, dir).length > 0;
+  const stats = archivedStats(loans, dir);
+  const results = archivedLoansBy(loans, { status: filter, query, direction: dir });
 
   // Bucket the (already newest-first) results into month sections.
   const groups = useMemo<MonthGroup[]>(() => {
@@ -79,11 +84,33 @@ export default function HistoryScreen() {
     <Screen scroll tabBarInset bare={Platform.OS !== 'ios'} ambient="history" crossfade>
       <Header overline="The archive" title="History" />
 
+      {anyArchive && (
+        <Reveal index={0} from={16}>
+          <View style={styles.dirToggle}>
+            <SegmentedToggle<LoanDirection>
+              value={dir}
+              onChange={(v) => {
+                setDir(v);
+                setFilter('all');
+              }}
+              options={[
+                { value: 'lent', label: 'Owed to me' },
+                { value: 'borrowed', label: 'I owe' },
+              ]}
+            />
+          </View>
+        </Reveal>
+      )}
+
       {!hasArchive ? (
         <Reveal>
           <View style={styles.empty}>
             <Icon name="mailbox" size={54} color={colors.inkSoft} />
-            <Text style={styles.emptyText}>Nothing&apos;s come home yet. Give it time.</Text>
+            <Text style={styles.emptyText}>
+              {lent
+                ? 'Nothing’s come home yet. Give it time.'
+                : 'Nothing settled yet — stuff you’ve returned shows up here.'}
+            </Text>
             <Icon name="hourglass" size={22} color={colors.inkFaint} />
           </View>
         </Reveal>
@@ -94,13 +121,13 @@ export default function HistoryScreen() {
             <View style={styles.payoff}>
               <View style={styles.payoffHead}>
                 <Icon name="party" size={17} color={colors.onFeature} strokeWidth={2.2} />
-                <Text style={styles.payoffOverline}>Came home</Text>
+                <Text style={styles.payoffOverline}>{lent ? 'Came home' : 'Settled up'}</Text>
               </View>
               <View style={styles.payoffRow}>
                 <View style={styles.payoffCell}>
                   <Text style={styles.payoffNum}>{stats.itemsReturned}</Text>
                   <Text style={styles.payoffLabel}>
-                    thing{stats.itemsReturned === 1 ? '' : 's'} back
+                    thing{stats.itemsReturned === 1 ? '' : 's'} {lent ? 'back' : 'returned'}
                   </Text>
                 </View>
                 <View style={styles.payoffDivider} />
@@ -109,7 +136,7 @@ export default function HistoryScreen() {
                     {recovered ? compactMoney(recovered.total, recovered.currency) : '—'}
                   </Text>
                   <Text style={styles.payoffLabel}>
-                    recovered
+                    {lent ? 'recovered' : 'paid back'}
                     {stats.moneyRecovered.length > 1 ? ' +' : ''}
                   </Text>
                 </View>
@@ -118,7 +145,9 @@ export default function HistoryScreen() {
                 <View style={styles.payoffLossRow}>
                   <Icon name="grave" size={16} color={colors.onFeature} strokeWidth={2.3} />
                   <Text style={styles.payoffLoss}>
-                    {stats.writtenOff} written off — we don&apos;t talk about those
+                    {lent
+                      ? `${stats.writtenOff} written off — we don't talk about those`
+                      : `${stats.writtenOff} you lost track of`}
                   </Text>
                 </View>
               )}
@@ -231,6 +260,7 @@ export default function HistoryScreen() {
 }
 
 const makeStyles = (th: Theme) => StyleSheet.create({
+  dirToggle: { marginBottom: space.lg },
   payoff: {
     backgroundColor: th.colors.feature,
     borderRadius: radius.lg,

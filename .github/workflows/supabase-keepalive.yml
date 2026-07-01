@@ -1,0 +1,45 @@
+# Keeps the Supabase free-tier project awake.
+#
+# Free projects auto-pause after ~7 days with no activity (see the "going to be
+# paused" email). This makes one tiny authenticated REST request each day, which
+# counts as activity and resets the idle timer — so the project never pauses.
+#
+# Setup (one time): add two repo secrets under
+# GitHub → Settings → Secrets and variables → Actions:
+#   SUPABASE_URL       e.g. https://agrhlakrbzvdhbvkzums.supabase.co
+#   SUPABASE_ANON_KEY  your project's anon/publishable key (safe to store; it's
+#                      the same public key shipped in the app)
+#
+# The anon key is public by design and RLS protects the data, so this request
+# returns nothing sensitive — it just pokes the project so it stays awake.
+
+name: Supabase keep-alive
+
+on:
+  schedule:
+    # 06:17 UTC daily. Odd minute so it's not on a busy cron tick; daily gives a
+    # huge margin against the 7-day pause window.
+    - cron: "17 6 * * *"
+  workflow_dispatch: {} # lets you run it manually from the Actions tab to test
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the database
+        run: |
+          if [ -z "${{ secrets.SUPABASE_URL }}" ] || [ -z "${{ secrets.SUPABASE_ANON_KEY }}" ]; then
+            echo "::error::Set SUPABASE_URL and SUPABASE_ANON_KEY repo secrets first."
+            exit 1
+          fi
+          # A real (if empty, thanks to RLS) DB query — the strongest "activity" signal.
+          code=$(curl -sS -o /dev/null -w "%{http_code}" \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/loans?select=id&limit=1" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}")
+          echo "Supabase responded with HTTP $code"
+          # 2xx = served fine; anything the API answers still counts as activity.
+          case "$code" in
+            2*) echo "Project pinged — staying awake. ✅" ;;
+            *) echo "::warning::Unexpected status $code (still counts as a request)." ;;
+          esac

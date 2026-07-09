@@ -144,6 +144,8 @@ function ThemedNavigation() {
             independent money loans (no group / no shared balance). */}
         <Stack.Screen name="split" options={{ presentation: 'modal', gestureEnabled: true }} />
         <Stack.Screen name="loans" options={{ animation: 'slide_from_right' }} />
+        {/* "The web of your stuff" node graph (pushed from the People tab). */}
+        <Stack.Screen name="graph" options={{ animation: 'slide_from_right' }} />
         {/* Hall of Shame: always its own graveyard-dark place regardless of
             theme — paint its native container dark too so the slide doesn't
             flash the base at the edges. */}

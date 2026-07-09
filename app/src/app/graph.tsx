@@ -1,0 +1,803 @@
+/**
+ * "The web of your stuff" — a LIVE force-directed graph of what's out in the wild.
+ *
+ * A real d3-force simulation (charge repulsion + link springs + centering +
+ * collision), not a fixed radial layout: YOU are pinned at the center, each
+ * person holding your stuff floats on link-springs around you, and their items
+ * hang off them as leaves. The web breathes, you can drag nodes and the whole
+ * thing follows, and changing the Sort/Filter re-heats the sim so it flows to a
+ * new shape. Lent-side only.
+ *
+ * Perf: the sim is driven by our own rAF loop and SLEEPS as soon as it settles
+ * (alpha < alphaMin) — reheated on drag or a filter change. Node count is capped
+ * (≤8 people × ≤4 leaves + You ≈ 41). Positions live in reanimated shared values
+ * (`makeMutable`), so ticks write values the UI thread renders — no per-tick React
+ * re-render. Reduced-motion → the sim is ticked to completion once and frozen.
+ */
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { LayoutChangeEvent, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import Svg, { Line } from 'react-native-svg';
+import {
+  forceCenter,
+  forceCollide,
+  forceLink,
+  forceManyBody,
+  forceSimulation,
+  type Simulation,
+} from 'd3-force';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  Easing,
+  interpolate,
+  makeMutable,
+  runOnJS,
+  type SharedValue,
+  useAnimatedProps,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
+import { Screen } from '../components/Screen';
+import { BackLink } from '../components/BackLink';
+import { PressableScale } from '../components/PressableScale';
+import { Avatar } from '../components/Avatar';
+import { Button } from '../components/Button';
+import { Icon } from '../components/Icon';
+import { dirOf, getBorrower, useLoans } from '../lib/store';
+import { Borrower, Loan } from '../lib/types';
+import { daysSince, isOverdue, loanLabel } from '../lib/format';
+import { expoOut, reduceMotion } from '../lib/motion';
+import { radius, space } from '../lib/theme';
+import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
+
+const AnimatedLine = Animated.createAnimatedComponent(Line);
+
+const MAX_PEOPLE = 8; // beyond this the web gets unreadable — cap + "+N more"
+const LEAF_CAP = 4; // visible item leaves per person before a "+N" marker
+const AVATAR_MIN = 44;
+const AVATAR_MAX = 66;
+const YOU_D = 66;
+const LEAF_HIT = 36; // tap target around a leaf
+const LEAF_DOT = 12;
+
+type SortMode = 'most' | 'longest' | 'recent';
+type TypeFilter = 'all' | 'item' | 'money';
+
+const SORTS: { value: SortMode; label: string }[] = [
+  { value: 'most', label: 'Most held' },
+  { value: 'longest', label: 'Longest out' },
+  { value: 'recent', label: 'Recently lent' },
+];
+const TYPES: { value: TypeFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'item', label: 'Items' },
+  { value: 'money', label: 'Money' },
+];
+
+// A shared-value pair per node id, reused across filter changes so a node that
+// survives keeps its position (continuity) instead of snapping back to center.
+interface Vec {
+  x: SharedValue<number>;
+  y: SharedValue<number>;
+}
+
+interface PersonData {
+  borrower: Borrower;
+  loans: Loan[];
+  count: number;
+  metric: number; // drives node size under the active Sort
+}
+
+// d3 mutates x/y/vx/vy on these in place; we mirror x/y into the shared values.
+interface SimNode {
+  id: string;
+  kind: 'you' | 'person' | 'leaf';
+  r: number;
+  sv: Vec;
+  person?: PersonData;
+  loan?: Loan;
+  plus?: number;
+  fx?: number | null;
+  fy?: number | null;
+  x?: number;
+  y?: number;
+  vx?: number;
+  vy?: number;
+}
+
+interface SimLink {
+  source: string;
+  target: string;
+  kind: 'hub' | 'leaf';
+}
+
+export default function GraphScreen() {
+  const { colors, type: t } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  const router = useRouter();
+  const loans = useLoans();
+  const reduce = useReducedMotion();
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+
+  const [sort, setSort] = useState<SortMode>('most');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [overdueOnly, setOverdueOnly] = useState(false);
+
+  // Persist a Vec per node id across rebuilds so survivors keep their spot.
+  const vecs = useRef<Map<string, Vec>>(new Map());
+  const getVec = (id: string, cx: number, cy: number): Vec => {
+    let v = vecs.current.get(id);
+    if (!v) {
+      // Seed new nodes near the center with a little scatter → they fly outward.
+      v = { x: makeMutable(cx + (Math.random() - 0.5) * 40), y: makeMutable(cy + (Math.random() - 0.5) * 40) };
+      vecs.current.set(id, v);
+    }
+    return v;
+  };
+
+  // --- build the (filtered, capped) graph model -----------------------------
+  const model = useMemo(() => {
+    const matches = (l: Loan) =>
+      l.status === 'active' &&
+      dirOf(l) === 'lent' &&
+      (typeFilter === 'all' || l.type === typeFilter) &&
+      (!overdueOnly || isOverdue(l));
+
+    const byId = new Map<string, Loan[]>();
+    for (const l of loans) {
+      if (!matches(l)) continue;
+      const list = byId.get(l.borrowerId);
+      if (list) list.push(l);
+      else byId.set(l.borrowerId, [l]);
+    }
+
+    const people: PersonData[] = [];
+    for (const [id, ls] of byId) {
+      const borrower = getBorrower(id);
+      if (!borrower) continue;
+      const oldest = ls.reduce((m, l) => Math.max(m, daysSince(l.lentAt)), 0);
+      const newest = ls.reduce((m, l) => Math.min(m, daysSince(l.lentAt)), Infinity);
+      const metric = sort === 'longest' ? oldest : sort === 'recent' ? -newest : ls.length;
+      people.push({ borrower, loans: ls, count: ls.length, metric });
+    }
+    // Membership is always the biggest holders; Sort re-emphasises within them.
+    people.sort((a, b) => b.count - a.count || a.borrower.name.localeCompare(b.borrower.name));
+    const shown = people.slice(0, MAX_PEOPLE);
+    return {
+      shown,
+      overflow: people.length - shown.length,
+      total: shown.reduce((n, p) => n + p.count, 0),
+      totalPeople: people.length,
+    };
+  }, [loans, sort, typeFilter, overdueOnly]);
+
+  const { shown, overflow, total } = model;
+  // A signature that changes only when the node SET or sizing changes → rebuild.
+  const signature = useMemo(
+    () =>
+      `${box ? `${Math.round(box.w)}x${Math.round(box.h)}` : 'none'}|${sort}|${shown
+        .map((p) => `${p.borrower.id}:${p.count}:${Math.round(p.metric)}`)
+        .join(',')}`,
+    [box, sort, shown],
+  );
+
+  // --- the simulation -------------------------------------------------------
+  const simRef = useRef<Simulation<SimNode, undefined> | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const nodesRef = useRef<SimNode[]>([]);
+  const [render, setRender] = useState<{ nodes: SimNode[]; links: SimLink[] } | null>(null);
+
+  useEffect(() => {
+    if (!box || shown.length === 0) {
+      simRef.current?.stop();
+      simRef.current = null;
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+      nodesRef.current = [];
+      setRender(null);
+      return;
+    }
+    const cx = box.w / 2;
+    const cy = box.h / 2;
+
+    const metrics = shown.map((p) => p.metric);
+    const minM = Math.min(...metrics);
+    const maxM = Math.max(...metrics);
+    const sizeFor = (m: number) =>
+      maxM === minM ? (AVATAR_MIN + AVATAR_MAX) / 2 : AVATAR_MIN + ((m - minM) / (maxM - minM)) * (AVATAR_MAX - AVATAR_MIN);
+
+    const nodes: SimNode[] = [];
+    const links: SimLink[] = [];
+
+    // Center (pinned) You node.
+    nodes.push({ id: 'you', kind: 'you', r: YOU_D / 2, sv: getVec('you', cx, cy), fx: cx, fy: cy });
+
+    for (const person of shown) {
+      const pid = `p:${person.borrower.id}`;
+      nodes.push({ id: pid, kind: 'person', r: sizeFor(person.metric) / 2, sv: getVec(pid, cx, cy), person });
+      links.push({ source: 'you', target: pid, kind: 'hub' });
+
+      const items = person.loans;
+      const showN = items.length > LEAF_CAP ? LEAF_CAP - 1 : items.length;
+      items.slice(0, showN).forEach((loan) => {
+        const lid = `l:${loan.id}`;
+        nodes.push({ id: lid, kind: 'leaf', r: LEAF_DOT / 2, sv: getVec(lid, cx, cy), loan });
+        links.push({ source: pid, target: lid, kind: 'leaf' });
+      });
+      if (items.length > LEAF_CAP) {
+        const plusId = `plus:${person.borrower.id}`;
+        nodes.push({ id: plusId, kind: 'leaf', r: LEAF_DOT, sv: getVec(plusId, cx, cy), plus: items.length - showN });
+        links.push({ source: pid, target: plusId, kind: 'leaf' });
+      }
+    }
+
+    // Seed each d3 node from its persisted shared value so survivors don't jump.
+    for (const n of nodes) {
+      n.x = n.sv.x.value;
+      n.y = n.sv.y.value;
+    }
+
+    // Drop shared values for nodes that no longer exist (avoid leaking).
+    const live = new Set(nodes.map((n) => n.id));
+    for (const id of [...vecs.current.keys()]) if (!live.has(id)) vecs.current.delete(id);
+
+    const sim = forceSimulation<SimNode>(nodes)
+      .force('charge', forceManyBody<SimNode>().strength((d) => (d.kind === 'leaf' ? -60 : -260)))
+      .force(
+        'link',
+        forceLink<SimNode, SimLink>(links)
+          .id((d) => d.id)
+          .distance((l) => (l.kind === 'hub' ? 128 : 44))
+          .strength((l) => (l.kind === 'hub' ? 0.35 : 0.7)),
+      )
+      .force('center', forceCenter(cx, cy).strength(0.04))
+      .force('collide', forceCollide<SimNode>().radius((d) => d.r + 5).strength(0.85))
+      .stop();
+
+    simRef.current = sim;
+    nodesRef.current = nodes;
+    setRender({ nodes, links });
+
+    const pad = 18;
+    const writeAll = () => {
+      for (const n of nodes) {
+        n.x = Math.max(pad, Math.min(box.w - pad, n.x ?? cx));
+        n.y = Math.max(pad, Math.min(box.h - pad, n.y ?? cy));
+        n.sv.x.value = n.x;
+        n.sv.y.value = n.y;
+      }
+    };
+
+    if (reduce) {
+      // Reduced motion: settle instantly, freeze, no ongoing loop.
+      sim.alpha(1);
+      for (let i = 0; i < 320 && sim.alpha() > sim.alphaMin(); i++) sim.tick();
+      writeAll();
+      return () => {
+        sim.stop();
+      };
+    }
+
+    // Warm start; our own rAF loop ticks until it settles, then sleeps.
+    sim.alpha(0.9).alphaTarget(0);
+    const frame = () => {
+      sim.tick();
+      writeAll();
+      if (sim.alpha() > sim.alphaMin()) {
+        rafRef.current = requestAnimationFrame(frame);
+      } else {
+        rafRef.current = null; // sleep
+      }
+    };
+    if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(frame);
+
+    return () => {
+      sim.stop();
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature, reduce]);
+
+  // Wake the loop (used on drag / reheat) if it's asleep.
+  const kick = () => {
+    if (reduce || rafRef.current != null) return;
+    const sim = simRef.current;
+    const box0 = box;
+    if (!sim || !box0) return;
+    const pad = 18;
+    const frame = () => {
+      sim.tick();
+      for (const n of nodesRef.current) {
+        n.x = Math.max(pad, Math.min(box0.w - pad, n.x ?? 0));
+        n.y = Math.max(pad, Math.min(box0.h - pad, n.y ?? 0));
+        n.sv.x.value = n.x;
+        n.sv.y.value = n.y;
+      }
+      if (sim.alpha() > sim.alphaMin()) rafRef.current = requestAnimationFrame(frame);
+      else rafRef.current = null;
+    };
+    rafRef.current = requestAnimationFrame(frame);
+  };
+
+  // --- drag handlers (called from the UI thread via runOnJS) ----------------
+  const dragStart = (id: string) => {
+    const n = nodesRef.current.find((x) => x.id === id);
+    if (!n) return;
+    n.fx = n.x;
+    n.fy = n.y;
+    simRef.current?.alphaTarget(0.32);
+    kick();
+  };
+  const dragMove = (id: string, dx: number, dy: number) => {
+    const n = nodesRef.current.find((x) => x.id === id);
+    if (!n || !box) return;
+    n.fx = Math.max(0, Math.min(box.w, (n.fx ?? n.x ?? 0) + dx));
+    n.fy = Math.max(0, Math.min(box.h, (n.fy ?? n.y ?? 0) + dy));
+    kick();
+  };
+  const dragEnd = (id: string) => {
+    const n = nodesRef.current.find((x) => x.id === id);
+    if (!n) return;
+    n.fx = null;
+    n.fy = null;
+    simRef.current?.alphaTarget(0); // let it cool → sleep
+  };
+
+  const onLayout = (e: LayoutChangeEvent) =>
+    setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height });
+
+  const empty = model.totalPeople === 0;
+
+  return (
+    <Screen ambient="people">
+      <BackLink label="People" />
+      <Text style={t.overline}>Out in the wild</Text>
+      <Text style={[t.title, styles.title]}>The web of your stuff</Text>
+      {!empty && (
+        <Text style={styles.sub}>
+          {total} thing{total === 1 ? '' : 's'} with {shown.length} {shown.length === 1 ? 'person' : 'people'}
+          {overflow > 0 ? ` · +${overflow} more not shown` : ''} · drag to untangle
+        </Text>
+      )}
+
+      {/* Filter / sort — neutral chips (coral stays CTA-reserved). */}
+      {!empty && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipsRow}
+          style={styles.chipsScroll}
+        >
+          {SORTS.map((s) => {
+            const on = sort === s.value;
+            return (
+              <PressableScale
+                key={s.value}
+                onPress={() => setSort(s.value)}
+                scaleTo={0.94}
+                style={[styles.chip, on && styles.chipOn]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+              >
+                <Text style={[styles.chipText, on && styles.chipTextOn]}>{s.label}</Text>
+              </PressableScale>
+            );
+          })}
+          <View style={styles.chipDivider} />
+          {TYPES.map((ty) => {
+            const on = typeFilter === ty.value;
+            return (
+              <PressableScale
+                key={ty.value}
+                onPress={() => setTypeFilter(ty.value)}
+                scaleTo={0.94}
+                style={[styles.chip, on && styles.chipOn]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+              >
+                <Text style={[styles.chipText, on && styles.chipTextOn]}>{ty.label}</Text>
+              </PressableScale>
+            );
+          })}
+          <View style={styles.chipDivider} />
+          <PressableScale
+            onPress={() => setOverdueOnly((v) => !v)}
+            scaleTo={0.94}
+            style={[styles.chip, overdueOnly && styles.chipOn]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: overdueOnly }}
+          >
+            <Text style={[styles.chipText, overdueOnly && styles.chipTextOn]}>Overdue</Text>
+          </PressableScale>
+        </ScrollView>
+      )}
+
+      {empty ? (
+        <View style={styles.empty}>
+          <Icon name="cactus" size={56} color={colors.inkSoft} />
+          <Text style={styles.emptyText}>
+            {overdueOnly || typeFilter !== 'all'
+              ? 'Nothing matches this filter — try widening it.'
+              : 'Nothing’s out in the wild yet — nothing to map. Lend something and it’ll show up here.'}
+          </Text>
+          <Button label="Back to People" variant="pill" onPress={() => router.back()} />
+        </View>
+      ) : (
+        <View style={styles.canvas} onLayout={onLayout}>
+          {render && (
+            <>
+              {/* Edges — behind the nodes, distance-faded, non-interactive. */}
+              <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+                {render.links.map((lk, i) => {
+                  const a = render.nodes.find((n) => n.id === lk.source);
+                  const b = render.nodes.find((n) => n.id === lk.target);
+                  if (!a || !b) return null;
+                  return (
+                    <Edge
+                      key={`${lk.source}->${lk.target}-${i}`}
+                      a={a.sv}
+                      b={b.sv}
+                      hub={lk.kind === 'hub'}
+                      stroke={lk.kind === 'hub' ? colors.inkSoft : colors.hairline}
+                    />
+                  );
+                })}
+              </Svg>
+
+              {render.nodes.map((n, i) => {
+                if (n.kind === 'you') {
+                  return (
+                    <NodeShell key={n.id} sv={n.sv} size={YOU_D} index={0} reduce={reduce}>
+                      <View style={[styles.youNode, { backgroundColor: colors.accent }]}>
+                        <Text style={[styles.youText, { color: colors.onAccent }]}>You</Text>
+                      </View>
+                    </NodeShell>
+                  );
+                }
+                if (n.kind === 'person' && n.person) {
+                  return (
+                    <PersonNode
+                      key={n.id}
+                      node={n}
+                      index={i}
+                      reduce={reduce}
+                      onNavigate={() => router.push(`/borrower/${n.person!.borrower.id}`)}
+                      onDragStart={dragStart}
+                      onDragMove={dragMove}
+                      onDragEnd={dragEnd}
+                      styles={styles}
+                    />
+                  );
+                }
+                // leaf or "+N"
+                if (n.plus != null) {
+                  return (
+                    <NodeShell key={n.id} sv={n.sv} size={LEAF_HIT} index={i} reduce={reduce}>
+                      <View style={styles.plusPill}>
+                        <Text style={styles.plusText}>+{n.plus}</Text>
+                      </View>
+                    </NodeShell>
+                  );
+                }
+                return (
+                  <LeafNode
+                    key={n.id}
+                    node={n}
+                    index={i}
+                    reduce={reduce}
+                    color={colors.inkSoft}
+                    onPress={() => n.loan && router.push(`/loan/${n.loan.id}`)}
+                    styles={styles}
+                  />
+                );
+              })}
+            </>
+          )}
+        </View>
+      )}
+    </Screen>
+  );
+}
+
+// --- edge (animated SVG line, distance-faded) ------------------------------
+function Edge({ a, b, hub, stroke }: { a: Vec; b: Vec; hub: boolean; stroke: string }) {
+  const props = useAnimatedProps(() => {
+    const dx = b.x.value - a.x.value;
+    const dy = b.y.value - a.y.value;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    // Longer edges read fainter — a cheap depth cue.
+    const opacity = hub
+      ? interpolate(dist, [70, 240], [0.42, 0.14])
+      : interpolate(dist, [30, 120], [0.5, 0.2]);
+    return {
+      x1: a.x.value,
+      y1: a.y.value,
+      x2: b.x.value,
+      y2: b.y.value,
+      strokeOpacity: Math.max(0.1, Math.min(0.5, opacity)),
+    };
+  });
+  return <AnimatedLine animatedProps={props} stroke={stroke} strokeWidth={hub ? 2 : 1.4} strokeLinecap="round" />;
+}
+
+// --- node shell: positions by shared value, entrance + idle breathe ---------
+function NodeShell({
+  sv,
+  size,
+  index,
+  reduce,
+  children,
+}: {
+  sv: Vec;
+  size: number;
+  index: number;
+  reduce: boolean;
+  children: React.ReactNode;
+}) {
+  const enter = useSharedValue(0);
+  const breathe = useSharedValue(0);
+  useEffect(() => {
+    enter.value = withDelay(Math.min(index * 35, 500), withTiming(1, { duration: 520, easing: expoOut, reduceMotion }));
+    if (!reduce) {
+      breathe.value = withDelay(
+        600 + index * 40,
+        withRepeat(withTiming(1, { duration: 2600 + (index % 5) * 220, easing: Easing.inOut(Easing.sin) }), -1, true),
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Outer view = raw position (top-left) so the shared value maps to node center.
+  const posStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: sv.x.value - size / 2 }, { translateY: sv.y.value - size / 2 }],
+  }));
+  // Inner view = entrance scale/opacity × subtle breathing (scales about its center).
+  const lifeStyle = useAnimatedStyle(() => {
+    const grow = interpolate(enter.value, [0, 1], [0.55, 1]);
+    const b = reduce ? 1 : 1 + breathe.value * 0.035;
+    return { opacity: enter.value, transform: [{ scale: grow * b }] };
+  });
+
+  return (
+    <Animated.View style={[shell.shell, { width: size, height: size }, posStyle]} pointerEvents="box-none">
+      <Animated.View style={[shell.inner, lifeStyle]} pointerEvents="box-none">
+        {children}
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
+type StyleSheetT = ReturnType<typeof makeStyles>;
+
+// --- person node (draggable + tappable) ------------------------------------
+function PersonNode({
+  node,
+  index,
+  reduce,
+  onNavigate,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+  styles: s,
+}: {
+  node: SimNode;
+  index: number;
+  reduce: boolean;
+  onNavigate: () => void;
+  onDragStart: (id: string) => void;
+  onDragMove: (id: string, dx: number, dy: number) => void;
+  onDragEnd: (id: string) => void;
+  styles: StyleSheetT;
+}) {
+  const person = node.person!;
+  const d = node.r * 2;
+  const BOX = 100;
+
+  const enter = useSharedValue(0);
+  const breathe = useSharedValue(0);
+  const grab = useSharedValue(0); // lifts the node while dragged
+  useEffect(() => {
+    enter.value = withDelay(Math.min(index * 35, 500), withTiming(1, { duration: 520, easing: expoOut, reduceMotion }));
+    if (!reduce) {
+      breathe.value = withDelay(
+        600 + index * 40,
+        withRepeat(withTiming(1, { duration: 2600 + (index % 5) * 220, easing: Easing.inOut(Easing.sin) }), -1, true),
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const posStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: node.sv.x.value - BOX / 2 }, { translateY: node.sv.y.value - d / 2 }],
+  }));
+  const lifeStyle = useAnimatedStyle(() => {
+    const grow = interpolate(enter.value, [0, 1], [0.55, 1]);
+    const b = reduce ? 1 : 1 + breathe.value * 0.035;
+    return { opacity: enter.value, transform: [{ scale: grow * b + grab.value * 0.06 }] };
+  });
+
+  // Tap navigates; Pan drags. Race so a still tap never starts a drag.
+  const tap = Gesture.Tap()
+    .maxDistance(10)
+    .onEnd((_e, ok) => {
+      if (ok) runOnJS(onNavigate)();
+    });
+  const pan = Gesture.Pan()
+    .minDistance(6)
+    .enabled(!reduce) // no drag jiggle under reduced motion
+    .onBegin(() => {
+      grab.value = withTiming(1, { duration: 140 });
+      runOnJS(onDragStart)(node.id);
+    })
+    .onChange((e) => {
+      runOnJS(onDragMove)(node.id, e.changeX, e.changeY);
+    })
+    .onFinalize(() => {
+      grab.value = withTiming(0, { duration: 200 });
+      runOnJS(onDragEnd)(node.id);
+    });
+  const gesture = Gesture.Race(pan, tap);
+
+  return (
+    <Animated.View style={[shell.shell, { width: BOX, height: BOX }, posStyle]} pointerEvents="box-none">
+      <GestureDetector gesture={gesture}>
+        <Animated.View style={[s.personInner, lifeStyle]}>
+          <View style={[s.personRing, { width: d, height: d, borderRadius: d / 2 }]}>
+            <Avatar name={person.borrower.name} emoji={person.borrower.emoji} uri={person.borrower.avatarUrl} size={d - 6} />
+            <View style={s.countBadge}>
+              <Text style={s.countText}>{person.count}</Text>
+            </View>
+          </View>
+          <Text style={s.personName} numberOfLines={1}>
+            {person.borrower.name}
+          </Text>
+        </Animated.View>
+      </GestureDetector>
+    </Animated.View>
+  );
+}
+
+// --- leaf node (tap → loan) ------------------------------------------------
+function LeafNode({
+  node,
+  index,
+  reduce,
+  color,
+  onPress,
+  styles: s,
+}: {
+  node: SimNode;
+  index: number;
+  reduce: boolean;
+  color: string;
+  onPress: () => void;
+  styles: StyleSheetT;
+}) {
+  const enter = useSharedValue(0);
+  const breathe = useSharedValue(0);
+  useEffect(() => {
+    enter.value = withDelay(Math.min(index * 35, 500), withTiming(1, { duration: 520, easing: expoOut, reduceMotion }));
+    if (!reduce) {
+      breathe.value = withDelay(
+        600 + index * 40,
+        withRepeat(withTiming(1, { duration: 2600 + (index % 5) * 220, easing: Easing.inOut(Easing.sin) }), -1, true),
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const posStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: node.sv.x.value - LEAF_HIT / 2 }, { translateY: node.sv.y.value - LEAF_HIT / 2 }],
+  }));
+  const lifeStyle = useAnimatedStyle(() => {
+    const grow = interpolate(enter.value, [0, 1], [0.5, 1]);
+    const b = reduce ? 1 : 1 + breathe.value * 0.05;
+    return { opacity: enter.value, transform: [{ scale: grow * b }] };
+  });
+  return (
+    <Animated.View style={[shell.shell, { width: LEAF_HIT, height: LEAF_HIT }, posStyle]} pointerEvents="box-none">
+      <Animated.View style={[shell.inner, lifeStyle]}>
+        <PressableScale
+          onPress={onPress}
+          scaleTo={0.82}
+          style={s.leafPress}
+          accessibilityRole="button"
+          accessibilityLabel={node.loan ? loanLabel(node.loan) : 'Item'}
+        >
+          <View style={[s.leafDot, { backgroundColor: color }]} />
+        </PressableScale>
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
+// Non-themed shell layout (position wrapper); themed bits come via makeStyles.
+const shell = StyleSheet.create({
+  shell: { position: 'absolute', left: 0, top: 0, alignItems: 'center', justifyContent: 'center' },
+  inner: { alignItems: 'center', justifyContent: 'center' },
+});
+
+const makeStyles = (th: Theme) =>
+  StyleSheet.create({
+    title: { marginTop: space.xs },
+    sub: { ...th.type.small, color: th.colors.inkSoft, marginTop: space.xs },
+    chipsScroll: { marginTop: space.md, flexGrow: 0 },
+    chipsRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingRight: space.xl },
+    chip: {
+      paddingVertical: space.sm,
+      paddingHorizontal: space.lg,
+      borderRadius: radius.pill,
+      backgroundColor: th.colors.surface,
+      borderWidth: 1,
+      borderColor: th.colors.hairline,
+    },
+    chipOn: { backgroundColor: th.colors.ink, borderColor: th.colors.ink },
+    chipText: { ...th.type.small, color: th.colors.inkSoft },
+    chipTextOn: { color: th.colors.surface },
+    chipDivider: { width: 1, height: 20, backgroundColor: th.colors.hairline, marginHorizontal: 2 },
+    canvas: { flex: 1, marginTop: space.md },
+    youNode: {
+      width: YOU_D,
+      height: YOU_D,
+      borderRadius: YOU_D / 2,
+      alignItems: 'center',
+      justifyContent: 'center',
+      ...th.shadow.lifted,
+    },
+    youText: { ...th.type.h3, fontSize: 15, fontWeight: '800' },
+    personInner: { alignItems: 'center', gap: 4, width: 100 },
+    personRing: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: th.colors.surface,
+      borderWidth: 1.5,
+      borderColor: th.colors.hairline,
+      ...th.shadow.card,
+    },
+    countBadge: {
+      position: 'absolute',
+      top: -4,
+      right: -4,
+      minWidth: 20,
+      height: 20,
+      paddingHorizontal: 5,
+      borderRadius: radius.pill,
+      backgroundColor: th.colors.ink,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    countText: { ...th.type.small, fontSize: 11, fontWeight: '800', color: th.colors.surface },
+    personName: { ...th.type.small, color: th.colors.ink, fontWeight: '700', maxWidth: 96, textAlign: 'center' },
+    leafPress: { width: LEAF_HIT, height: LEAF_HIT, alignItems: 'center', justifyContent: 'center' },
+    leafDot: {
+      width: LEAF_DOT,
+      height: LEAF_DOT,
+      borderRadius: LEAF_DOT / 2,
+      borderWidth: 1.5,
+      borderColor: th.colors.bg,
+    },
+    plusPill: {
+      minWidth: 34,
+      height: 24,
+      paddingHorizontal: 6,
+      borderRadius: radius.pill,
+      backgroundColor: th.colors.bgSunken,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    plusText: { ...th.type.small, fontSize: 11, fontWeight: '800', color: th.colors.inkSoft },
+    empty: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: space.md,
+      paddingHorizontal: space.xl,
+    },
+    emptyText: { ...th.type.bodySoft, textAlign: 'center' },
+  });

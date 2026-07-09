@@ -6,6 +6,31 @@ optional account sync** — see [HANDOFF.md](./HANDOFF.md).
 
 ---
 
+## 2026-07-09 — "The web of your stuff" — dynamic force-directed graph
+
+- **New `/graph` full-screen route** — an interactive graphify-style node graph of
+  what's out in the wild. YOU pinned at the center (the one accent focal point),
+  each person holding your stuff as a node, their items as leaf nodes on the edges.
+  Lent-side only.
+- **Real force-directed physics** (`d3-force`, the one justified new dep): charge
+  repulsion, edge springs (You↔person↔item), centering + collision. The web
+  **settles then sleeps** (alpha < alphaMin) to stay 60fps, and **reheats** on a
+  drag or filter change. `react-native-svg` draws the edges; node overlays carry
+  taps + press feedback.
+- **Draggable + alive:** pan a node to fling the web around (it springs back and
+  re-settles); a gentle idle drift when settled so it's never fully static
+  (OFF+BRAND premium). **Reduced-motion → runs to completion instantly and freezes.**
+- **Filter / sort control** (mobile take on graphify's side panel): sort/emphasis by
+  **Most held · Longest out · Recently lent** (animates node sizes), and a type
+  filter **All · Items · Money** (nodes add/remove, the sim re-settles). Empty +
+  no-match states.
+- Warm ambient base, all theme tokens (light + dark), one accent reserved. Tap a
+  person → profile, tap an item → the loan. Node count capped for perf. Entry point:
+  a quiet "See the whole web →" link on the People tab (bars + History composition
+  stay).
+
+---
+
 ## 2026-07-09 — Self-reminders for borrowed loans + borrower confirmation (N2)
 
 - **Self-reminders on the "I owe" side.** Borrowed loans can now carry a reminder

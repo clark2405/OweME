@@ -156,6 +156,17 @@ export default function BorrowersScreen() {
             {moreHolders > 0 && (
               <Text style={styles.vizMore}>+{moreHolders} more holding your stuff</Text>
             )}
+            {/* Quiet link into the richer node-graph view (keeps the bars above). */}
+            <PressableScale
+              onPress={() => router.push('/graph')}
+              scaleTo={0.97}
+              style={styles.webLink}
+              accessibilityRole="button"
+              accessibilityLabel="See the whole web of your stuff"
+            >
+              <Icon name="duo" size={15} color={colors.inkSoft} strokeWidth={2} />
+              <Text style={styles.webLinkText}>See the whole web →</Text>
+            </PressableScale>
           </View>
         </Reveal>
       )}
@@ -292,6 +303,15 @@ const makeStyles = (th: Theme) => StyleSheet.create({
     textAlign: 'right',
   },
   vizMore: { ...th.type.small, color: th.colors.inkFaint },
+  webLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    marginTop: space.xs,
+    paddingVertical: space.xs,
+  },
+  webLinkText: { ...th.type.small, color: th.colors.inkSoft, fontWeight: '700' },
   list: { gap: space.md },
   row: {
     flexDirection: 'row',

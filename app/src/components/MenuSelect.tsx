@@ -17,7 +17,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Host, Picker, Text as UIText } from '@expo/ui/swift-ui';
-import { fixedSize, pickerStyle, tag } from '@expo/ui/swift-ui/modifiers';
+import { fixedSize, pickerStyle, tag, tint } from '@expo/ui/swift-ui/modifiers';
 import { PressableScale } from './PressableScale';
 import { Icon } from './Icon';
 import { haptics } from '../lib/haptics';
@@ -45,11 +45,15 @@ export function MenuSelect<T extends string>(props: Props<T>) {
 // --- iOS: native SwiftUI menu picker ---------------------------------------
 
 function NativeMenu<T extends string>({ title, options, value, onChange }: Props<T>) {
+  const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const current = options.find((o) => o.value === value);
   return (
     <View style={styles.nativeWrap}>
       <Text style={styles.nativeTitle}>{title}</Text>
+      {/* matchContents keeps the SwiftUI host sized to the button (no oversized
+          invisible bounding box overlaying the graph); tint recolors the menu's
+          value + chevron from iOS-system blue to our ink so it reads on-brand. */}
       <Host matchContents>
         <Picker
           label={current?.label ?? title}
@@ -57,7 +61,7 @@ function NativeMenu<T extends string>({ title, options, value, onChange }: Props
           onSelectionChange={(sel) => {
             if (sel != null && sel !== value) onChange(sel as T);
           }}
-          modifiers={[pickerStyle('menu'), fixedSize()]}
+          modifiers={[pickerStyle('menu'), fixedSize(), tint(colors.ink)]}
         >
           {options.map((o) => (
             <UIText key={o.value} modifiers={[tag(o.value)]}>
@@ -155,14 +159,18 @@ const makeStyles = (th: Theme) =>
     nativeWrap: {
       flexDirection: 'row',
       alignItems: 'center',
+      alignSelf: 'flex-start',
       gap: space.sm,
-      paddingVertical: space.xs,
+      height: 40,
       paddingLeft: space.md,
       paddingRight: space.sm,
       borderRadius: radius.pill,
       backgroundColor: th.colors.surface,
       borderWidth: 1,
       borderColor: th.colors.hairline,
+      // Clip any host bleed so the native menu button can't paint past the pill
+      // into the graph canvas below (the popover is a system overlay, not clipped).
+      overflow: 'hidden',
     },
     nativeTitle: { ...th.type.small, color: th.colors.inkFaint, fontWeight: '700' },
     button: {

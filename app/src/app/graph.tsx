@@ -413,7 +413,7 @@ export default function GraphScreen() {
       {!empty && (
         <Text style={styles.sub}>
           {total} thing{total === 1 ? '' : 's'} with {shown.length} {shown.length === 1 ? 'person' : 'people'}
-          {overflow > 0 ? ` · +${overflow} more not shown` : ''} · drag to untangle
+          {overflow > 0 ? ` · +${overflow} more not shown` : ''}
         </Text>
       )}
 
@@ -451,7 +451,7 @@ export default function GraphScreen() {
                       a={a.sv}
                       b={b.sv}
                       hub={lk.kind === 'hub'}
-                      stroke={lk.kind === 'hub' ? colors.inkSoft : colors.hairline}
+                      stroke={colors.inkFaint}
                     />
                   );
                 })}
@@ -511,7 +511,18 @@ export default function GraphScreen() {
               })}
 
               {card && box && (
-                <GraphNodeCard data={card.data} x={card.x} y={card.y} canvasW={box.w} onDismiss={() => setCard(null)} />
+                // Keyed by node id so switching selection FULLY remounts the card
+                // (and its iOS GlassView) — a persisted GlassView that just moves
+                // leaves a clear artifact over the screen.
+                <GraphNodeCard
+                  key={card.id}
+                  data={card.data}
+                  x={card.x}
+                  y={card.y}
+                  canvasW={box.w}
+                  canvasH={box.h}
+                  onDismiss={() => setCard(null)}
+                />
               )}
             </>
           )}
@@ -527,19 +538,20 @@ function Edge({ a, b, hub, stroke }: { a: Vec; b: Vec; hub: boolean; stroke: str
     const dx = b.x.value - a.x.value;
     const dy = b.y.value - a.y.value;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    // Longer edges read fainter — a cheap depth cue.
+    // Clearly connected but still recessive — a gentle distance fade with a solid
+    // floor so the web reads on BOTH light and dark (was near-invisible before).
     const opacity = hub
-      ? interpolate(dist, [70, 240], [0.42, 0.14])
-      : interpolate(dist, [30, 120], [0.5, 0.2]);
+      ? interpolate(dist, [70, 260], [0.7, 0.4])
+      : interpolate(dist, [24, 120], [0.62, 0.34]);
     return {
       x1: a.x.value,
       y1: a.y.value,
       x2: b.x.value,
       y2: b.y.value,
-      strokeOpacity: Math.max(0.1, Math.min(0.5, opacity)),
+      strokeOpacity: Math.max(0.32, Math.min(0.72, opacity)),
     };
   });
-  return <AnimatedLine animatedProps={props} stroke={stroke} strokeWidth={hub ? 2 : 1.4} strokeLinecap="round" />;
+  return <AnimatedLine animatedProps={props} stroke={stroke} strokeWidth={hub ? 2.2 : 1.6} strokeLinecap="round" />;
 }
 
 // --- node shell: positions by shared value, entrance + idle breathe ---------

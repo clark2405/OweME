@@ -43,6 +43,21 @@ optional account sync** — see [HANDOFF.md](./HANDOFF.md).
     `@expo/ui/swift-ui` `Picker` with `pickerStyle('menu')`; Android = custom
     dropdown popover. A tidy "Sort" + "Show" row below the header (no more clipping
     into the ambient blobs). Overdue toggle dropped for a cleaner two-menu row.
+- **v2 polish (same day):**
+  - **Card-switch glass glitch fixed.** The info card is now keyed by node id, so
+    switching selection FULLY unmounts the old card + its iOS `GlassView` before the
+    next mounts — a persisted GlassView that merely repositioned left a clear
+    blocking layer over the screen.
+  - **Card docks away from the node.** It anchors to the canvas edge *opposite* the
+    tapped node (top-half node → card at the bottom, and vice versa), clamped
+    on-screen, so it never covers the node or its item leaves.
+  - **Native menu tinted on-brand.** The iOS `Picker(menu)` value + chevron are
+    tinted to `ink` (was iOS-system blue) via the `tint` modifier; the Host is
+    `matchContents` + clipped so its bounding box can't overlay the graph.
+  - **Visible web.** Edges now stroke `inkFaint` with a higher opacity floor
+    (0.32–0.72) so the connecting lines read on both light and dark, keeping a
+    subtle distance fade; they stay attached as nodes resize (sort) and drag.
+  - Dropped the "· drag to untangle" subtitle tail.
 
 ---
 

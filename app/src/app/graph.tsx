@@ -4,9 +4,10 @@
  * A real d3-force simulation (charge repulsion + link springs + centering +
  * collision), not a fixed radial layout: YOU are pinned at the center, each
  * person holding your stuff floats on link-springs around you, and their items
- * hang off them as leaves. The web breathes, you can drag nodes and the whole
- * thing follows, and changing the Sort/Filter re-heats the sim so it flows to a
- * new shape. Lent-side only.
+ * hang off them as leaves (short, strong springs → they HUG their person). The
+ * web breathes, you can drag nodes and the whole thing follows, tapping a node
+ * pops a liquid-glass info card, and changing the Sort/Show menus re-heats the
+ * sim so it flows to a new shape. Lent-side only.
  *
  * Perf: the sim is driven by our own rAF loop and SLEEPS as soon as it settles
  * (alpha < alphaMin) — reheated on drag or a filter change. Node count is capped
@@ -16,7 +17,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { LayoutChangeEvent, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import Svg, { Line } from 'react-native-svg';
 import {
@@ -48,9 +49,11 @@ import { PressableScale } from '../components/PressableScale';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { Icon } from '../components/Icon';
+import { MenuSelect } from '../components/MenuSelect';
+import { GraphNodeCard, type GraphCardData } from '../components/GraphNodeCard';
 import { dirOf, getBorrower, useLoans } from '../lib/store';
 import { Borrower, Loan } from '../lib/types';
-import { daysSince, isOverdue, loanLabel } from '../lib/format';
+import { daysSince, loanLabel, shortDate } from '../lib/format';
 import { expoOut, reduceMotion } from '../lib/motion';
 import { radius, space } from '../lib/theme';
 import { Theme, useTheme, useThemedStyles } from '../lib/theme-context';
@@ -114,6 +117,8 @@ interface SimLink {
   source: string;
   target: string;
   kind: 'hub' | 'leaf';
+  dist: number;
+  strength: number;
 }
 
 export default function GraphScreen() {
@@ -126,7 +131,9 @@ export default function GraphScreen() {
 
   const [sort, setSort] = useState<SortMode>('most');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
-  const [overdueOnly, setOverdueOnly] = useState(false);
+
+  // The tapped node's floating info card (graphify-style node-info).
+  const [card, setCard] = useState<{ id: string; data: GraphCardData; x: number; y: number } | null>(null);
 
   // Persist a Vec per node id across rebuilds so survivors keep their spot.
   const vecs = useRef<Map<string, Vec>>(new Map());
@@ -143,10 +150,7 @@ export default function GraphScreen() {
   // --- build the (filtered, capped) graph model -----------------------------
   const model = useMemo(() => {
     const matches = (l: Loan) =>
-      l.status === 'active' &&
-      dirOf(l) === 'lent' &&
-      (typeFilter === 'all' || l.type === typeFilter) &&
-      (!overdueOnly || isOverdue(l));
+      l.status === 'active' && dirOf(l) === 'lent' && (typeFilter === 'all' || l.type === typeFilter);
 
     const byId = new Map<string, Loan[]>();
     for (const l of loans) {
@@ -174,7 +178,7 @@ export default function GraphScreen() {
       total: shown.reduce((n, p) => n + p.count, 0),
       totalPeople: people.length,
     };
-  }, [loans, sort, typeFilter, overdueOnly]);
+  }, [loans, sort, typeFilter]);
 
   const { shown, overflow, total } = model;
   // A signature that changes only when the node SET or sizing changes → rebuild.
@@ -219,20 +223,25 @@ export default function GraphScreen() {
 
     for (const person of shown) {
       const pid = `p:${person.borrower.id}`;
-      nodes.push({ id: pid, kind: 'person', r: sizeFor(person.metric) / 2, sv: getVec(pid, cx, cy), person });
-      links.push({ source: 'you', target: pid, kind: 'hub' });
+      const pr = sizeFor(person.metric) / 2;
+      nodes.push({ id: pid, kind: 'person', r: pr, sv: getVec(pid, cx, cy), person });
+      // Hub links are loose + long so people fan out around You…
+      links.push({ source: 'you', target: pid, kind: 'hub', dist: 128, strength: 0.4 });
 
       const items = person.loans;
       const showN = items.length > LEAF_CAP ? LEAF_CAP - 1 : items.length;
       items.slice(0, showN).forEach((loan) => {
         const lid = `l:${loan.id}`;
-        nodes.push({ id: lid, kind: 'leaf', r: LEAF_DOT / 2, sv: getVec(lid, cx, cy), loan });
-        links.push({ source: pid, target: lid, kind: 'leaf' });
+        const lr = LEAF_DOT / 2;
+        nodes.push({ id: lid, kind: 'leaf', r: lr, sv: getVec(lid, cx, cy), loan });
+        // …leaf links are SHORT + STRONG so items hug their person (no fling).
+        links.push({ source: pid, target: lid, kind: 'leaf', dist: pr + lr + 8, strength: 0.95 });
       });
       if (items.length > LEAF_CAP) {
         const plusId = `plus:${person.borrower.id}`;
-        nodes.push({ id: plusId, kind: 'leaf', r: LEAF_DOT, sv: getVec(plusId, cx, cy), plus: items.length - showN });
-        links.push({ source: pid, target: plusId, kind: 'leaf' });
+        const lr = LEAF_DOT;
+        nodes.push({ id: plusId, kind: 'leaf', r: lr, sv: getVec(plusId, cx, cy), plus: items.length - showN });
+        links.push({ source: pid, target: plusId, kind: 'leaf', dist: pr + lr + 8, strength: 0.95 });
       }
     }
 
@@ -247,16 +256,18 @@ export default function GraphScreen() {
     for (const id of [...vecs.current.keys()]) if (!live.has(id)) vecs.current.delete(id);
 
     const sim = forceSimulation<SimNode>(nodes)
-      .force('charge', forceManyBody<SimNode>().strength((d) => (d.kind === 'leaf' ? -60 : -260)))
+      // Leaves barely repel (they're small + should stay near their person);
+      // people repel strongly so the hub spreads.
+      .force('charge', forceManyBody<SimNode>().strength((d) => (d.kind === 'leaf' ? -24 : -260)))
       .force(
         'link',
         forceLink<SimNode, SimLink>(links)
           .id((d) => d.id)
-          .distance((l) => (l.kind === 'hub' ? 128 : 44))
-          .strength((l) => (l.kind === 'hub' ? 0.35 : 0.7)),
+          .distance((l) => l.dist)
+          .strength((l) => l.strength),
       )
       .force('center', forceCenter(cx, cy).strength(0.04))
-      .force('collide', forceCollide<SimNode>().radius((d) => d.r + 5).strength(0.85))
+      .force('collide', forceCollide<SimNode>().radius((d) => d.r + 4).strength(0.8))
       .stop();
 
     simRef.current = sim;
@@ -330,6 +341,7 @@ export default function GraphScreen() {
   const dragStart = (id: string) => {
     const n = nodesRef.current.find((x) => x.id === id);
     if (!n) return;
+    setCard(null); // dragging dismisses an open card
     n.fx = n.x;
     n.fy = n.y;
     simRef.current?.alphaTarget(0.32);
@@ -350,6 +362,44 @@ export default function GraphScreen() {
     simRef.current?.alphaTarget(0); // let it cool → sleep
   };
 
+  // --- tap → floating info card ---------------------------------------------
+  const openPerson = (n: SimNode) => {
+    const p = n.person!;
+    const oldest = p.loans.reduce((m, l) => Math.max(m, daysSince(l.lentAt)), 0);
+    setCard({
+      id: n.id,
+      x: n.sv.x.value,
+      y: n.sv.y.value,
+      data: {
+        title: p.borrower.name,
+        detail: `Holding ${p.count} thing${p.count === 1 ? '' : 's'}${oldest > 0 ? ` · oldest ${oldest}d` : ''}`,
+        ctaLabel: 'Open profile →',
+        onOpen: () => {
+          setCard(null);
+          router.push(`/borrower/${p.borrower.id}`);
+        },
+      },
+    });
+  };
+  const openLeaf = (n: SimNode) => {
+    if (!n.loan) return;
+    const loan = n.loan;
+    setCard({
+      id: n.id,
+      x: n.sv.x.value,
+      y: n.sv.y.value,
+      data: {
+        title: loanLabel(loan),
+        detail: `Lent ${shortDate(loan.lentAt)}`,
+        ctaLabel: 'Open loan →',
+        onOpen: () => {
+          setCard(null);
+          router.push(`/loan/${loan.id}`);
+        },
+      },
+    });
+  };
+
   const onLayout = (e: LayoutChangeEvent) =>
     setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height });
 
@@ -367,64 +417,20 @@ export default function GraphScreen() {
         </Text>
       )}
 
-      {/* Filter / sort — neutral chips (coral stays CTA-reserved). */}
+      {/* Sort / Show — two clean menu selectors below the header. */}
       {!empty && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipsRow}
-          style={styles.chipsScroll}
-        >
-          {SORTS.map((s) => {
-            const on = sort === s.value;
-            return (
-              <PressableScale
-                key={s.value}
-                onPress={() => setSort(s.value)}
-                scaleTo={0.94}
-                style={[styles.chip, on && styles.chipOn]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
-              >
-                <Text style={[styles.chipText, on && styles.chipTextOn]}>{s.label}</Text>
-              </PressableScale>
-            );
-          })}
-          <View style={styles.chipDivider} />
-          {TYPES.map((ty) => {
-            const on = typeFilter === ty.value;
-            return (
-              <PressableScale
-                key={ty.value}
-                onPress={() => setTypeFilter(ty.value)}
-                scaleTo={0.94}
-                style={[styles.chip, on && styles.chipOn]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
-              >
-                <Text style={[styles.chipText, on && styles.chipTextOn]}>{ty.label}</Text>
-              </PressableScale>
-            );
-          })}
-          <View style={styles.chipDivider} />
-          <PressableScale
-            onPress={() => setOverdueOnly((v) => !v)}
-            scaleTo={0.94}
-            style={[styles.chip, overdueOnly && styles.chipOn]}
-            accessibilityRole="button"
-            accessibilityState={{ selected: overdueOnly }}
-          >
-            <Text style={[styles.chipText, overdueOnly && styles.chipTextOn]}>Overdue</Text>
-          </PressableScale>
-        </ScrollView>
+        <View style={styles.menuRow}>
+          <MenuSelect<SortMode> title="Sort" options={SORTS} value={sort} onChange={setSort} />
+          <MenuSelect<TypeFilter> title="Show" options={TYPES} value={typeFilter} onChange={setTypeFilter} />
+        </View>
       )}
 
       {empty ? (
         <View style={styles.empty}>
           <Icon name="cactus" size={56} color={colors.inkSoft} />
           <Text style={styles.emptyText}>
-            {overdueOnly || typeFilter !== 'all'
-              ? 'Nothing matches this filter — try widening it.'
+            {typeFilter !== 'all'
+              ? 'Nothing matches this filter — try “All”.'
               : 'Nothing’s out in the wild yet — nothing to map. Lend something and it’ll show up here.'}
           </Text>
           <Button label="Back to People" variant="pill" onPress={() => router.back()} />
@@ -451,6 +457,10 @@ export default function GraphScreen() {
                 })}
               </Svg>
 
+              {/* Tap-outside-to-dismiss layer, below the nodes so node taps still
+                  switch the selection. Only present while a card is open. */}
+              {card && <Pressable style={StyleSheet.absoluteFill} onPress={() => setCard(null)} />}
+
               {render.nodes.map((n, i) => {
                 if (n.kind === 'you') {
                   return (
@@ -468,7 +478,8 @@ export default function GraphScreen() {
                       node={n}
                       index={i}
                       reduce={reduce}
-                      onNavigate={() => router.push(`/borrower/${n.person!.borrower.id}`)}
+                      selected={card?.id === n.id}
+                      onSelect={() => openPerson(n)}
                       onDragStart={dragStart}
                       onDragMove={dragMove}
                       onDragEnd={dragEnd}
@@ -492,12 +503,16 @@ export default function GraphScreen() {
                     node={n}
                     index={i}
                     reduce={reduce}
-                    color={colors.inkSoft}
-                    onPress={() => n.loan && router.push(`/loan/${n.loan.id}`)}
+                    selected={card?.id === n.id}
+                    onPress={() => openLeaf(n)}
                     styles={styles}
                   />
                 );
               })}
+
+              {card && box && (
+                <GraphNodeCard data={card.data} x={card.x} y={card.y} canvasW={box.w} onDismiss={() => setCard(null)} />
+              )}
             </>
           )}
         </View>
@@ -581,7 +596,8 @@ function PersonNode({
   node,
   index,
   reduce,
-  onNavigate,
+  selected,
+  onSelect,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -590,7 +606,8 @@ function PersonNode({
   node: SimNode;
   index: number;
   reduce: boolean;
-  onNavigate: () => void;
+  selected: boolean;
+  onSelect: () => void;
   onDragStart: (id: string) => void;
   onDragMove: (id: string, dx: number, dy: number) => void;
   onDragEnd: (id: string) => void;
@@ -623,11 +640,11 @@ function PersonNode({
     return { opacity: enter.value, transform: [{ scale: grow * b + grab.value * 0.06 }] };
   });
 
-  // Tap navigates; Pan drags. Race so a still tap never starts a drag.
+  // Tap selects (opens card); Pan drags. Race so a still tap never starts a drag.
   const tap = Gesture.Tap()
     .maxDistance(10)
     .onEnd((_e, ok) => {
-      if (ok) runOnJS(onNavigate)();
+      if (ok) runOnJS(onSelect)();
     });
   const pan = Gesture.Pan()
     .minDistance(6)
@@ -649,13 +666,13 @@ function PersonNode({
     <Animated.View style={[shell.shell, { width: BOX, height: BOX }, posStyle]} pointerEvents="box-none">
       <GestureDetector gesture={gesture}>
         <Animated.View style={[s.personInner, lifeStyle]}>
-          <View style={[s.personRing, { width: d, height: d, borderRadius: d / 2 }]}>
+          <View style={[s.personRing, { width: d, height: d, borderRadius: d / 2 }, selected && s.personRingOn]}>
             <Avatar name={person.borrower.name} emoji={person.borrower.emoji} uri={person.borrower.avatarUrl} size={d - 6} />
             <View style={s.countBadge}>
               <Text style={s.countText}>{person.count}</Text>
             </View>
           </View>
-          <Text style={s.personName} numberOfLines={1}>
+          <Text style={[s.personName, selected && s.personNameOn]} numberOfLines={1}>
             {person.borrower.name}
           </Text>
         </Animated.View>
@@ -664,19 +681,19 @@ function PersonNode({
   );
 }
 
-// --- leaf node (tap → loan) ------------------------------------------------
+// --- leaf node (tap → info card) -------------------------------------------
 function LeafNode({
   node,
   index,
   reduce,
-  color,
+  selected,
   onPress,
   styles: s,
 }: {
   node: SimNode;
   index: number;
   reduce: boolean;
-  color: string;
+  selected: boolean;
   onPress: () => void;
   styles: StyleSheetT;
 }) {
@@ -710,7 +727,7 @@ function LeafNode({
           accessibilityRole="button"
           accessibilityLabel={node.loan ? loanLabel(node.loan) : 'Item'}
         >
-          <View style={[s.leafDot, { backgroundColor: color }]} />
+          <View style={[s.leafDot, selected && s.leafDotOn]} />
         </PressableScale>
       </Animated.View>
     </Animated.View>
@@ -727,20 +744,7 @@ const makeStyles = (th: Theme) =>
   StyleSheet.create({
     title: { marginTop: space.xs },
     sub: { ...th.type.small, color: th.colors.inkSoft, marginTop: space.xs },
-    chipsScroll: { marginTop: space.md, flexGrow: 0 },
-    chipsRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm, paddingRight: space.xl },
-    chip: {
-      paddingVertical: space.sm,
-      paddingHorizontal: space.lg,
-      borderRadius: radius.pill,
-      backgroundColor: th.colors.surface,
-      borderWidth: 1,
-      borderColor: th.colors.hairline,
-    },
-    chipOn: { backgroundColor: th.colors.ink, borderColor: th.colors.ink },
-    chipText: { ...th.type.small, color: th.colors.inkSoft },
-    chipTextOn: { color: th.colors.surface },
-    chipDivider: { width: 1, height: 20, backgroundColor: th.colors.hairline, marginHorizontal: 2 },
+    menuRow: { flexDirection: 'row', gap: space.sm, marginTop: space.md, flexWrap: 'wrap' },
     canvas: { flex: 1, marginTop: space.md },
     youNode: {
       width: YOU_D,
@@ -760,6 +764,8 @@ const makeStyles = (th: Theme) =>
       borderColor: th.colors.hairline,
       ...th.shadow.card,
     },
+    // Subtle selected emphasis — an accent rim + a touch more lift.
+    personRingOn: { borderColor: th.colors.accent, borderWidth: 2.5, ...th.shadow.lifted },
     countBadge: {
       position: 'absolute',
       top: -4,
@@ -774,6 +780,7 @@ const makeStyles = (th: Theme) =>
     },
     countText: { ...th.type.small, fontSize: 11, fontWeight: '800', color: th.colors.surface },
     personName: { ...th.type.small, color: th.colors.ink, fontWeight: '700', maxWidth: 96, textAlign: 'center' },
+    personNameOn: { color: th.colors.accent },
     leafPress: { width: LEAF_HIT, height: LEAF_HIT, alignItems: 'center', justifyContent: 'center' },
     leafDot: {
       width: LEAF_DOT,
@@ -781,6 +788,13 @@ const makeStyles = (th: Theme) =>
       borderRadius: LEAF_DOT / 2,
       borderWidth: 1.5,
       borderColor: th.colors.bg,
+      backgroundColor: th.colors.inkSoft,
+    },
+    leafDotOn: {
+      width: LEAF_DOT + 4,
+      height: LEAF_DOT + 4,
+      borderRadius: (LEAF_DOT + 4) / 2,
+      backgroundColor: th.colors.accent,
     },
     plusPill: {
       minWidth: 34,

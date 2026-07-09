@@ -24,10 +24,25 @@ optional account sync** — see [HANDOFF.md](./HANDOFF.md).
   **Most held · Longest out · Recently lent** (animates node sizes), and a type
   filter **All · Items · Money** (nodes add/remove, the sim re-settles). Empty +
   no-match states.
-- Warm ambient base, all theme tokens (light + dark), one accent reserved. Tap a
-  person → profile, tap an item → the loan. Node count capped for perf. Entry point:
-  a quiet "See the whole web →" link on the People tab (bars + History composition
-  stay).
+- Warm ambient base, all theme tokens (light + dark), one accent reserved. Node
+  count capped for perf. Entry point: a quiet "See the whole web →" link on the
+  People tab (bars + History composition stay).
+- **v2 refinements (same day):**
+  - **Items hug their person.** Person↔item springs are now short + strong
+    (distance = personR + leafR + 8, strength 0.95) and leaf charge repulsion is
+    tiny (−24), so item dots cluster tight to their holder instead of drifting off
+    — both after settle and while dragging.
+  - **Tap → liquid-glass info card.** A tap no longer navigates; it pops a floating
+    node-info card (`components/GraphNodeCard.tsx`) — iOS `expo-glass-effect`
+    `GlassView`, Android the app's BlurView glass. Person → name + "Holding N ·
+    oldest Nd" + "Open profile →"; item → name/amount + "Lent {date}" + "Open loan
+    →". Only the Open button is coral; tap-outside or ✕ dismisses; the selected node
+    gets an accent rim. Reduced-motion → no animation.
+  - **Menu selectors replace the chip scroller.** New reusable
+    `components/MenuSelect.tsx` (platform-split like `SegmentedToggle`): iOS = native
+    `@expo/ui/swift-ui` `Picker` with `pickerStyle('menu')`; Android = custom
+    dropdown popover. A tidy "Sort" + "Show" row below the header (no more clipping
+    into the ambient blobs). Overdue toggle dropped for a cleaner two-menu row.
 
 ---
 

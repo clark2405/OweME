@@ -715,6 +715,8 @@ export interface NewLoanInput {
   lentAt?: string;
   dueAt?: string;
   reminder?: ReminderCadence;
+  /** Opt-in (N1): let OweMe email this loan's reminder on its cadence. */
+  autoNudge?: boolean;
   type: 'item' | 'money';
   itemName?: string;
   photoUrl?: string;
@@ -738,6 +740,7 @@ export function addLoan(input: NewLoanInput): string {
     notes: input.notes,
     dueAt: input.dueAt,
     reminder: input.reminder,
+    autoNudge: input.autoNudge ?? false,
     lentAt: input.lentAt ?? today(),
     status: 'active',
     nudges: [],
@@ -766,6 +769,8 @@ export function updateLoan(id: string, input: NewLoanInput) {
         notes: input.notes,
         dueAt: input.dueAt,
         reminder: input.reminder,
+        autoNudge: input.autoNudge ?? l.autoNudge,
+        lastAutoNudgeAt: l.lastAutoNudgeAt,
         lentAt: input.lentAt ?? l.lentAt,
         status: l.status,
         returnedAt: l.returnedAt,
@@ -793,6 +798,24 @@ export function deleteLoan(id: string) {
  *  pending notification to match. */
 export function setLoanReminder(id: string, reminder: ReminderCadence) {
   const next = loans.map((l) => (l.id === id ? { ...l, reminder, updatedAt: nowIso() } : l));
+  commit(next);
+  const loan = next.find((l) => l.id === id);
+  if (loan) {
+    syncReminderFor(loan);
+    persistLoanWithPhoto(loan);
+  }
+}
+
+/** Toggle the opt-in email auto-nudge (N1) for a loan. Turning it on with no
+ *  cadence set doesn't make sense (nothing to anchor "on schedule" to), so it
+ *  also bumps an `'off'` reminder to `'weekly'` — mirrors how the reminder chips
+ *  themselves default a fresh loan to weekly. */
+export function setLoanAutoNudge(id: string, v: boolean) {
+  const next = loans.map((l) => {
+    if (l.id !== id) return l;
+    const reminder = v && (l.reminder ?? 'off') === 'off' ? 'weekly' : l.reminder;
+    return { ...l, autoNudge: v, reminder, updatedAt: nowIso() };
+  });
   commit(next);
   const loan = next.find((l) => l.id === id);
   if (loan) {
@@ -850,9 +873,15 @@ export function recordNudge(id: string) {
   if (loan) persistLoanWithPhoto(loan);
 }
 
-export function addBorrower(name: string, emoji = '🙂', phone?: string, avatarUrl?: string): string {
+export function addBorrower(
+  name: string,
+  emoji = '🙂',
+  phone?: string,
+  avatarUrl?: string,
+  email?: string,
+): string {
   const id = uuid();
-  const borrower: Borrower = { id, name, emoji, phone, avatarUrl, exempt: false, updatedAt: nowIso() };
+  const borrower: Borrower = { id, name, emoji, phone, email, avatarUrl, exempt: false, updatedAt: nowIso() };
   commitBorrowers([...borrowers, borrower]);
   persistBorrowerWithPhoto(borrower);
   return id;
@@ -860,10 +889,11 @@ export function addBorrower(name: string, emoji = '🙂', phone?: string, avatar
 
 export function updateBorrower(
   id: string,
-  patch: Partial<Pick<Borrower, 'name' | 'emoji' | 'phone' | 'exempt' | 'avatarUrl'>>,
+  patch: Partial<Pick<Borrower, 'name' | 'emoji' | 'phone' | 'email' | 'exempt' | 'avatarUrl'>>,
 ) {
   const clean: typeof patch = { ...patch };
   if ('phone' in clean) clean.phone = clean.phone?.trim() || undefined;
+  if ('email' in clean) clean.email = clean.email?.trim() || undefined;
   if ('name' in clean && clean.name != null) clean.name = clean.name.trim();
   let updated: Borrower | undefined;
   commitBorrowers(

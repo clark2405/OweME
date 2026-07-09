@@ -7,6 +7,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -34,6 +35,7 @@ import {
   useSettings,
 } from '../lib/store';
 import { pickContact } from '../lib/contacts';
+import { useSession } from '../lib/auth';
 import { showToast } from '../lib/toast';
 import { LoanDirection, ReminderCadence } from '../lib/types';
 import { currencySymbol, shortDate } from '../lib/format';
@@ -82,6 +84,7 @@ export default function AddLoanScreen() {
   const source = editing ?? template;
   const borrowers = useBorrowers();
   const { defaultCurrency } = useSettings();
+  const { session } = useSession();
 
   // Lending direction — fixed once a loan exists (you don't flip lent↔borrowed);
   // new loans default from the param Home passed, else 'lent'.
@@ -105,7 +108,16 @@ export default function AddLoanScreen() {
   const [notes, setNotes] = useState(source?.notes ?? '');
   const [lentAt, setLentAt] = useState<string>(editing?.lentAt ?? isoInDays(0));
   const [dueAt, setDueAt] = useState<string | undefined>(editing?.dueAt);
-  const [reminder, setReminder] = useState<ReminderCadence>(editing?.reminder ?? (id ? 'off' : 'weekly'));
+  // Reminder default: keep an edited loan's own cadence; a fresh LENT loan starts
+  // on weekly (chase-it-back is the norm), a fresh BORROWED loan starts OFF —
+  // self-reminders are opt-in, we don't auto-nag you about your own debts.
+  const [reminder, setReminder] = useState<ReminderCadence>(
+    editing?.reminder ?? (id ? 'off' : borrowed ? 'off' : 'weekly'),
+  );
+  // Mirrors `reminder` above: preserved on edit, but a fresh default (off) on a
+  // brand-new loan OR a "lend it again" clone — cloning starts the item's
+  // identity fresh, not its old nudge prefs.
+  const [autoNudge, setAutoNudge] = useState(editing?.autoNudge ?? false);
 
   // Which picker is currently spinning up, so the tapped button can show instant
   // feedback (the native camera/library takes a beat to present, esp. on sim).
@@ -121,6 +133,18 @@ export default function AddLoanScreen() {
   const valid =
     borrowerId != null &&
     (type === 'item' ? itemName.trim().length > 0 : Number(amount) > 0);
+
+  const selectedBorrower = borrowers.find((b) => b.id === borrowerId);
+  // Same gate as the loan-detail toggle: needs a signed-in lender (the loan has
+  // to exist in Supabase to schedule against) + somewhere for OweMe to send.
+  const canAutoNudge = session != null && !!selectedBorrower?.email;
+  const autoNudgeHint = session == null
+    ? 'Sign in to sync so OweMe can send these for you.'
+    : !selectedBorrower?.email
+      ? selectedBorrower
+        ? `Add ${selectedBorrower.name}’s email so OweMe can reach them.`
+        : 'Pick who you lent to first.'
+      : null;
 
   // Suggest item names from past loans — people lend the same handful of things
   // over and over. Empty field shows recents; typing filters by substring.
@@ -221,8 +245,12 @@ export default function AddLoanScreen() {
       notes: notes.trim() || undefined,
       lentAt,
       dueAt,
-      // You don't nudge yourself — borrowed loans never schedule reminders.
-      reminder: borrowed ? 'off' : reminder,
+      // Both sides can carry a cadence now: lent = chase-them reminders,
+      // borrowed = a self-reminder to return/pay it back.
+      reminder,
+      // Auto-nudge (email the borrower) is lent-only — there's no one to email
+      // when the loan is something YOU owe.
+      autoNudge: borrowed ? false : autoNudge && canAutoNudge,
     };
     if (editing) {
       updateLoan(editing.id, input);
@@ -277,7 +305,13 @@ export default function AddLoanScreen() {
               <Reveal index={2} from={20}>
                 <SegmentedToggle<LoanDirection>
                   value={direction}
-                  onChange={setDirection}
+                  onChange={(d) => {
+                    setDirection(d);
+                    // Re-default the reminder to the new side's sensible default
+                    // (lent → weekly chase; borrowed → off / opt-in self-reminder).
+                    setReminder(d === 'borrowed' ? 'off' : 'weekly');
+                    if (d === 'borrowed') setAutoNudge(false);
+                  }}
                   options={[
                     { value: 'lent', label: 'I lent' },
                     { value: 'borrowed', label: 'I borrowed' },
@@ -343,6 +377,21 @@ export default function AddLoanScreen() {
                         );
                       })}
                     </View>
+                    {/* Quiet secondary affordance — a bill split is still N normal
+                        money loans, so it lives off the money field, not as a
+                        second primary button. Lent side only, new loans only. */}
+                    {!editing && !borrowed && (
+                      <PressableScale
+                        onPress={() => router.push('/split')}
+                        scaleTo={0.97}
+                        style={styles.splitLink}
+                        accessibilityRole="button"
+                        accessibilityLabel="Split a bill between several people"
+                      >
+                        <Icon name="people" size={15} color={colors.inkSoft} strokeWidth={2} />
+                        <Text style={styles.splitLinkText}>Out with friends? Split a bill →</Text>
+                      </PressableScale>
+                    )}
                   </View>
                 )}
               </View>
@@ -553,27 +602,47 @@ export default function AddLoanScreen() {
               </View>
             </Reveal>
 
-            {/* Reminder cadence — lent only; you don't nudge yourself to return. */}
-            {!borrowed && (
-              <Reveal index={8} from={18}>
-                <Text style={[t.overline, styles.label]}>Nudge me</Text>
-                <View style={styles.chipRow}>
-                  {CADENCES.map((c) => {
-                    const on = reminder === c.value;
-                    return (
-                      <PressableScale
-                        key={c.value}
-                        onPress={() => setReminder(c.value)}
-                        scaleTo={0.94}
-                        style={[styles.chip, on && styles.chipOn]}
-                      >
-                        <Text style={[styles.chipText, on && styles.chipTextOn]}>{c.label}</Text>
-                      </PressableScale>
-                    );
-                  })}
+            {/* Reminder cadence — both sides. Lent = chase-them nudges; borrowed
+                = a self-reminder to return/pay it back (opt-in, defaults off). */}
+            <Reveal index={8} from={18}>
+              <Text style={[t.overline, styles.label]}>
+                {borrowed ? 'Remind me to return it' : 'Nudge me'}
+              </Text>
+              <View style={styles.chipRow}>
+                {CADENCES.map((c) => {
+                  const on = reminder === c.value;
+                  return (
+                    <PressableScale
+                      key={c.value}
+                      onPress={() => setReminder(c.value)}
+                      scaleTo={0.94}
+                      style={[styles.chip, on && styles.chipOn]}
+                    >
+                      <Text style={[styles.chipText, on && styles.chipTextOn]}>{c.label}</Text>
+                    </PressableScale>
+                  );
+                })}
+              </View>
+
+              {/* Auto-nudge (email the borrower) is lent-only — no one to email
+                  when the loan is something you owe. */}
+              {!borrowed && (
+                <View style={styles.autoNudgeRow}>
+                  <View style={styles.autoNudgeText}>
+                    <Text style={t.h3}>Let OweMe email the reminder</Text>
+                    <Text style={styles.sub}>
+                      {autoNudgeHint ?? 'OweMe emails it on this cadence, with the return link — no nudging from you.'}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={autoNudge}
+                    onValueChange={setAutoNudge}
+                    disabled={!canAutoNudge}
+                    trackColor={{ true: colors.accent, false: colors.hairline }}
+                  />
                 </View>
-              </Reveal>
-            )}
+              )}
+            </Reveal>
 
             <Reveal index={9} from={20}>
               <Text style={[t.overline, styles.label]}>Notes (optional)</Text>
@@ -669,6 +738,14 @@ const makeStyles = (th: Theme) => StyleSheet.create({
     borderColor: th.colors.hairline,
   },
   curChipText: { ...th.type.small, color: th.colors.inkSoft },
+  splitLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    paddingVertical: space.xs,
+  },
+  splitLinkText: { ...th.type.small, color: th.colors.inkSoft, fontWeight: '600' },
   peso: { ...th.type.numeral, color: th.colors.inkSoft },
   amountInput: { flex: 1, fontSize: 34, lineHeight: 42, fontWeight: '800', letterSpacing: -1 },
   photoWrap: { alignSelf: 'flex-start' },
@@ -752,6 +829,19 @@ const makeStyles = (th: Theme) => StyleSheet.create({
   chipOn: { backgroundColor: th.colors.ink, borderColor: th.colors.ink },
   chipText: { ...th.type.small, color: th.colors.inkSoft },
   chipTextOn: { color: th.colors.surface },
+  autoNudgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    marginTop: space.md,
+    backgroundColor: th.colors.surface,
+    borderRadius: radius.md,
+    padding: space.lg,
+    borderWidth: 1.5,
+    borderColor: th.colors.hairline,
+  },
+  autoNudgeText: { flex: 1, gap: 4 },
+  sub: { ...th.type.small, color: th.colors.inkSoft },
   notes: { minHeight: 80, textAlignVertical: 'top', lineHeight: 23 },
   footer: {
     paddingHorizontal: space.xl,

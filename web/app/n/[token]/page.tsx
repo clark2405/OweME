@@ -9,7 +9,7 @@
 
 import type { Metadata } from "next";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { markReturned } from "./actions";
+import { confirmLoan, markReturned } from "./actions";
 
 export const dynamic = "force-dynamic"; // always live: read state + record opens
 
@@ -28,6 +28,7 @@ type LoanLite = {
   currency: string | null;
   lent_at: string;
   status: "active" | "returned" | "written_off";
+  confirmed_at: string | null;
 };
 
 type LinkRow = {
@@ -83,7 +84,7 @@ export default async function NudgePage({ params }: { params: Promise<{ token: s
   const supabaseAdmin = getSupabaseAdmin();
   const { data, error } = await supabaseAdmin
     .from("nudge_links")
-    .select("loan_id, responded, expires_at, opened_at, loan:loans(type, item_name, amount, currency, lent_at, status)")
+    .select("loan_id, responded, expires_at, opened_at, loan:loans(type, item_name, amount, currency, lent_at, status, confirmed_at)")
     .eq("token", token)
     .maybeSingle<LinkRow>();
 
@@ -142,7 +143,9 @@ export default async function NudgePage({ params }: { params: Promise<{ token: s
   }
 
   const isMoney = loan.type === "money";
-  const action = markReturned.bind(null, token);
+  const returnAction = markReturned.bind(null, token);
+  const confirmAction = confirmLoan.bind(null, token);
+  const confirmed = loan.confirmed_at != null;
 
   return (
     <Shell>
@@ -167,7 +170,7 @@ export default async function NudgePage({ params }: { params: Promise<{ token: s
         <p className="mt-2 text-sm text-zinc-500">Lent on {lentOn(loan.lent_at)}</p>
       </div>
 
-      <form action={action} className="w-full">
+      <form action={returnAction} className="w-full">
         <button
           type="submit"
           className="w-full rounded-full px-6 py-4 text-base font-bold text-white transition active:scale-[0.98]"
@@ -176,6 +179,22 @@ export default async function NudgePage({ params }: { params: Promise<{ token: s
           {isMoney ? "I've paid it back 🎉" : "I've returned it 🎉"}
         </button>
       </form>
+
+      {/* "Gentle proof" (N2): confirm the loan is real without returning it yet.
+          Secondary, and only offered while still unconfirmed. */}
+      {confirmed ? (
+        <p className="text-sm font-semibold text-emerald-700">Confirmed — thanks! 💛</p>
+      ) : (
+        <form action={confirmAction} className="w-full">
+          <button
+            type="submit"
+            className="w-full rounded-full border-2 px-6 py-4 text-base font-bold transition active:scale-[0.98]"
+            style={{ borderColor: CORAL, color: CORAL, backgroundColor: "transparent" }}
+          >
+            {isMoney ? "Yes, I borrowed this ✅" : "Yes, I borrowed it ✅"}
+          </button>
+        </form>
+      )}
 
       <p className="text-xs text-zinc-400">
         Tapping this just lets them know — no account, no app, nothing to install.

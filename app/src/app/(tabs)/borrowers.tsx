@@ -36,6 +36,16 @@ export default function BorrowersScreen() {
   const wanted = mostWanted(loans);
   const slowest = slowestReturner(loans, borrowers);
 
+  // "Where your stuff is" — people ranked by how much of yours they're holding
+  // right now (active, lent-side). Top 5; the rest fold into a "+N more" line.
+  const holders = borrowers
+    .map((b) => ({ borrower: b, count: reliabilityFor(loans, b.id).activeCount }))
+    .filter((h) => h.count > 0)
+    .sort((a, b) => b.count - a.count);
+  const topHolders = holders.slice(0, 5);
+  const topCount = topHolders[0]?.count ?? 1;
+  const moreHolders = holders.length - topHolders.length;
+
   if (!hydrated) {
     return (
       <Screen scroll tabBarInset bare={Platform.OS !== 'ios'} ambient="people" crossfade>
@@ -117,6 +127,39 @@ export default function BorrowersScreen() {
         </Reveal>
       )}
 
+      {/* "Where your stuff is" — ranked magnitude bars (active lent count). */}
+      {topHolders.length > 0 && (
+        <Reveal index={1} from={22}>
+          <View style={styles.vizCard}>
+            <Text style={[t.overline, styles.vizOverline]}>Where your stuff is</Text>
+            <View style={styles.holderList}>
+              {topHolders.map((h) => (
+                <PressableScale
+                  key={h.borrower.id}
+                  onPress={() => router.push(`/borrower/${h.borrower.id}`)}
+                  scaleTo={0.98}
+                  style={styles.holderRow}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${h.borrower.name}, holding ${h.count} thing${h.count === 1 ? '' : 's'}`}
+                >
+                  <Avatar name={h.borrower.name} emoji={h.borrower.emoji} uri={h.borrower.avatarUrl} size={34} />
+                  <View style={styles.holderMid}>
+                    <Text style={styles.holderName} numberOfLines={1}>{h.borrower.name}</Text>
+                    <View style={styles.barTrack}>
+                      <View style={[styles.barFill, { width: `${Math.max(8, (h.count / topCount) * 100)}%` }]} />
+                    </View>
+                  </View>
+                  <Text style={styles.holderCount}>{h.count}</Text>
+                </PressableScale>
+              ))}
+            </View>
+            {moreHolders > 0 && (
+              <Text style={styles.vizMore}>+{moreHolders} more holding your stuff</Text>
+            )}
+          </View>
+        </Reveal>
+      )}
+
       {borrowers.length === 0 && (
         <Reveal index={1}>
           <View style={styles.empty}>
@@ -146,7 +189,7 @@ export default function BorrowersScreen() {
               ? 'All clear ✨'
               : `Holding ${stat.activeCount} thing${stat.activeCount === 1 ? '' : 's'}`;
           return (
-            <Reveal key={b.id} index={i + 1} from={22}>
+            <Reveal key={b.id} index={i + 2} from={22}>
               <PressableScale
                 onPress={() => router.push(`/borrower/${b.id}`)}
                 scaleTo={0.975}
@@ -221,6 +264,34 @@ const makeStyles = (th: Theme) => StyleSheet.create({
   shameBody: { flex: 1, gap: 2 },
   shameTitle: { ...th.type.h3, color: th.colors.onAccent },
   shameSub: { ...th.type.small, color: th.colors.onAccent, opacity: 0.85 },
+  vizCard: {
+    backgroundColor: th.colors.surface,
+    borderRadius: radius.lg,
+    padding: space.lg,
+    marginBottom: space.lg,
+    gap: space.md,
+    ...th.shadow.card,
+  },
+  vizOverline: {},
+  holderList: { gap: space.md },
+  holderRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  holderMid: { flex: 1, gap: 6 },
+  holderName: { ...th.type.small, color: th.colors.ink, fontWeight: '700' },
+  barTrack: {
+    height: 9,
+    borderRadius: radius.pill,
+    backgroundColor: th.colors.bgSunken,
+    overflow: 'hidden',
+  },
+  barFill: { height: '100%', borderRadius: radius.pill, backgroundColor: th.colors.ink },
+  holderCount: {
+    ...th.type.small,
+    color: th.colors.ink,
+    fontWeight: '800',
+    minWidth: 18,
+    textAlign: 'right',
+  },
+  vizMore: { ...th.type.small, color: th.colors.inkFaint },
   list: { gap: space.md },
   row: {
     flexDirection: 'row',

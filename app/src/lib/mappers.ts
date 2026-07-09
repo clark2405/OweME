@@ -15,6 +15,7 @@ export interface BorrowerRow {
   id: string;
   name: string;
   phone: string | null;
+  email: string | null;
   avatar_url: string | null;
   emoji: string;
   exempt: boolean;
@@ -37,6 +38,11 @@ export interface LoanRow {
   status: LoanStatus;
   returned_at: string | null;
   reminder: string | null;
+  /** Opt-in email auto-nudge (N1); optional/nullable so pre-feature rows default off. */
+  auto_nudge?: boolean | null;
+  last_auto_nudge_at?: string | null;
+  /** Borrower confirmation (N2); nullable so pre-feature rows read undefined. */
+  confirmed_at?: string | null;
   nudges: string[] | null;
   updated_at: string;
 }
@@ -49,6 +55,7 @@ export function rowToBorrower(r: BorrowerRow): Borrower {
     name: r.name,
     emoji: r.emoji,
     phone: r.phone ?? undefined,
+    email: r.email ?? undefined,
     avatarUrl: r.avatar_url ?? undefined,
     exempt: r.exempt,
     updatedAt: r.updated_at ?? undefined,
@@ -64,6 +71,9 @@ export function rowToLoan(r: LoanRow): Loan {
     lentAt: r.lent_at,
     dueAt: r.due_at ?? undefined,
     reminder: (r.reminder ?? undefined) as ReminderCadence | undefined,
+    autoNudge: r.auto_nudge ?? false,
+    lastAutoNudgeAt: r.last_auto_nudge_at ?? undefined,
+    confirmedAt: r.confirmed_at ?? undefined,
     nudges: r.nudges ?? [],
     status: r.status,
     // returned_at is timestamptz in the DB; the app treats it as a YYYY-MM-DD date.
@@ -82,6 +92,7 @@ export function borrowerToRow(b: Borrower): BorrowerRow {
     id: b.id,
     name: b.name,
     phone: b.phone ?? null,
+    email: b.email ?? null,
     avatar_url: b.avatarUrl ?? null,
     emoji: b.emoji,
     exempt: b.exempt ?? false,
@@ -105,6 +116,9 @@ export function loanToRow(l: Loan): Omit<LoanRow, 'amount'> & { amount: number |
     status: l.status,
     returned_at: l.returnedAt ?? null,
     reminder: l.reminder ?? null,
+    auto_nudge: l.autoNudge ?? false,
+    last_auto_nudge_at: l.lastAutoNudgeAt ?? null,
+    confirmed_at: l.confirmedAt ?? null,
     nudges: l.nudges ?? [],
     updated_at: l.updatedAt ?? new Date().toISOString(),
   };

@@ -140,6 +140,9 @@ function ThemedNavigation() {
             the first open when launched over a pushed card (RN 0.85 / iOS 26),
             needing a second tap. Let the modal own its transition. */}
         <Stack.Screen name="add" options={{ presentation: 'modal' }} />
+        {/* "Split a bill" quick-add — same modal treatment as add; creates N
+            independent money loans (no group / no shared balance). */}
+        <Stack.Screen name="split" options={{ presentation: 'modal', gestureEnabled: true }} />
         <Stack.Screen name="loans" options={{ animation: 'slide_from_right' }} />
         {/* Hall of Shame: always its own graveyard-dark place regardless of
             theme — paint its native container dark too so the slide doesn't

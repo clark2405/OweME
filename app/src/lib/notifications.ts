@@ -11,7 +11,7 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { Loan, ReminderCadence } from './types';
-import { money } from './format';
+import { daysSince, money } from './format';
 
 const IS_NATIVE = Platform.OS === 'ios' || Platform.OS === 'android';
 
@@ -85,6 +85,15 @@ export async function requestNotifPermission(): Promise<NotifPermission> {
 
 const idFor = (loanId: string) => `loan-${loanId}`;
 
+/** How long a loan's been out, as a warm phrase: "5 days", "3 weeks", "2 months". */
+function elapsedPhrase(isoDate: string): string {
+  const d = daysSince(isoDate);
+  if (d <= 1) return d === 1 ? 'a day' : 'a bit';
+  if (d < 14) return `${d} days`;
+  if (d < 60) return `${Math.round(d / 7)} weeks`;
+  return `${Math.round(d / 30)} months`;
+}
+
 export function cancelLoanReminder(loanId: string) {
   Notifications.cancelScheduledNotificationAsync(idFor(loanId)).catch(() => {});
 }
@@ -101,15 +110,35 @@ export async function syncLoanReminder(loan: Loan, borrowerName: string, nudgesE
   }
   if (!(await ensureNotifPermission())) return;
 
-  const what =
-    loan.type === 'item' ? `your ${loan.itemName}` : money(loan.amount, loan.currency);
+  // Copy branches on direction: a lent loan nags the LENDER to chase it back; a
+  // borrowed loan is a self-reminder to return/pay what YOU owe (no nudge action).
+  const borrowed = (loan.direction ?? 'lent') === 'borrowed';
+  let title: string;
+  let body: string;
+  if (borrowed) {
+    if (loan.type === 'item') {
+      title = 'Still holding onto this 📦';
+      body = `You've had ${borrowerName}'s ${loan.itemName} for ${elapsedPhrase(loan.lentAt)} — time to return it?`;
+    } else {
+      title = 'You still owe this 💸';
+      body = `You still owe ${borrowerName} ${money(loan.amount, loan.currency)} — settle up when you can?`;
+    }
+  } else {
+    const what =
+      loan.type === 'item' ? `your ${loan.itemName}` : money(loan.amount, loan.currency);
+    title = 'Still out in the wild 📦';
+    body = `${borrowerName} still has ${what}. Want to send a nudge?`;
+  }
+
   await Notifications.scheduleNotificationAsync({
     identifier: idFor(loan.id),
     content: {
-      title: 'Still out in the wild 📦',
-      body: `${borrowerName} still has ${what}. Want to send a nudge?`,
+      title,
+      body,
       data: { loanId: loan.id },
-      categoryIdentifier: NUDGE_CATEGORY,
+      // Borrowed self-reminders don't offer the lender "Send a nudge" action —
+      // you don't nudge yourself. A plain tap still deep-links to the loan.
+      ...(borrowed ? {} : { categoryIdentifier: NUDGE_CATEGORY }),
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,

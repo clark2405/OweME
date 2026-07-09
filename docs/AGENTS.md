@@ -28,7 +28,7 @@ oweme/
 
 ## Hard rules (do not violate)
 
-1. **Respect scope guardrails in `PROJECT.md` §2.** Never add bill-splitting, group expenses, running balances, partial payments, interest, or inventory features. If a task seems to require them, stop and ask.
+1. **Respect scope guardrails in `PROJECT.md` §2.** Never add bill-splitting, group expenses, running balances, partial payments, interest, or inventory features. If a task seems to require them, stop and ask. *(Carve-out, 2026-07-09: the "no bill-splitting" line means no groups / running balances / net "who owes whom" / settle-up. A bounded **Split a bill** shortcut that just creates N independent one-way loans DID ship by explicit owner decision — see TASKS.md P10 N4. The balance-netting Splitwise model stays out.)*
 2. **TypeScript everywhere, strict mode on.** No `any` unless truly unavoidable — and comment why.
 3. **All database access goes through Supabase client with RLS.** Never bypass RLS except in the Next.js nudge page, which uses a service-role key server-side, scoped to a single token lookup. Never expose the service-role key to the client.
 4. **No new dependencies without good reason.** Prefer what Expo/Next ship with. If adding a package, explain why in the PR/commit message.
@@ -67,11 +67,14 @@ oweme/
 > **iOS build gotchas live in `BUILD_NOTES.md`** — read it first if a device build fails. Key constraint: Clark is on a **free** Apple account, so NO push/`aps-environment` entitlement (local notifications only).
 
 - [x] Repo scaffolded (Expo app in `app/` + Next.js web in `web/`, both TS strict, tsc clean)
-- [x] Schema migrations written — SEVEN now: init (`20260610000000`), app columns
+- [x] Schema migrations written — NINE now: init (`20260610000000`), app columns
   (`20260617000000`), photo storage (`20260618000000`), `updated_at` for sync
   (`20260622000000`), photos read lockdown (`20260622000001`), nudge-link tokens
   (`20260622000002` — DB-generated token + `expires_at`/`responded_at` for E2),
-  loan `direction` (`20260622000003` — lent/borrowed for the "stuff I borrowed" view).
+  loan `direction` (`20260622000003` — lent/borrowed for the "stuff I borrowed" view),
+  auto-nudge (`20260623000000` — `borrowers.email` + `loans.auto_nudge`/
+  `last_auto_nudge_at` for N1, opt-in email auto-nudge), loan confirmation
+  (`20260709000000` — `loans.confirmed_at` for N2, borrower "gentle proof").
   RLS scopes everything to `owner_id = auth.uid()`.
 - [x] iOS native build set up (prebuild + Pods, bundle id `com.clark24smoothoperator.oweme`, runs on simulator). Free Apple account → no push entitlement.
 - [x] **Mobile UI** — full design system + all v1 screens (`offbrand-design`), verified on iOS sim.
@@ -100,10 +103,11 @@ oweme/
   `20260622000001`), S5 dropped Android RECORD_AUDIO, S6 OTP resend cooldown, S7
   truthful sync-error messages.
 - [ ] **Manual setup before sync runs:** create the Supabase project, apply ALL
-  SEVEN migrations, fill `app/.env`, add `{{ .Token }}` to the OTP email template,
+  NINE migrations, fill `app/.env`, add `{{ .Token }}` to the OTP email template,
   and **`supabase functions deploy delete-account`** (needed for S1 account deletion).
   *(Migrations `…000` + `…002` are applied to the live `oweme` project; `…003`
-  (loan direction) is PENDING — apply it before a signed-in user adds any loan.)*
+  (loan direction) is PENDING — apply it before a signed-in user adds any loan.
+  `20260623000000` (auto-nudge) is also PENDING — see N1 below.)*
 - [x] **P7 launch-readiness batch (2026-06-22)** — R2 hosted privacy page
   (`web/app/privacy`), S4 third-party-PII clause + `docs/APP_STORE_PRIVACY.md`
   labels map, R3 Sentry (DSN-gated, `lib/sentry.ts`), R4 sync-layer unit tests
@@ -124,8 +128,26 @@ pieces: S2 (SecureStore), S5 (Android RECORD_AUDIO drop), R1 (app lock), and R3
 (Sentry native — only matters once a DSN is set). Backend S1/S3 are live (function
 deployed, migration applied).
 
+- [x] **N1 opt-in email auto-nudge (2026-07-09)** — code-complete. A per-loan,
+  lent-only toggle ("Let OweMe email the reminder") in `BorrowerEditSheet.tsx`
+  (email field), `loan/[id].tsx` + `add.tsx` (the toggle itself), backed by
+  migration `20260623000000` and a new scheduled `supabase/functions/auto-nudge`
+  Edge Function that emails due loans via Resend with the `/n/[token]` link.
+  **Needs the manual deploy** (apply the migration, `supabase functions deploy
+  auto-nudge`, set `RESEND_API_KEY`/`WEB_URL` secrets, schedule via Cron/`pg_cron`)
+  before it actually sends anything — see TASKS.md N1.
+
+- [x] **N2 borrower confirmation + borrowed self-reminders (2026-07-09)** —
+  code-complete. Borrowed loans can carry a self-reminder cadence (direction-aware
+  `syncLoanReminder` copy; add + loan-detail show the picker, auto-nudge stays
+  lent-only). The `/n/<token>` page gained "Yes, I borrowed it ✅" → `confirmLoan`
+  server action stamps `loans.confirmed_at` (migration `20260709000000`); the app
+  shows a "Confirmed by {name} ✅" chip on lent loans. **Needs migration
+  `20260709000000` applied + `web/` deployed** to work end-to-end.
+
 Next: the killer loop is code-complete — remaining work is the **manual backend
 deploy** to light up nudge links end-to-end (apply the token migration, set web/app
-env, deploy `web/`), then backend niceties (E3 atomic restore, E4 settings sync,
+env, deploy `web/`) and N1 auto-nudge (apply its migration, deploy + schedule the
+new function), then backend niceties (E3 atomic restore, E4 settings sync,
 E5 storage GC) and QA (D1 Android, D2 VoiceOver/contrast). Deeper S3 (private bucket
 + signed URLs) parked; "stuff I borrowed" stays v2 (PROJECT.md §9).

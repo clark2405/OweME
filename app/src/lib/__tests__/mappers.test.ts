@@ -14,6 +14,7 @@ describe('borrower mappers', () => {
     id: 'b1',
     name: 'Mia',
     phone: '+639170000000',
+    email: 'mia@example.com',
     avatar_url: 'https://x/a.jpg',
     emoji: '🦊',
     exempt: true,
@@ -26,6 +27,7 @@ describe('borrower mappers', () => {
       name: 'Mia',
       emoji: '🦊',
       phone: '+639170000000',
+      email: 'mia@example.com',
       avatarUrl: 'https://x/a.jpg',
       exempt: true,
       updatedAt: '2026-06-01T00:00:00.000Z',
@@ -33,14 +35,16 @@ describe('borrower mappers', () => {
   });
 
   it('rowToBorrower turns nulls into undefined', () => {
-    const b = rowToBorrower({ ...row, phone: null, avatar_url: null });
+    const b = rowToBorrower({ ...row, phone: null, email: null, avatar_url: null });
     expect(b.phone).toBeUndefined();
+    expect(b.email).toBeUndefined();
     expect(b.avatarUrl).toBeUndefined();
   });
 
   it('borrowerToRow turns undefined into null and defaults exempt', () => {
     const r = borrowerToRow({ id: 'b2', name: 'Ada', emoji: '🙂', updatedAt: '2026-06-01' });
     expect(r.phone).toBeNull();
+    expect(r.email).toBeNull();
     expect(r.avatar_url).toBeNull();
     expect(r.exempt).toBe(false);
   });
@@ -57,11 +61,20 @@ describe('borrower mappers', () => {
       name: 'Mia',
       emoji: '🦊',
       phone: '123',
+      email: 'mia@example.com',
       avatarUrl: 'https://x/a.jpg',
       exempt: true,
       updatedAt: '2026-06-01T00:00:00.000Z',
     };
     expect(rowToBorrower(borrowerToRow(b))).toEqual(b);
+  });
+
+  it('borrower email round-trips, including when absent', () => {
+    const withEmail: Borrower = { id: 'b4', name: 'Cole', emoji: '🙂', email: 'cole@x.com' };
+    expect(rowToBorrower(borrowerToRow(withEmail)).email).toBe('cole@x.com');
+
+    const noEmail: Borrower = { id: 'b5', name: 'Dex', emoji: '🙂' };
+    expect(rowToBorrower(borrowerToRow(noEmail)).email).toBeUndefined();
   });
 });
 
@@ -173,6 +186,7 @@ describe('loan mappers', () => {
       lentAt: '2026-05-01',
       dueAt: '2026-06-01',
       reminder: 'weekly',
+      autoNudge: false,
       nudges: ['2026-05-10'],
       status: 'active',
       updatedAt: '2026-05-01T00:00:00.000Z',
@@ -203,5 +217,33 @@ describe('loan mappers', () => {
       updatedAt: '2026-05-01',
     };
     expect(loanToRow(item).direction).toBe('lent');
+  });
+
+  it('rowToLoan defaults auto_nudge to false and lastAutoNudgeAt to undefined when unset', () => {
+    const l = rowToLoan(itemRow);
+    expect(l.autoNudge).toBe(false);
+    expect(l.lastAutoNudgeAt).toBeUndefined();
+  });
+
+  it('auto_nudge / last_auto_nudge_at round-trip', () => {
+    const l = rowToLoan({
+      ...itemRow,
+      auto_nudge: true,
+      last_auto_nudge_at: '2026-06-10T00:00:00.000Z',
+    });
+    expect(l.autoNudge).toBe(true);
+    expect(l.lastAutoNudgeAt).toBe('2026-06-10T00:00:00.000Z');
+    const r = loanToRow(l);
+    expect(r.auto_nudge).toBe(true);
+    expect(r.last_auto_nudge_at).toBe('2026-06-10T00:00:00.000Z');
+  });
+
+  it('confirmed_at (N2) round-trips and defaults to undefined', () => {
+    expect(rowToLoan(itemRow).confirmedAt).toBeUndefined();
+    const l = rowToLoan({ ...itemRow, confirmed_at: '2026-07-01T09:30:00.000Z' });
+    expect(l.confirmedAt).toBe('2026-07-01T09:30:00.000Z');
+    expect(loanToRow(l).confirmed_at).toBe('2026-07-01T09:30:00.000Z');
+    // unset domain → null row (so the column clears cleanly)
+    expect(loanToRow(rowToLoan(itemRow)).confirmed_at).toBeNull();
   });
 });

@@ -15,6 +15,7 @@ import {
   archivedLoansBy,
   archivedStats,
   ArchiveFilter,
+  dirOf,
   useHydrated,
   useLoans,
 } from '../../lib/store';
@@ -65,6 +66,16 @@ export default function HistoryScreen() {
   }, [results]);
 
   const recovered = stats.moneyRecovered[0];
+
+  // "All-time" composition — how every LENT loan ended up (returned / still out /
+  // written off). Lent-side only; counts across all statuses, not just archived.
+  const lentLoans = loans.filter((l) => dirOf(l) === 'lent');
+  const composition = [
+    { key: 'returned', label: 'Came home', count: lentLoans.filter((l) => l.status === 'returned').length, color: colors.mintInk },
+    { key: 'active', label: 'Still out', count: lentLoans.filter((l) => l.status === 'active').length, color: colors.ink },
+    { key: 'written_off', label: 'Written off', count: lentLoans.filter((l) => l.status === 'written_off').length, color: colors.inkFaint },
+  ];
+
   let rowIndex = 0;
 
   if (!hydrated) {
@@ -98,6 +109,33 @@ export default function HistoryScreen() {
                 { value: 'borrowed', label: 'I owe' },
               ]}
             />
+          </View>
+        </Reveal>
+      )}
+
+      {/* "All-time" composition — one stacked bar of every lent loan by outcome. */}
+      {lent && lentLoans.length > 0 && (
+        <Reveal index={0} from={20}>
+          <View style={styles.compCard}>
+            <Text style={[t.overline, styles.compOverline]}>All-time</Text>
+            <View style={styles.compBar}>
+              {composition
+                .filter((s) => s.count > 0)
+                .map((s) => (
+                  <View key={s.key} style={[styles.compSeg, { flex: s.count, backgroundColor: s.color }]} />
+                ))}
+            </View>
+            <View style={styles.legend}>
+              {composition
+                .filter((s) => s.count > 0)
+                .map((s) => (
+                  <View key={s.key} style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: s.color }]} />
+                    <Text style={styles.legendLabel}>{s.label}</Text>
+                    <Text style={styles.legendCount}>{s.count}</Text>
+                  </View>
+                ))}
+            </View>
           </View>
         </Reveal>
       )}
@@ -261,6 +299,22 @@ export default function HistoryScreen() {
 
 const makeStyles = (th: Theme) => StyleSheet.create({
   dirToggle: { marginBottom: space.lg },
+  compCard: {
+    backgroundColor: th.colors.surface,
+    borderRadius: radius.lg,
+    padding: space.lg,
+    marginBottom: space.lg,
+    gap: space.md,
+    ...th.shadow.card,
+  },
+  compOverline: {},
+  compBar: { flexDirection: 'row', gap: 2, height: 14 },
+  compSeg: { height: '100%', borderRadius: 4 },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: space.md },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendDot: { width: 8, height: 8, borderRadius: radius.pill },
+  legendLabel: { ...th.type.small, color: th.colors.inkSoft },
+  legendCount: { ...th.type.small, color: th.colors.ink, fontWeight: '800' },
   payoff: {
     backgroundColor: th.colors.feature,
     borderRadius: radius.lg,

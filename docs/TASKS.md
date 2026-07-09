@@ -615,6 +615,115 @@ on the mock store, today.
 
 ---
 
+## P10 — Direction & idea backlog (2026-06-23)
+
+> Prompted by a near-identical competitor (**UtangIna.app** — a PWA with the same
+> "we play the bad guy" positioning: automated SMS/email nudges, a kasunduan/
+> agreement generator, installment tracking, a meme generator). Clark surfaced
+> new ideas (installments, automatic nudging, a lender CRM). This section records
+> the **decision** and the **idea backlog** so we don't lose them.
+
+### DECISION (locked 2026-06-23): stay the focused *consumer friend-app*
+OweMe wins where the competitor **can't follow**, not by matching their feature
+sprawl:
+- **Native iOS + App Store presence** (they're a PWA — likely because their
+  profanity-pun name can't pass App Store review or run ads).
+- **Clean, ad-safe, brandable name** → paid acquisition + word-of-mouth they can't do.
+- **Privacy / local-first** (no account needed; data on device) — a real wedge for
+  sensitive debt data vs their cloud-synced PWA.
+- **The one-tap `/n/<token>` return link** — warmer + lighter than a legal contract.
+The lending-*business* market (installments, interest, CRM) is a **different
+product for a different customer**; chasing it turns OweMe into the "bloated
+accounting" app the competitor mocks. We do NOT pivot there unless it's a
+deliberate, separate decision.
+
+### Greenlit next (aligned with the decision)
+- [x] **N1. Opt-in auto-nudge (email).** *(code-complete 2026-07-09; manual deploy
+  pending)* A per-loan toggle: "let OweMe send the reminder for me." Server-side
+  via a scheduled Edge Function + **Resend** (already wired for OTP) using the
+  loan's cadence + the `/n/<token>` link. *This is Clark's original vision
+  ("remove my presence") and neutralizes the competitor's headline feature.*
+  On-device auto-send is impossible (OS blocks apps sending SMS/WhatsApp/iMessage
+  without a tap) — this is the only real path. **Caveats:** consent/anti-spam (PH
+  Data Privacy Act) → kept opt-in and email-first; SMS is a later, likely *paid*
+  add-on (per-message cost + A2P registration + higher legal risk).
+  - [x] **Data:** migration `20260623000000_auto_nudge.sql` — `borrowers.email`,
+    `loans.auto_nudge` (default false), `loans.last_auto_nudge_at`. Round-tripped
+    in `types.ts` / `mappers.ts` (+ mapper tests); threaded through `store.ts`
+    (`addBorrower`/`updateBorrower` take `email`; `NewLoanInput.autoNudge`; new
+    `setLoanAutoNudge(id, v)` — turning it on with the cadence at `off` also bumps
+    it to `weekly`, since auto-nudge needs something to anchor "due" to).
+  - [x] **UI:** `BorrowerEditSheet.tsx` gained an optional Email field (below
+    Phone). Loan detail (`loan/[id].tsx`) and the add flow (`add.tsx`, lent-only)
+    both got a "Let OweMe email the reminder" toggle under the cadence chips,
+    disabled + hinted when not signed in ("Sign in to sync so OweMe can send
+    these for you") or the borrower has no email ("Add {name}'s email so OweMe
+    can reach them").
+  - [x] **Backend:** `supabase/functions/auto-nudge/index.ts` (service-role,
+    scheduled — not app-invoked). Selects active lent-side loans with
+    `auto_nudge = true`, skips any with no borrower email or `reminder`/`off`,
+    checks due-ness against `last_auto_nudge_at ?? lent_at` + the cadence
+    interval (weekly=7d/biweekly=14d/monthly=30d), get-or-creates a `nudge_links`
+    row (same table the web page + in-app nudges use) and emails the borrower via
+    the Resend HTTP API with the `/n/<token>` link; stamps `last_auto_nudge_at` on
+    a successful send. Returns `{ sent, skipped }`.
+  - **Manual steps (none done yet):**
+    1. Apply migration `20260623000000_auto_nudge.sql` to the live project.
+    2. `supabase functions deploy auto-nudge`.
+    3. `supabase secrets set RESEND_API_KEY=... WEB_URL=https://your-web-app`
+       (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are injected automatically).
+    4. Schedule it (Supabase Dashboard → Edge Functions → Cron, or `pg_cron`) —
+       hourly or daily is plenty since the cadence itself is weekly+.
+    5. End-to-end test: opt a real loan in with a real borrower email, invoke the
+       function manually once, confirm the email + link arrive and mark-returned
+       flips the loan.
+- [x] **N2. Borrower-confirms-the-loan ("gentle proof")** *(done 2026-07-09)*. The
+  borrower taps the existing `/n/<token>` link and hits **"Yes, I borrowed it ✅"**
+  (secondary button, shown only while unconfirmed) to record mutual acknowledgement
+  — countering Abono's "Kasunduan Generator" without a scary contract. Confirm ≠
+  return: `confirmLoan(token)` (service-role) stamps `confirmed_at`/`updated_at` on
+  the active loan, does NOT change status, and does NOT consume the token (they can
+  still mark it returned from the same link). The lender's app shows a mint
+  "Confirmed by {name} ✅" chip on the loan once it syncs. Migration
+  `20260709000000_loan_confirmed.sql` adds `loans.confirmed_at`; round-tripped in
+  types/mappers (+ test). **Manual steps:** apply migration `20260709000000`;
+  confirmation is live once `web/` is deployed (same deploy the nudge links need).
+- [ ] **N3. Consumer freemium ("OweMe Pro").** If we monetize, do it consumer-side:
+  auto-nudge, unlimited loans, export, extra themes. NOT a lender CRM paywall.
+- [x] **N4. "Split a bill" quick-add** *(done 2026-07-09)*. Realizes the "going out
+  with friends" case **as bounded split-to-individual-loans — explicitly NOT groups
+  or balances.** New `app/src/app/split.tsx` modal (mirrors `add.tsx`) takes one
+  total + a multi-selected set of people (+ optional "include me"), splits it EVENLY
+  in cents (`floor(totalCents / divisor)`, remainder onto the first created loan so
+  the sum is exact), and calls `addLoan()` once per participant to create N
+  **independent** one-way money loans — each with normal nudge / return-link /
+  auto-nudge support. There is **no shared group id, no running balance, no net
+  "who owes whom", no settle-up** — that balance-netting is the Splitwise line §2
+  keeps us behind. Entry is a quiet secondary link on the add flow's money field
+  (not a second primary button). *v1 is even-split only; per-person custom amounts
+  are a possible future add.* NOTE: this is a deliberate, bounded exception to the
+  CLAUDE.md "no bill-splitting" rule — it splits into ordinary loans, it does NOT
+  add a group/expense/balance feature; confirm with Clark if the framing drifts.
+
+### Parked — pivot-level, need a conscious call first (do NOT bolt on casually)
+- [ ] **P-installments. Installment / partial-payment tracking.** Real demand
+  (competitor has it; Clark's friend asked). But it breaks the clean "amount →
+  returned or not" model and drags toward accounting. *If* built, keep it minimal
+  (a checklist of expected payments), never a full amortization engine. Decide
+  consciously — it's the first step toward the lender market.
+- [ ] **P-interest. Interest / "tubo" (amount grows over time).** This is the 5-6
+  lending model. It **changes what OweMe is** (friend tracker → informal-lending
+  tool) and triggers **App Store / Play lending-app policies** (APR disclosure,
+  lending rules) that risk rejection. Treat as a pivot, not a feature. Currently in
+  the §2 "do NOT add" list.
+- [ ] **P-crm. Mini CRM for lending businesses (paywalled).** Genuine market + real
+  willingness to pay, BUT needs balances/interest/history/dashboards = the exact
+  "bloated accounting" we differentiate against, and it's more crowded + regulated.
+  If pursued, it's a **separate product or a distinct "Business mode,"** not a
+  paywall bolted onto the friendly app. Company-level decision.
+
+---
+
 *Done so far (for context): onboarding flow, home dashboard (tappable bento
 filters + pinned overdue group + capped lineup + "See all"), full
 active-loans screen with search/sort, swipe-to-return / swipe-to-nudge on

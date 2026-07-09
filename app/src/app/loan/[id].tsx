@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Screen } from '../../components/Screen';
 import { Reveal } from '../../components/Reveal';
@@ -17,12 +17,14 @@ import {
   markReturned,
   recordNudge,
   restoreLoan,
+  setLoanAutoNudge,
   setLoanReminder,
   unreturn,
   useLoans,
   useSettings,
   writeOff,
 } from '../../lib/store';
+import { useSession } from '../../lib/auth';
 import { deliverNudge, deliverThanks, NUDGE_TONES } from '../../lib/nudge';
 import { ensureNudgeLink } from '../../lib/nudgeLink';
 import { showToast } from '../../lib/toast';
@@ -52,6 +54,14 @@ const CADENCE_HINT: Record<ReminderCadence, string> = {
   monthly: 'OweMe checks in once a month.',
 };
 
+// Borrowed loans reframe the reminder as a self-nudge to return/pay it back.
+const CADENCE_HINT_BORROWED: Record<ReminderCadence, string> = {
+  off: 'Off — OweMe won’t remind you to give this back.',
+  weekly: 'OweMe reminds you weekly to give this back.',
+  biweekly: 'OweMe reminds you every couple of weeks.',
+  monthly: 'OweMe nudges you once a month to settle it.',
+};
+
 export default function LoanDetailScreen() {
   const { colors, type: t } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -59,6 +69,7 @@ export default function LoanDetailScreen() {
   const router = useRouter();
   const loans = useLoans();
   const { channel } = useSettings();
+  const { session } = useSession();
   const loan = loanById(loans, id);
   const [nudgeOpen, setNudgeOpen] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
@@ -86,6 +97,16 @@ export default function LoanDetailScreen() {
   const what = loanLabel(loan);
   const nudges = loan.nudges ?? [];
   const lastNudge = nudges[nudges.length - 1];
+
+  // Auto-nudge (N1) needs a cloud copy to schedule against and somewhere for
+  // OweMe to actually send the email — gate + explain in brand voice rather
+  // than just greying the switch out with no reason given.
+  const canAutoNudge = session != null && !!borrower.email;
+  const autoNudgeHint = session == null
+    ? 'Sign in to sync so OweMe can send these for you.'
+    : !borrower.email
+      ? `Add ${borrower.name}’s email so OweMe can reach them.`
+      : null;
   // Soften the CTA if we nudged in the last day — the app shouldn't make the
   // user the annoying one by encouraging double-nudges.
   const nudgedRecently = lastNudge != null && Date.now() - new Date(lastNudge).getTime() < 86_400_000;
@@ -241,6 +262,11 @@ export default function LoanDetailScreen() {
               <Chip label={`${borrowed ? 'Borrowed' : 'Lent'} ${shortDate(loan.lentAt)}`} tone="sand" />
               {loan.dueAt && <Chip label={`Due ${shortDate(loan.dueAt)}`} tone="sand" />}
               <AgeChip loan={loan} />
+              {/* Borrower confirmed the loan via the /n/<token> page (N2) — the
+                  "gentle proof". Lent-side only (you don't confirm your own debt). */}
+              {!borrowed && loan.confirmedAt && (
+                <Chip label={`Confirmed by ${borrower.name} ✅`} tone="mint" />
+              )}
               {loan.status === 'active' && loan.reminder && loan.reminder !== 'off' && (
                 <Chip label={REMINDER_LABEL[loan.reminder]} tone="mint" />
               )}
@@ -263,12 +289,15 @@ export default function LoanDetailScreen() {
           </Reveal>
         )}
 
-        {/* Reminder — reschedule (or pause) the nudge cadence in place, without
-            opening the full edit flow. */}
-        {loan.status === 'active' && !borrowed && (
+        {/* Reminder — reschedule (or pause) the cadence in place, without opening
+            the full edit flow. Lent = chase-them nudges; borrowed = a self-
+            reminder to return/pay it back. */}
+        {loan.status === 'active' && (
           <Reveal index={3} from={18}>
             <View style={styles.reminderCard}>
-              <Text style={[t.overline, styles.reminderLabel]}>Reminder</Text>
+              <Text style={[t.overline, styles.reminderLabel]}>
+                {borrowed ? 'Remind me to return it' : 'Reminder'}
+              </Text>
               <View style={styles.cadenceRow}>
                 {CADENCES.map((c) => {
                   const on = (loan.reminder ?? 'off') === c.value;
@@ -289,7 +318,31 @@ export default function LoanDetailScreen() {
                   );
                 })}
               </View>
-              <Text style={styles.reminderHint}>{CADENCE_HINT[loan.reminder ?? 'off']}</Text>
+              <Text style={styles.reminderHint}>
+                {(borrowed ? CADENCE_HINT_BORROWED : CADENCE_HINT)[loan.reminder ?? 'off']}
+              </Text>
+
+              {/* Auto-nudge (email the borrower) is lent-only — no one to email
+                  when the loan is something you owe. */}
+              {!borrowed && (
+              <View style={styles.autoNudgeRow}>
+                <View style={styles.autoNudgeText}>
+                  <Text style={t.h3}>Let OweMe email the reminder</Text>
+                  <Text style={styles.autoNudgeSub}>
+                    {autoNudgeHint ?? `OweMe emails ${borrower.name} on this cadence, with the return link.`}
+                  </Text>
+                </View>
+                <Switch
+                  value={loan.autoNudge ?? false}
+                  onValueChange={(v) => {
+                    haptics.tap();
+                    setLoanAutoNudge(loan.id, v);
+                  }}
+                  disabled={!canAutoNudge}
+                  trackColor={{ true: colors.accent, false: colors.hairline }}
+                />
+              </View>
+              )}
             </View>
           </Reveal>
         )}
@@ -515,6 +568,17 @@ const makeStyles = (th: Theme) => StyleSheet.create({
   cadenceText: { ...th.type.small, color: th.colors.inkSoft },
   cadenceTextOn: { color: th.colors.surface },
   reminderHint: { ...th.type.small, color: th.colors.inkFaint },
+  autoNudgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    marginTop: space.sm,
+    paddingTop: space.md,
+    borderTopWidth: 1,
+    borderTopColor: th.colors.hairline,
+  },
+  autoNudgeText: { flex: 1, gap: 4 },
+  autoNudgeSub: { ...th.type.small, color: th.colors.inkSoft },
   timelineCard: {
     backgroundColor: th.colors.surface,
     borderRadius: radius.lg,

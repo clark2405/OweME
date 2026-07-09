@@ -29,7 +29,7 @@ No popular app solves this. Money-splitting apps (Splitwise) exist for roommates
 
 These are deliberate **non-goals** to avoid feature creep:
 
-- ❌ **Not a Splitwise clone.** No bill splitting, no group expenses, no running balances between people, no "split 4 ways."
+- ❌ **Not a Splitwise clone.** No group expenses, no running balances between people, no net "who owes whom", no settle-up/debt-simplification. *(Carve-out 2026-07-09: a bounded "Split a bill" shortcut that creates N independent one-way loans shipped by owner decision — see TASKS.md P10 N4. What stays out is the balance-netting model, not the convenience of entering a shared bill.)*
 - ❌ **Not a finance app.** No interest calculation, no partial-payment amortization schedules. A money loan is: amount → returned or not.
 - ❌ **Not an inventory/asset manager.** We track *lent* things, not *all* your things.
 - ❌ **No favors/promises type in v1.** ("You said you'd fix my PC") — good idea, parked for v2.

@@ -21,6 +21,8 @@ export interface Borrower {
   id: string;
   name: string;
   phone?: string;
+  /** Needed for the opt-in auto-nudge (N1) to have anywhere to send. */
+  email?: string;
   avatarUrl?: string;
   /** Emoji used as a fallback avatar when there's no photo. */
   emoji: string;
@@ -42,6 +44,15 @@ export interface LoanBase {
   dueAt?: string;
   /** Reminder cadence for this loan; defaults to `off` when unset. */
   reminder?: ReminderCadence;
+  /** Opt-in (N1): let OweMe email the borrower this loan's reminder on its
+   *  cadence, instead of the lender sending it. Needs a signed-in lender + a
+   *  borrower email — the scheduled Edge Function is what actually sends. */
+  autoNudge?: boolean;
+  /** ISO timestamp of the last auto-nudge email sent for this loan (N1). */
+  lastAutoNudgeAt?: string;
+  /** ISO timestamp the borrower confirmed the loan via the /n/<token> page (N2).
+   *  Undefined = not yet confirmed. Confirm ≠ return — status is unaffected. */
+  confirmedAt?: string;
   /** ISO timestamps of nudges sent for this loan, oldest first. */
   nudges?: string[];
   status: LoanStatus;

@@ -58,6 +58,7 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
   const [name, setName] = useState(borrower?.name ?? '');
   const [emoji, setEmoji] = useState(borrower?.emoji ?? DEFAULT_EMOJI);
   const [phone, setPhone] = useState(borrower?.phone ?? '');
+  const [email, setEmail] = useState(borrower?.email ?? '');
   const [exempt, setExempt] = useState(borrower?.exempt ?? false);
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(borrower?.avatarUrl);
   // Which picker is spinning up, for instant feedback on the tapped button.
@@ -73,6 +74,7 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
       setName(borrower?.name ?? '');
       setEmoji(borrower?.emoji ?? DEFAULT_EMOJI);
       setPhone(borrower?.phone ?? '');
+      setEmail(borrower?.email ?? '');
       setExempt(borrower?.exempt ?? false);
       setAvatarUrl(borrower?.avatarUrl);
     }
@@ -156,11 +158,11 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
     if (!name.trim()) return;
     haptics.tap();
     if (creating) {
-      const id = addBorrower(name.trim(), emoji, phone, avatarUrl);
+      const id = addBorrower(name.trim(), emoji, phone, avatarUrl, email);
       onClose();
       onCreated?.(id);
     } else {
-      updateBorrower(borrower.id, { name, emoji, phone, exempt, avatarUrl });
+      updateBorrower(borrower.id, { name, emoji, phone, email, exempt, avatarUrl });
       onClose();
     }
   };
@@ -262,8 +264,22 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
             />
           </Reveal>
 
+          <Reveal index={4} delay={REVEAL_DELAY}>
+            <Text style={[t.overline, styles.label]}>Email (optional)</Text>
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              placeholder="So OweMe can auto-nudge them"
+              placeholderTextColor={colors.inkFaint}
+              style={styles.input}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </Reveal>
+
           {!creating && shameMode && (
-            <Reveal index={4} delay={REVEAL_DELAY}>
+            <Reveal index={5} delay={REVEAL_DELAY}>
               <View style={styles.exemptRow}>
                 <View style={styles.exemptText}>
                   <Text style={t.h3}>Exempt from shame 😇</Text>
@@ -278,7 +294,7 @@ export function BorrowerEditSheet({ visible, borrower, onClose, onDeleted, onCre
             </Reveal>
           )}
 
-          <Reveal index={creating ? 4 : 5} delay={REVEAL_DELAY}>
+          <Reveal index={creating ? 5 : 6} delay={REVEAL_DELAY}>
             <View style={styles.actions}>
               <Button label={creating ? 'Add 🤝' : 'Save'} onPress={save} disabled={!name.trim()} />
               {!creating && (

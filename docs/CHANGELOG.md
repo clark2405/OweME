@@ -6,6 +6,100 @@ optional account sync** — see [HANDOFF.md](./HANDOFF.md).
 
 ---
 
+## 2026-07-09 — Self-reminders for borrowed loans + borrower confirmation (N2)
+
+- **Self-reminders on the "I owe" side.** Borrowed loans can now carry a reminder
+  cadence — a **self-nudge to return/pay back** what you owe (opt-in, defaults
+  OFF; lent loans still default weekly). `syncLoanReminder` copy is now
+  direction-aware: borrowed item → "You've had {name}'s {item} for {duration} —
+  time to return it? 📦", borrowed money → "You still owe {name} {amount} 💸".
+  The add flow + loan-detail Reminder card show the cadence picker for borrowed
+  (self-framed label "Remind me to return it"); the **auto-nudge email toggle
+  stays lent-only** (no one to email when it's your own debt). Borrowed
+  self-reminders drop the "Send a nudge" long-press action. `resyncAllReminders`
+  + the global `nudgesEnabled` gate already cover both directions.
+- **Borrower "gentle proof" (N2).** The existing `/n/<token>` page gained a
+  secondary **"Yes, I borrowed it ✅"** button (shown only while unconfirmed)
+  beside "I've returned it". New `confirmLoan(token)` server action (service-role)
+  stamps `confirmed_at`/`updated_at` on the ACTIVE loan — it does **not** change
+  status and does **not** consume the token (confirm ≠ return, and they can still
+  return from the same link later). The lender's app shows a mint **"Confirmed by
+  {name} ✅"** chip on the loan (lent-side) once it syncs. Counters Abono's
+  "kasunduan" without a contract.
+- **Data:** migration `20260709000000_loan_confirmed.sql` adds `loans.confirmed_at`;
+  round-tripped in types/mappers (+ a mapper test). **Manual: apply the migration;
+  confirmation works once `web/` is deployed.**
+
+---
+
+## 2026-07-09 — "Split a bill" quick-add
+
+- **New `split.tsx` modal** (mirrors `add.tsx`) — a fast way to turn one bill into
+  several **independent** one-way money loans. Pick a total + currency, multi-select
+  who's in (with New person / From contacts), toggle "count me in", optional label
+  + date + due date + reminder cadence + the auto-nudge toggle. Live preview shows
+  the per-person share; the CTA is the single accent "Split it" button.
+- **Even split only (v1).** Divisor = selected people + (you, if included). Per-person
+  share is computed in **cents** (`floor(totalCents / divisor)`) and any rounding
+  remainder is added to the **first created loan**, so the created loans + your
+  absorbed share sum to the total exactly. You never get a loan — including yourself
+  just shrinks everyone else's share.
+- Each participant gets a normal `addLoan({ direction:'lent', type:'money', … })`
+  with `notes: "Your share of <label>"` (or "Split bill"), carrying reminders +
+  auto-nudge like any money loan. On submit: dismiss + a "Created N loans 🧾" toast.
+- **Deliberately NOT groups.** No shared group id, no running balance, no net
+  "who owes whom", no settle-up — the loans are fully independent (the Splitwise
+  line OweMe doesn't cross). Entry point is a quiet secondary link on the add
+  flow's money field ("Out with friends? Split a bill →"), not a second button.
+- Registered `/split` as a modal in the root layout (same treatment as `/add`).
+
+---
+
+## 2026-07-09 — Opt-in email auto-nudge (N1)
+
+- **"Let OweMe email the reminder"** — a per-loan, lent-only, opt-in toggle. When
+  on, a scheduled server-side function emails the borrower on the loan's existing
+  reminder cadence with the `/n/<token>` "mark as returned" link, instead of the
+  lender having to send it themselves. Genuinely server-side (it only fires for
+  SIGNED-IN users, since the loan has to exist in Supabase to schedule against) —
+  on-device auto-send isn't possible, the OS blocks it.
+- **Data:** migration `20260623000000_auto_nudge.sql` adds `borrowers.email`,
+  `loans.auto_nudge` (default false), `loans.last_auto_nudge_at`; round-tripped in
+  `types.ts`/`mappers.ts` with new tests. `store.ts` threads `email` through
+  `addBorrower`/`updateBorrower`, `autoNudge` through `NewLoanInput`, and gets a
+  new `setLoanAutoNudge()` (bumps an `'off'` cadence to `'weekly'` when turned on
+  — auto-nudge needs a schedule to anchor to).
+- **UI:** `BorrowerEditSheet` gained an optional Email field; loan detail and the
+  add flow both show the toggle under the reminder cadence chips, disabled with a
+  brand-voice hint when not signed in or the borrower has no email.
+- **Backend:** `supabase/functions/auto-nudge` — a scheduled (not app-invoked)
+  Edge Function that finds due loans, get-or-creates a `nudge_links` row (the same
+  one the web page + in-app nudges already use), and sends via the Resend HTTP
+  API (same sender as OTP: `onboarding@resend.dev`).
+- **This is the eighth migration.** *Manual steps (none done yet):* apply
+  `20260623000000`, `supabase functions deploy auto-nudge`, set secrets
+  `RESEND_API_KEY` + `WEB_URL`, and schedule the function (Cron/`pg_cron`) —
+  see TASKS.md N1 for the full checklist.
+
+---
+
+## 2026-07-09 — Lending visualizations (People + History)
+
+- **People → "Where your stuff is."** A ranked horizontal-bar card (top 5 holders by
+  active *lent* count, "+N more" overflow) under the Most-Wanted hero; each row taps
+  to the profile. Single-hue magnitude (`ink` fill on a `bgSunken` track) — coral
+  stays reserved for the CTA.
+- **History → "All-time."** One stacked composition bar of every lent loan by
+  outcome (Came home / Still out / Written off) with a dot+label+count legend;
+  lent-side only, hidden with no lent loans. Returned segment uses `mintInk` (the
+  pale `mint` is near-invisible on white).
+- Built to the dataviz skill: form-by-job, thin marks with rounded ends, direct
+  labels, status colours ship *with* labels (never colour-alone), no chart lib / no
+  new deps (plain RN Views), reduced-motion safe, and each card renders nothing when
+  there's no data. tsc clean, 28/28 jest.
+
+---
+
 ## 2026-06-23 — Borrowed loose ends, native toggle icons, a11y pass
 
 - **Item/Money icons back on the native iOS toggle.** `Segment` gained an optional

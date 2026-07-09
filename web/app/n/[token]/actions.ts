@@ -48,3 +48,39 @@ export async function markReturned(token: string): Promise<void> {
 
   revalidatePath(`/n/${token}`);
 }
+
+/**
+ * The borrower tapped "Yes, I borrowed it ✅" — mutual acknowledgement (N2)
+ * without a contract. Service-role, single-token scoped: stamps confirmed_at on
+ * the loan so the lender's app shows a "Confirmed" badge on next sync. Confirm ≠
+ * return: it does NOT change status and does NOT consume the token (so the
+ * borrower can still mark it returned later from the same link). Idempotent —
+ * re-confirming an already-confirmed loan is a harmless no-op.
+ */
+export async function confirmLoan(token: string): Promise<void> {
+  const supabaseAdmin = getSupabaseAdmin();
+  const { data: link } = await supabaseAdmin
+    .from("nudge_links")
+    .select("loan_id, expires_at")
+    .eq("token", token)
+    .maybeSingle();
+
+  if (!link) return;
+  if (new Date(link.expires_at).getTime() < Date.now()) {
+    revalidatePath(`/n/${token}`);
+    return;
+  }
+
+  const nowIso = new Date().toISOString();
+
+  // Only stamp an ACTIVE, not-yet-confirmed loan. `updated_at = now()` so the
+  // lender's last-write-wins sync picks the confirmation up.
+  await supabaseAdmin
+    .from("loans")
+    .update({ confirmed_at: nowIso, updated_at: nowIso })
+    .eq("id", link.loan_id)
+    .eq("status", "active")
+    .is("confirmed_at", null);
+
+  revalidatePath(`/n/${token}`);
+}

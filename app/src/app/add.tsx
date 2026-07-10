@@ -659,7 +659,7 @@ export default function AddLoanScreen() {
 
           <View style={styles.footer}>
             <Button
-              label={editing ? 'Save changes' : borrowed ? 'Add it 📥' : 'Lend it 🤝'}
+              label={editing ? 'Save changes' : borrowed ? 'Add it 📥' : 'Lend it'}
               onPress={submit}
               disabled={!valid}
             />

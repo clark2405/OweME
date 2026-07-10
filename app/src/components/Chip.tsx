@@ -39,7 +39,7 @@ export function StatusChip({ status }: { status: Loan['status'] }) {
 
 /** Surfaces an overdue / due-soon / aging signal without a second accent color. */
 export function AgeChip({ loan }: { loan: Loan }) {
-  if (isOverdue(loan)) return <Chip label="Overdue 👀" tone="warn" />;
+  if (isOverdue(loan)) return <Chip label="Overdue" tone="warn" />;
   if (isDueSoon(loan)) {
     const n = daysUntil(loan.dueAt!);
     return <Chip label={n === 0 ? 'Due today' : n === 1 ? 'Due tomorrow' : `Due in ${n}d`} tone="warn" />;

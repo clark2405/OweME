@@ -275,7 +275,7 @@ export default function HomeScreen() {
                 <Reveal index={3} from={18}>
                   <View style={styles.overdueHead}>
                     <Text style={[t.overline, styles.overdueLabel]}>
-                      👀 {overdue.length} overdue
+                      {overdue.length} overdue
                     </Text>
                     {overdue.length > 1 && lent && (
                       <PressableScale

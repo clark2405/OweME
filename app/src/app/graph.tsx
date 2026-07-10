@@ -142,6 +142,9 @@ export default function GraphScreen() {
     data: GraphCardData;
   } | null>(null);
 
+  const cardRef = useRef(card);
+  cardRef.current = card;
+
   // Persist a Vec per node id across rebuilds so survivors keep their spot.
   const vecs = useRef<Map<string, Vec>>(new Map());
   const getVec = (id: string, cx: number, cy: number): Vec => {
@@ -193,8 +196,8 @@ export default function GraphScreen() {
     () =>
       `${box ? `${Math.round(box.w)}x${Math.round(box.h)}` : 'none'}|${sort}|${shown
         .map((p) => `${p.borrower.id}:${p.count}:${Math.round(p.metric)}`)
-        .join(',')}|card:${card ? card.id : 'none'}`,
-    [box, sort, shown, card],
+        .join(',')}`,
+    [box, sort, shown],
   );
 
   // --- the simulation -------------------------------------------------------
@@ -282,48 +285,74 @@ export default function GraphScreen() {
     };
 
     const cardForce = (alpha: number) => {
-      if (!card) return;
+      const activeCard = cardRef.current;
+      if (!activeCard) return;
 
-      const cx = card.x.value;
-      const cy = card.y.value;
-      const rect = getCardRect(cx, cy, card.r, box.w, box.h);
-      const padRepel = 20; // safety margin around the card
-
-      const cLeft = rect.left - padRepel;
-      const cRight = rect.right + padRepel;
-      const cTop = rect.top - padRepel;
-      const cBottom = rect.bottom + padRepel;
-
+      const cx = activeCard.x.value;
+      const cy = activeCard.y.value;
+      const rect = getCardRect(cx, cy, activeCard.r, box.w, box.h);
+      
       const CARD_W = 208;
+      const CARD_H = 135;
+      
+      const cardCenterX = rect.left + CARD_W / 2;
+      const cardCenterY = rect.top + CARD_H / 2;
+      
+      const halfW = CARD_W / 2 + 20; // safety margin
+      const halfH = CARD_H / 2 + 20;
 
       for (const n of nodes) {
         // Do not repel the selected node itself, its anchor node, or the 'you' node
-        if (n.id === card.id || n.id === card.anchorId || n.kind === 'you') continue;
+        if (n.id === activeCard.id || n.id === activeCard.anchorId || n.kind === 'you') continue;
         if (n.x === undefined || n.y === undefined || n.vx === undefined || n.vy === undefined) continue;
 
-        // Repel leaf nodes if they overlap with the card
-        if (n.kind === 'leaf' && n.x >= cLeft && n.x <= cRight && n.y >= cTop && n.y <= cBottom) {
-          // Calculate distance to each of the 4 boundaries
-          const dl = n.x - cLeft;
-          const dr = cRight - n.x;
-          const dt = n.y - cTop;
-          const db = cBottom - n.y;
-
-          const minDist = Math.min(dl, dr, dt, db);
-          if (minDist <= 0) continue;
-
-          // Force magnitude scales with depth and alpha
-          const strength = 18 * (1 - minDist / (CARD_W / 2)) * alpha;
-
-          if (minDist === dl) {
-            n.vx -= strength;
-          } else if (minDist === dr) {
-            n.vx += strength;
-          } else if (minDist === dt) {
-            n.vy -= strength;
+        const dx = n.x - cardCenterX;
+        const dy = n.y - cardCenterY;
+        
+        const absX = Math.abs(dx);
+        const absY = Math.abs(dy);
+        
+        if (absX < halfW && absY < halfH) {
+          const overlapX = halfW - absX;
+          const overlapY = halfH - absY;
+          
+          if (overlapX < overlapY) {
+            // Apply soft continuous spring force
+            const force = 3.5 * overlapX * alpha;
+            n.vx += dx > 0 ? force : -force;
           } else {
-            n.vy += strength;
+            const force = 3.5 * overlapY * alpha;
+            n.vy += dy > 0 ? force : -force;
           }
+        }
+      }
+    };
+
+    const avoidNameForce = (alpha: number) => {
+      for (const n of nodes) {
+        if (n.kind !== 'leaf') continue;
+        if (n.x === undefined || n.y === undefined || n.vx === undefined || n.vy === undefined) continue;
+
+        const parentId = n.loan ? `p:${n.loan.borrowerId}` : (n.plus != null ? `p:${n.id.split(':')[1]}` : null);
+        if (!parentId) continue;
+
+        const parentNode = nodes.find((x) => x.id === parentId);
+        if (!parentNode || parentNode.x === undefined || parentNode.y === undefined) continue;
+
+        // Repulsion source: centered just below the avatar (where the name is)
+        const rx = parentNode.x;
+        const ry = parentNode.y + parentNode.r + 12;
+
+        const dx = n.x - rx;
+        const dy = n.y - ry;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        const safetyRadius = 28; // repulsion zone radius
+        if (dist < safetyRadius && dist > 0.1) {
+          // Smooth radial push away from the name tag center
+          const strength = 16 * (1 - dist / safetyRadius) * alpha;
+          n.vx += (dx / dist) * strength;
+          n.vy += (dy / dist) * strength;
         }
       }
     };
@@ -340,11 +369,9 @@ export default function GraphScreen() {
           .strength((l) => l.strength),
       )
       .force('center', forceCenter(cx, cy).strength(0.04))
-      .force('collide', forceCollide<SimNode>().radius((d) => d.r + 4).strength(0.8));
-
-    if (card) {
-      sim.force('cardRepel', cardForce);
-    }
+      .force('collide', forceCollide<SimNode>().radius((d) => d.r + 4).strength(0.8))
+      .force('cardRepel', cardForce)
+      .force('avoidName', avoidNameForce);
 
     sim.stop();
 
@@ -414,6 +441,13 @@ export default function GraphScreen() {
     };
     rafRef.current = requestAnimationFrame(frame);
   };
+
+  // Gently reheat the simulation to push/pull leaves when the card opens or closes
+  useEffect(() => {
+    if (!simRef.current || !box) return;
+    simRef.current.alpha(0.18);
+    kick();
+  }, [card]);
 
   // --- drag handlers (called from the UI thread via runOnJS) ----------------
   const dragStart = (id: string) => {
@@ -528,12 +562,14 @@ export default function GraphScreen() {
               {/* Edges — behind the nodes, distance-faded, non-interactive. */}
               <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
                 {render.links.map((lk, i) => {
-                  const a = render.nodes.find((n) => n.id === lk.source);
-                  const b = render.nodes.find((n) => n.id === lk.target);
+                  const sourceId = typeof lk.source === 'object' ? (lk.source as any).id : lk.source;
+                  const targetId = typeof lk.target === 'object' ? (lk.target as any).id : lk.target;
+                  const a = render.nodes.find((n) => n.id === sourceId);
+                  const b = render.nodes.find((n) => n.id === targetId);
                   if (!a || !b) return null;
                   return (
                     <Edge
-                      key={`${lk.source}->${lk.target}-${i}`}
+                      key={`${sourceId}->${targetId}-${i}`}
                       a={a.sv}
                       b={b.sv}
                       hub={lk.kind === 'hub'}

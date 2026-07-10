@@ -83,13 +83,17 @@ export function GraphNodeCard({ data, x, y, r, canvasW, canvasH, onDismiss }: Pr
     return {
       left,
       top,
-      opacity: Math.max(0.01, progress.value), // clamp to 0.01 to prevent expo-glass-effect blur layer from disappearing
+      opacity: GLASS_OK ? 1 : progress.value, // keep parent opacity at 1.0 for GlassView to avoid UIKit blur bug
       transform: [
         { scale: 0.9 + progress.value * 0.1 },
         { translateY: (1 - progress.value) * slideFrom },
       ],
     };
   });
+
+  const contentAnim = useAnimatedStyle(() => ({
+    opacity: progress.value,
+  }));
 
   // Android/older-iOS glass rim + tint (mirrors Toaster / onboarding chips).
   const rim = scheme === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.7)';
@@ -105,7 +109,7 @@ export function GraphNodeCard({ data, x, y, r, canvasW, canvasH, onDismiss }: Pr
           <View style={[styles.glass, { backgroundColor: tint }]} pointerEvents="none" />
         </>
       )}
-      <View style={[styles.card, { borderColor: rim }]}>
+      <Animated.View style={[styles.card, { borderColor: rim }, contentAnim]}>
         <View style={styles.headRow}>
           <Text style={styles.title} numberOfLines={1}>
             {data.title}
@@ -133,7 +137,7 @@ export function GraphNodeCard({ data, x, y, r, canvasW, canvasH, onDismiss }: Pr
         >
           <Text style={styles.ctaText}>{data.ctaLabel}</Text>
         </PressableScale>
-      </View>
+      </Animated.View>
     </Animated.View>
   );
 }

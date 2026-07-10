@@ -163,7 +163,7 @@ export default function LoansScreen() {
           {overdue.length > 0 && (
             <>
               <Reveal index={5} from={16}>
-                <Text style={[t.overline, styles.overdueLabel]}>👀 {overdue.length} overdue</Text>
+                <Text style={[t.overline, styles.overdueLabel]}>{overdue.length} overdue</Text>
               </Reveal>
               <View style={styles.list}>
                 {overdue.map((data, i) => (

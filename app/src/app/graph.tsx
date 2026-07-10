@@ -66,7 +66,7 @@ const AVATAR_MIN = 44;
 const AVATAR_MAX = 66;
 const YOU_D = 66;
 const LEAF_HIT = 36; // tap target around a leaf
-const LEAF_DOT = 12;
+const LEAF_DOT = 22;
 
 type SortMode = 'most' | 'longest' | 'recent';
 type TypeFilter = 'all' | 'item' | 'money';
@@ -143,7 +143,14 @@ export default function GraphScreen() {
   } | null>(null);
 
   const cardRef = useRef(card);
-  cardRef.current = card;
+  const cardProgress = useSharedValue(0);
+
+  // Keep cardRef populated during closing transitions
+  useEffect(() => {
+    if (card) {
+      cardRef.current = card;
+    }
+  }, [card]);
 
   // Persist a Vec per node id across rebuilds so survivors keep their spot.
   const vecs = useRef<Map<string, Vec>>(new Map());
@@ -288,19 +295,18 @@ export default function GraphScreen() {
       const activeCard = cardRef.current;
       if (!activeCard) return;
 
+      const progress = cardProgress.value;
+      if (progress < 0.01) return;
+
       const cx = activeCard.x.value;
       const cy = activeCard.y.value;
       const rect = getCardRect(cx, cy, activeCard.r, box.w, box.h);
       
       const CARD_W = 208;
       const CARD_H = 135;
-      
       const cardCenterX = rect.left + CARD_W / 2;
       const cardCenterY = rect.top + CARD_H / 2;
       
-      const halfW = CARD_W / 2 + 20; // safety margin
-      const halfH = CARD_H / 2 + 20;
-
       for (const n of nodes) {
         // Do not repel the selected node itself, its anchor node, or the 'you' node
         if (n.id === activeCard.id || n.id === activeCard.anchorId || n.kind === 'you') continue;
@@ -312,16 +318,23 @@ export default function GraphScreen() {
         const absX = Math.abs(dx);
         const absY = Math.abs(dy);
         
+        // Node-type specific safety margins to protect avatars, name labels, and leaf nodes
+        const nodeW = n.kind === 'person' ? n.r + 28 : n.r + 10;
+        const nodeH = n.kind === 'person' ? n.r + 38 : n.r + 10;
+        
+        const halfW = CARD_W / 2 + nodeW;
+        const halfH = CARD_H / 2 + nodeH;
+        
         if (absX < halfW && absY < halfH) {
           const overlapX = halfW - absX;
           const overlapY = halfH - absY;
           
           if (overlapX < overlapY) {
-            // Apply soft continuous spring force
-            const force = 3.5 * overlapX * alpha;
+            // Apply soft continuous spring force modulated by card progress
+            const force = 3.5 * overlapX * alpha * progress;
             n.vx += dx > 0 ? force : -force;
           } else {
-            const force = 3.5 * overlapY * alpha;
+            const force = 3.5 * overlapY * alpha * progress;
             n.vy += dy > 0 ? force : -force;
           }
         }
@@ -339,21 +352,27 @@ export default function GraphScreen() {
         const parentNode = nodes.find((x) => x.id === parentId);
         if (!parentNode || parentNode.x === undefined || parentNode.y === undefined) continue;
 
-        // Repulsion source: centered just below the avatar (where the name is)
+        // Name tag center: centered below the avatar
         const rx = parentNode.x;
         const ry = parentNode.y + parentNode.r + 12;
 
-        const dx = n.x - rx;
-        const dy = n.y - ry;
+        let dx = n.x - rx;
+        let dy = n.y - ry;
+        
+        // Break symmetry deterministically if exactly at center to prevent deadlocks
+        if (Math.abs(dx) < 0.1 && Math.abs(dy) < 0.1) {
+          dx = (n.id.charCodeAt(n.id.length - 1) % 2 === 0 ? 1 : -1) * 0.5;
+          dy = -0.5;
+        }
+
         const dist = Math.sqrt(dx * dx + dy * dy);
         
-        const safetyRadius = 28; // repulsion zone radius
-        if (dist < safetyRadius && dist > 0.1) {
-          // Smooth radial push away from the name tag center
-          const strength = 16 * (1 - dist / safetyRadius) * alpha;
-          n.vx += (dx / dist) * strength;
-          n.vy += (dy / dist) * strength;
-        }
+        // Continuous soft potential field (1 / dist)
+        // Strength of 480 provides a solid push to overcome the link spring
+        const force = (480 / (dist + 8)) * alpha;
+        
+        n.vx += (dx / dist) * force;
+        n.vy += (dy / dist) * force;
       }
     };
 
@@ -442,12 +461,23 @@ export default function GraphScreen() {
     rafRef.current = requestAnimationFrame(frame);
   };
 
-  // Gently reheat the simulation to push/pull leaves when the card opens or closes
+  // Reheat simulation and animate progress on card toggle so nodes move aside/return smoothly.
   useEffect(() => {
     if (!simRef.current || !box) return;
-    simRef.current.alpha(0.18);
-    kick();
-  }, [card]);
+    if (card) {
+      cardProgress.value = withTiming(1, { duration: 350, easing: Easing.out(Easing.cubic) });
+      if (!reduce) {
+        simRef.current.alpha(0.24);
+        kick();
+      }
+    } else {
+      cardProgress.value = withTiming(0, { duration: 260, easing: Easing.out(Easing.cubic) });
+      if (!reduce) {
+        simRef.current.alpha(0.18);
+        kick();
+      }
+    }
+  }, [card, reduce]);
 
   // --- drag handlers (called from the UI thread via runOnJS) ----------------
   const dragStart = (id: string) => {
@@ -832,6 +862,7 @@ function LeafNode({
   onPress: () => void;
   styles: StyleSheetT;
 }) {
+  const { colors } = useTheme();
   const enter = useSharedValue(0);
   const breathe = useSharedValue(0);
   useEffect(() => {
@@ -862,7 +893,16 @@ function LeafNode({
           accessibilityRole="button"
           accessibilityLabel={node.loan ? loanLabel(node.loan) : 'Item'}
         >
-          <View style={[s.leafDot, selected && s.leafDotOn]} />
+          <View style={[s.leafDot, selected && s.leafDotOn]}>
+            {node.loan && (
+              <Icon
+                name={node.loan.type === 'money' ? 'money' : 'box'}
+                size={12}
+                color={selected ? colors.onAccent : colors.inkSoft}
+                strokeWidth={2}
+              />
+            )}
+          </View>
         </PressableScale>
       </Animated.View>
     </Animated.View>
@@ -921,15 +961,20 @@ const makeStyles = (th: Theme) =>
       width: LEAF_DOT,
       height: LEAF_DOT,
       borderRadius: LEAF_DOT / 2,
-      borderWidth: 1.5,
-      borderColor: th.colors.bg,
-      backgroundColor: th.colors.inkSoft,
+      borderWidth: 1.2,
+      borderColor: th.colors.hairline,
+      backgroundColor: th.colors.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+      ...th.shadow.card,
     },
     leafDotOn: {
-      width: LEAF_DOT + 4,
-      height: LEAF_DOT + 4,
-      borderRadius: (LEAF_DOT + 4) / 2,
+      width: LEAF_DOT,
+      height: LEAF_DOT,
+      borderRadius: LEAF_DOT / 2,
+      borderColor: th.colors.accent,
       backgroundColor: th.colors.accent,
+      ...th.shadow.lifted,
     },
     plusPill: {
       minWidth: 34,

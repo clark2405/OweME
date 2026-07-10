@@ -19,6 +19,7 @@ import Animated, {
   useReducedMotion,
   useSharedValue,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated';
 import { PressableScale } from './PressableScale';
 import { Icon } from './Icon';
@@ -39,8 +40,9 @@ export interface GraphCardData {
 interface Props {
   data: GraphCardData;
   /** Node center in canvas coords — the card docks away from it. */
-  x: number;
-  y: number;
+  x: SharedValue<number>;
+  y: SharedValue<number>;
+  r: number;
   /** Canvas size so the card can clamp inside the edges + dock opposite the node. */
   canvasW: number;
   canvasH: number;
@@ -49,7 +51,7 @@ interface Props {
 
 const CARD_W = 208;
 
-export function GraphNodeCard({ data, x, y, canvasW, canvasH, onDismiss }: Props) {
+export function GraphNodeCard({ data, x, y, r, canvasW, canvasH, onDismiss }: Props) {
   const { colors, scheme } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const reduce = useReducedMotion();
@@ -59,26 +61,42 @@ export function GraphNodeCard({ data, x, y, canvasW, canvasH, onDismiss }: Props
     progress.value = withTiming(1, { duration: reduce ? 0 : duration.fast, easing: expoOut, reduceMotion });
   }, [progress, reduce]);
 
-  // Dock to the edge OPPOSITE the tapped node so the card never covers the node
-  // or its item leaves: node in the top half → card at the bottom, and vice
-  // versa. `bottom`/`top` anchoring means we don't need to measure card height.
-  const dockBottom = y < canvasH / 2;
-  const slideFrom = dockBottom ? 10 : -10;
-  const anim = useAnimatedStyle(() => ({
-    opacity: progress.value,
-    transform: [{ scale: 0.9 + progress.value * 0.1 }, { translateY: (1 - progress.value) * slideFrom }],
-  }));
+  // Estimate card height at 135px to handle layout placement and clamping.
+  const CARD_H = 135;
+  const gap = 12;
 
-  // Clamp horizontally inside the canvas; anchor to the far edge vertically.
-  const left = Math.max(space.sm, Math.min(canvasW - CARD_W - space.sm, x - CARD_W / 2));
-  const vertical = dockBottom ? { bottom: space.md } : { top: space.md };
+  const anim = useAnimatedStyle(() => {
+    const curX = x.value;
+    const curY = y.value;
+
+    const canPlaceAbove = curY - r - CARD_H - gap >= space.md;
+    const canPlaceBelow = curY + r + gap + CARD_H <= canvasH - space.md;
+    const dockBottom = !canPlaceAbove && canPlaceBelow;
+
+    const left = Math.max(space.sm, Math.min(canvasW - CARD_W - space.sm, curX - CARD_W / 2));
+    const top = dockBottom
+      ? Math.min(canvasH - CARD_H - space.md, curY + r + gap)
+      : Math.max(space.md, curY - r - CARD_H - gap);
+
+    const slideFrom = dockBottom ? 10 : -10;
+
+    return {
+      left,
+      top,
+      opacity: Math.max(0.01, progress.value), // clamp to 0.01 to prevent expo-glass-effect blur layer from disappearing
+      transform: [
+        { scale: 0.9 + progress.value * 0.1 },
+        { translateY: (1 - progress.value) * slideFrom },
+      ],
+    };
+  });
 
   // Android/older-iOS glass rim + tint (mirrors Toaster / onboarding chips).
   const rim = scheme === 'dark' ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.7)';
   const tint = scheme === 'dark' ? 'rgba(30,24,18,0.55)' : 'rgba(255,255,255,0.5)';
 
   return (
-    <Animated.View style={[styles.wrap, { left, ...vertical, width: CARD_W }, anim]}>
+    <Animated.View style={[styles.wrap, { width: CARD_W }, anim]}>
       {GLASS_OK ? (
         <GlassView style={styles.glass} glassEffectStyle="regular" />
       ) : (

@@ -133,7 +133,14 @@ export default function GraphScreen() {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
 
   // The tapped node's floating info card (graphify-style node-info).
-  const [card, setCard] = useState<{ id: string; data: GraphCardData; x: number; y: number } | null>(null);
+  const [card, setCard] = useState<{
+    id: string;
+    anchorId: string;
+    x: SharedValue<number>;
+    y: SharedValue<number>;
+    r: number;
+    data: GraphCardData;
+  } | null>(null);
 
   // Persist a Vec per node id across rebuilds so survivors keep their spot.
   const vecs = useRef<Map<string, Vec>>(new Map());
@@ -186,8 +193,8 @@ export default function GraphScreen() {
     () =>
       `${box ? `${Math.round(box.w)}x${Math.round(box.h)}` : 'none'}|${sort}|${shown
         .map((p) => `${p.borrower.id}:${p.count}:${Math.round(p.metric)}`)
-        .join(',')}`,
-    [box, sort, shown],
+        .join(',')}|card:${card ? card.id : 'none'}`,
+    [box, sort, shown, card],
   );
 
   // --- the simulation -------------------------------------------------------
@@ -255,6 +262,72 @@ export default function GraphScreen() {
     const live = new Set(nodes.map((n) => n.id));
     for (const id of [...vecs.current.keys()]) if (!live.has(id)) vecs.current.delete(id);
 
+    const getCardRect = (cardX: number, cardY: number, nodeR: number, canvasW: number, canvasH: number) => {
+      const CARD_W = 208;
+      const CARD_H = 135;
+      const gap = 12;
+      const spaceMd = 12; // space.md is 12
+      const spaceSm = 8;  // space.sm is 8
+
+      const canPlaceAbove = cardY - nodeR - CARD_H - gap >= spaceMd;
+      const canPlaceBelow = cardY + nodeR + gap + CARD_H <= canvasH - spaceMd;
+      const dockBottom = !canPlaceAbove && canPlaceBelow;
+
+      const left = Math.max(spaceSm, Math.min(canvasW - CARD_W - spaceSm, cardX - CARD_W / 2));
+      const top = dockBottom
+        ? Math.min(canvasH - CARD_H - spaceMd, cardY + nodeR + gap)
+        : Math.max(spaceMd, cardY - nodeR - CARD_H - gap);
+
+      return { left, top, right: left + CARD_W, bottom: top + CARD_H };
+    };
+
+    const cardForce = (alpha: number) => {
+      if (!card) return;
+
+      const cx = card.x.value;
+      const cy = card.y.value;
+      const rect = getCardRect(cx, cy, card.r, box.w, box.h);
+      const padRepel = 20; // safety margin around the card
+
+      const cLeft = rect.left - padRepel;
+      const cRight = rect.right + padRepel;
+      const cTop = rect.top - padRepel;
+      const cBottom = rect.bottom + padRepel;
+
+      const CARD_W = 208;
+
+      for (const n of nodes) {
+        // Do not repel the selected node itself, its anchor node, or the 'you' node
+        if (n.id === card.id || n.id === card.anchorId || n.kind === 'you') continue;
+        if (n.x === undefined || n.y === undefined || n.vx === undefined || n.vy === undefined) continue;
+
+        // Repel leaf nodes if they overlap with the card
+        if (n.kind === 'leaf' && n.x >= cLeft && n.x <= cRight && n.y >= cTop && n.y <= cBottom) {
+          // Calculate distance to each of the 4 boundaries
+          const dl = n.x - cLeft;
+          const dr = cRight - n.x;
+          const dt = n.y - cTop;
+          const db = cBottom - n.y;
+
+          const minDist = Math.min(dl, dr, dt, db);
+          if (minDist <= 0) continue;
+
+          // Force magnitude scales with depth and alpha
+          const strength = 18 * (1 - minDist / (CARD_W / 2)) * alpha;
+
+          if (minDist === dl) {
+            n.vx -= strength;
+          } else if (minDist === dr) {
+            n.vx += strength;
+          } else if (minDist === dt) {
+            n.vy -= strength;
+          } else {
+            n.vy += strength;
+          }
+        }
+      }
+    };
+
     const sim = forceSimulation<SimNode>(nodes)
       // Leaves barely repel (they're small + should stay near their person);
       // people repel strongly so the hub spreads.
@@ -267,8 +340,13 @@ export default function GraphScreen() {
           .strength((l) => l.strength),
       )
       .force('center', forceCenter(cx, cy).strength(0.04))
-      .force('collide', forceCollide<SimNode>().radius((d) => d.r + 4).strength(0.8))
-      .stop();
+      .force('collide', forceCollide<SimNode>().radius((d) => d.r + 4).strength(0.8));
+
+    if (card) {
+      sim.force('cardRepel', cardForce);
+    }
+
+    sim.stop();
 
     simRef.current = sim;
     nodesRef.current = nodes;
@@ -368,8 +446,10 @@ export default function GraphScreen() {
     const oldest = p.loans.reduce((m, l) => Math.max(m, daysSince(l.lentAt)), 0);
     setCard({
       id: n.id,
-      x: n.sv.x.value,
-      y: n.sv.y.value,
+      anchorId: n.id,
+      x: n.sv.x,
+      y: n.sv.y,
+      r: n.r,
       data: {
         title: p.borrower.name,
         detail: `Holding ${p.count} thing${p.count === 1 ? '' : 's'}${oldest > 0 ? ` · oldest ${oldest}d` : ''}`,
@@ -384,10 +464,16 @@ export default function GraphScreen() {
   const openLeaf = (n: SimNode) => {
     if (!n.loan) return;
     const loan = n.loan;
+    const parentId = `p:${loan.borrowerId}`;
+    const parentNode = nodesRef.current.find((x) => x.id === parentId);
+    const anchorNode = parentNode || n;
+
     setCard({
       id: n.id,
-      x: n.sv.x.value,
-      y: n.sv.y.value,
+      anchorId: anchorNode.id,
+      x: anchorNode.sv.x,
+      y: anchorNode.sv.y,
+      r: anchorNode.r,
       data: {
         title: loanLabel(loan),
         detail: `Lent ${shortDate(loan.lentAt)}`,
@@ -519,6 +605,7 @@ export default function GraphScreen() {
                   data={card.data}
                   x={card.x}
                   y={card.y}
+                  r={card.r}
                   canvasW={box.w}
                   canvasH={box.h}
                   onDismiss={() => setCard(null)}

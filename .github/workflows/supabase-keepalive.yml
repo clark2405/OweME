@@ -37,13 +37,19 @@ jobs:
             echo "::error::Settings → Secrets and variables → Actions (Secrets OR Variables tab)."
             exit 1
           fi
-          # A real (if empty, thanks to RLS) DB query — the strongest activity signal.
-          code=$(curl -sS -o /dev/null -w "%{http_code}" \
-            "$SUPABASE_URL/rest/v1/loans?select=id&limit=1" \
+          # A real DB *write* via the public.ping() RPC (see the keepalive migration).
+          # An empty RLS-blocked read did NOT count as activity; a write (UPDATE → WAL)
+          # is the strongest signal and hits both the API layer and the database.
+          body=$(mktemp)
+          code=$(curl -sS -o "$body" -w "%{http_code}" \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/ping" \
             -H "apikey: $PUBLISHABLE_KEY" \
-            -H "Authorization: Bearer $PUBLISHABLE_KEY")
-          echo "Supabase responded with HTTP $code"
+            -H "Authorization: Bearer $PUBLISHABLE_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{}')
+          echo "Supabase responded with HTTP $code — $(cat "$body")"
           case "$code" in
-            2*) echo "Project pinged — staying awake. ✅" ;;
+            2*) echo "Heartbeat written — staying awake. ✅" ;;
+            404) echo "::error::rpc/ping not found. Apply the keepalive migration (supabase/migrations/20260722000000_keepalive_heartbeat.sql)."; exit 1 ;;
             *) echo "::error::Unexpected status $code — check the URL/key."; exit 1 ;;
           esac
